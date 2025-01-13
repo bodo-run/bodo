@@ -1,0 +1,19 @@
+name: build
+description: Build tasks for the project
+
+defaultTask:
+  command: cargo build
+  env:
+    RUST_BACKTRACE: "1"
+
+subtasks:
+  release:
+    command: cargo build --release
+    env:
+      RUST_BACKTRACE: "1"
+  
+  check:
+    command: cargo check
+    
+  clean:
+    command: cargo clean 

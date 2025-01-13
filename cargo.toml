@@ -1,0 +1,23 @@
+[package]
+name = "bodo"
+version = "0.1.0"
+edition = "2021"
+authors = ["Mohsen"]
+description = "Task runner in Rust"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "bodo"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.4", features = ["derive", "cargo"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = { version = "1.0", features = ["preserve_order"] }
+rayon = "1.7"
+notify = "6.1"
+dialoguer = "0.11"
+petgraph = "0.6"
