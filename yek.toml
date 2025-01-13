@@ -6,7 +6,10 @@ patterns = [
     "target/",
     "Cargo.lock",
     ".cargo/",
-    ".rustup/"
+    ".rustup/",
+    "test/",
+    "examples/",
+    "repo-serialized/"
 ]
 
 # Define priority rules for processing order
