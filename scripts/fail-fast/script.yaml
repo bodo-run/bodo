@@ -1,0 +1,12 @@
+name: Fail Fast Demo
+description: Demonstrates concurrent task failure behavior
+
+default_task:
+  description: "Fail fast concurrently"
+  concurrently_options:
+    fail_fast: true
+  concurrently:
+    - command: 'echo "First output"'
+    - command: 'sleep 1 && echo "Failing..." && exit 1'
+    - command: 'echo "Third output"'
+    - command: 'sleep 2 && echo "Should not be run"'
