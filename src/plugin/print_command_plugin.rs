@@ -19,7 +19,10 @@ impl PrintCommandPlugin {
         ((term.size().1 as f64) * 0.6) as usize
     }
 
-    fn get_padding_width(concurrent_items: &[crate::config::ConcurrentItem], group: &str) -> usize {
+    pub fn get_padding_width(
+        concurrent_items: &[crate::config::ConcurrentItem],
+        group: &str,
+    ) -> usize {
         let mut max_len = 0;
         for item in concurrent_items {
             let label = match item {

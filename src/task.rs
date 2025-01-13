@@ -221,6 +221,12 @@ impl TaskManager {
         if let Some(concurrent_items) = &self.config.concurrently {
             let current_script_config = load_script_config(parent_task_name)?;
 
+            // Compute and store padding width for all concurrent items
+            let (group, _) = parent_task_name
+                .split_once(':')
+                .unwrap_or((parent_task_name, ""));
+            PrintCommandPlugin::get_padding_width(concurrent_items, group);
+
             let mut children = Vec::new();
 
             for item in concurrent_items {
