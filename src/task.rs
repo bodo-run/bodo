@@ -1,5 +1,6 @@
 use crate::config::{load_script_config, ColorSpec, ConcurrentItem, OutputConfig, TaskConfig};
 use crate::env::EnvManager;
+use crate::plugin::print_command_plugin::PrintCommandPlugin;
 use crate::plugin::PluginManager;
 use crate::prompt::PromptManager;
 use colored::{Color, ColoredString, Colorize};
@@ -46,6 +47,7 @@ fn apply_color(text: &str, color_spec: Option<&ColorSpec>) -> ColoredString {
 struct PrefixSettings {
     prefix: String,
     color: Option<ColorSpec>,
+    padding_width: usize,
 }
 
 pub struct TaskManager {
@@ -124,7 +126,12 @@ impl TaskManager {
                         Ok(line) => {
                             let prefix = format!("[{}]", sp.prefix);
                             let prefix_colored = apply_color(&prefix, sp.color.as_ref());
-                            println!("{} {}", prefix_colored, line);
+                            println!(
+                                "{:<width$}{}",
+                                prefix_colored,
+                                line,
+                                width = sp.padding_width
+                            );
                         }
                         Err(e) => {
                             eprintln!(
@@ -151,7 +158,12 @@ impl TaskManager {
                         Ok(line) => {
                             let prefix = format!("[{}]", sp.prefix);
                             let prefix_colored = apply_color(&prefix, sp.color.as_ref());
-                            eprintln!("{} {}", prefix_colored, line);
+                            eprintln!(
+                                "{:<width$}{}",
+                                prefix_colored,
+                                line,
+                                width = sp.padding_width
+                            );
                         }
                         Err(e) => {
                             eprintln!(
@@ -305,7 +317,12 @@ impl TaskManager {
                         Ok(line) => {
                             let prefix = format!("[{}]", sp.prefix);
                             let prefix_colored = apply_color(&prefix, sp.color.as_ref());
-                            println!("{} {}", prefix_colored, line);
+                            println!(
+                                "{:<width$}{}",
+                                prefix_colored,
+                                line,
+                                width = sp.padding_width
+                            );
                         }
                         Err(e) => {
                             eprintln!(
@@ -330,7 +347,12 @@ impl TaskManager {
                         Ok(line) => {
                             let prefix = format!("[{}]", sp.prefix);
                             let prefix_colored = apply_color(&prefix, sp.color.as_ref());
-                            eprintln!("{} {}", prefix_colored, line);
+                            eprintln!(
+                                "{:<width$}{}",
+                                prefix_colored,
+                                line,
+                                width = sp.padding_width
+                            );
                         }
                         Err(e) => {
                             eprintln!(
@@ -354,31 +376,27 @@ impl TaskManager {
         command: &str,
         output_config: Option<OutputConfig>,
     ) -> PrefixSettings {
-        if let Some(o) = output_config {
-            let prefix_str = o.prefix.unwrap_or_else(|| task_key.to_string());
-            let color = o.color;
-            PrefixSettings {
-                prefix: prefix_str,
-                color,
-            }
+        let color = output_config.as_ref().and_then(|o| o.color.clone());
+        let prefix_str = if let Some(o) = output_config {
+            o.prefix.unwrap_or_else(|| task_key.to_string())
         } else if task_key.contains(':') {
             // For subtasks, use the full task reference
-            PrefixSettings {
-                prefix: task_key.to_string(),
-                color: None,
-            }
+            task_key.to_string()
         } else if task_key.ends_with(":command") {
             // For raw commands, use the command text
-            PrefixSettings {
-                prefix: command.to_string(),
-                color: None,
-            }
+            command.to_string()
         } else {
             // Default to task key
-            PrefixSettings {
-                prefix: task_key.to_string(),
-                color: None,
-            }
+            task_key.to_string()
+        };
+
+        let padding_width = PrintCommandPlugin::get_stored_padding_width()
+            .max(format!("[{}]", prefix_str).len() + 1);
+
+        PrefixSettings {
+            prefix: prefix_str,
+            color,
+            padding_width,
         }
     }
 }

@@ -1,4 +1,4 @@
-mod print_command_plugin;
+pub mod print_command_plugin;
 mod types;
 
 pub use print_command_plugin::PrintCommandPlugin;
