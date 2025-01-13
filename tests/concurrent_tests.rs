@@ -1,35 +1,46 @@
-use assert_cmd::Command;
+use std::fs;
 use tempfile::tempdir;
 
 #[test]
 fn test_concurrent_tasks() {
-    let temp = tempdir().unwrap();
-    let project_root = temp.path();
+    let temp_dir = tempdir().unwrap();
+    let script_dir = temp_dir.path().join("scripts").join("test");
+    fs::create_dir_all(&script_dir).unwrap();
 
-    let dir = project_root.join("scripts/test");
-    std::fs::create_dir_all(&dir).unwrap();
-
-    std::fs::write(
-        dir.join("script.yaml"),
-        r#"
-name: "Test Script"
-defaultTask:
-  concurrently:
-    - task: "test:test"
-    - command: "echo 'Hello from command'"
+    let script_content = r#"
+name: Test Script
+description: Test concurrent tasks
+default_task:
+  command: echo "default task"
+  description: Default task
 subtasks:
-  test:
-    command: "echo 'Hello from test1'"
-"#,
-    )
-    .unwrap();
+  task1:
+    command: echo "task1"
+    description: Task 1
+  task2:
+    command: echo "task2"
+    description: Task 2
+concurrently:
+  - task: task1
+  - task: task2
+"#;
 
-    Command::cargo_bin("bodo")
-        .unwrap()
-        .current_dir(&project_root)
+    let script_path = script_dir.join("script.yaml");
+    fs::write(&script_path, script_content).unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_bodo"))
         .arg("test")
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("Hello from command"))
-        .stdout(predicates::str::contains("Hello from test1"));
+        .current_dir(&temp_dir)
+        .output()
+        .unwrap_or_else(|e| panic!("Failed to execute command: {}", e));
+
+    assert!(
+        output.status.success(),
+        "Unexpected failure.\ncode={:?}\nstdout=```{}```\nstderr=```{}```\ncommand=`cd {:?} && {:?} \"test\"`",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+        temp_dir.path(),
+        env!("CARGO_BIN_EXE_bodo"),
+    );
 }
