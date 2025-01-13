@@ -64,14 +64,36 @@ impl PrintCommandPlugin {
             .chars()
             .fold(0usize, |acc, c| (acc + c as usize) % colors.len());
 
+        let padded_width = PrintCommandPlugin::get_stored_padding_width();
         let colored_label = match colors[color_index] {
-            "blue" => label.blue().bold().to_string(),
-            "green" => label.green().bold().to_string(),
-            "yellow" => label.yellow().bold().to_string(),
-            "red" => label.red().bold().to_string(),
-            "magenta" => label.magenta().bold().to_string(),
-            "cyan" => label.cyan().bold().to_string(),
-            _ => label.green().bold().to_string(),
+            "blue" => format!("{:<width$}", label, width = padded_width)
+                .blue()
+                .bold()
+                .to_string(),
+            "green" => format!("{:<width$}", label, width = padded_width)
+                .green()
+                .bold()
+                .to_string(),
+            "yellow" => format!("{:<width$}", label, width = padded_width)
+                .yellow()
+                .bold()
+                .to_string(),
+            "red" => format!("{:<width$}", label, width = padded_width)
+                .red()
+                .bold()
+                .to_string(),
+            "magenta" => format!("{:<width$}", label, width = padded_width)
+                .magenta()
+                .bold()
+                .to_string(),
+            "cyan" => format!("{:<width$}", label, width = padded_width)
+                .cyan()
+                .bold()
+                .to_string(),
+            _ => format!("{:<width$}", label, width = padded_width)
+                .green()
+                .bold()
+                .to_string(),
         };
         (colored_label, color_index)
     }
@@ -117,7 +139,8 @@ impl BodoPlugin for PrintCommandPlugin {
                     if task == concurrent_items[0].to_string() {
                         println!(
                             "{}",
-                            format!("Running {} concurrent tasks:", concurrent_items.len()).bold()
+                            format!("\nRunning {} concurrent tasks:", concurrent_items.len())
+                                .bold()
                         );
                         // Store the padding width for all subsequent uses
                         Self::get_padding_width(concurrent_items, group);
@@ -130,17 +153,19 @@ impl BodoPlugin for PrintCommandPlugin {
                                             let label = format!("[{}:{}]", group, task);
                                             let (colored_label, _) =
                                                 Self::get_colored_label(&label);
-                                            let padded_width =
-                                                PrintCommandPlugin::get_stored_padding_width();
-                                            println!(
-                                                "{:<width$}{}",
+                                            let padded_label = format!(
+                                                "{:<width$}",
                                                 colored_label,
+                                                width = Self::get_stored_padding_width()
+                                            );
+                                            println!(
+                                                "{}{}",
+                                                padded_label,
                                                 Self::truncate_str(
                                                     task_config.command.as_deref().unwrap_or(""),
                                                     max_width
                                                 )
-                                                .dimmed(),
-                                                width = padded_width
+                                                .dimmed()
                                             );
                                         }
                                     }
@@ -148,13 +173,15 @@ impl BodoPlugin for PrintCommandPlugin {
                                 crate::config::ConcurrentItem::Command { command, .. } => {
                                     let label = format!("[{}:command]", group);
                                     let (colored_label, _) = Self::get_colored_label(&label);
-                                    let padded_width =
-                                        PrintCommandPlugin::get_stored_padding_width();
-                                    println!(
-                                        "{:<width$}{}",
+                                    let padded_label = format!(
+                                        "{:<width$}",
                                         colored_label,
-                                        Self::truncate_str(command, max_width).dimmed(),
-                                        width = padded_width
+                                        width = Self::get_stored_padding_width()
+                                    );
+                                    println!(
+                                        "{}{}",
+                                        padded_label,
+                                        Self::truncate_str(command, max_width).dimmed()
                                     );
                                 }
                             }
