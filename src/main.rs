@@ -153,7 +153,7 @@ fn run_task_with_deps(
     if let Some(deps) = &task_config.dependencies {
         for dep in deps {
             match dep {
-                ConcurrentItem::Task { task } => {
+                ConcurrentItem::Task { task, output: _ } => {
                     let parts: Vec<&str> = task.split(':').collect();
                     match parts.as_slice() {
                         [task, subtask] => {
@@ -182,7 +182,7 @@ fn run_task_with_deps(
                         _ => return Err(format!("Invalid dependency format: {}", task).into()),
                     }
                 }
-                ConcurrentItem::Command { command } => {
+                ConcurrentItem::Command { command, output: _ } => {
                     let mut cmd = std::process::Command::new("sh");
                     cmd.arg("-c").arg(command);
                     let status = cmd.status()?;
