@@ -1,0 +1,9 @@
+{
+  "editor.formatOnSave": true,
+  "files.exclude": {
+    "**/.git": true
+  },
+  "search.exclude": {
+    "repo-serialized": true
+  }
+}

@@ -3,41 +3,52 @@ use crate::env::EnvManager;
 use crate::plugin::print_command_plugin::PrintCommandPlugin;
 use crate::plugin::PluginManager;
 use crate::prompt::PromptManager;
-use colored::{Color, ColoredString, Colorize};
+use colored::{ColoredString, Colorize};
 use std::error::Error;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::thread;
 
-/// Converts our `ColorSpec` enum to a `colored::Color`.
-fn to_colored_color(spec: &ColorSpec) -> Color {
-    match spec {
-        ColorSpec::Black => Color::Black,
-        ColorSpec::Red => Color::Red,
-        ColorSpec::Green => Color::Green,
-        ColorSpec::Yellow => Color::Yellow,
-        ColorSpec::Blue => Color::Blue,
-        ColorSpec::Magenta => Color::Magenta,
-        ColorSpec::Cyan => Color::Cyan,
-        ColorSpec::White => Color::White,
-        ColorSpec::BrightBlack => Color::BrightBlack,
-        ColorSpec::BrightRed => Color::BrightRed,
-        ColorSpec::BrightGreen => Color::BrightGreen,
-        ColorSpec::BrightYellow => Color::BrightYellow,
-        ColorSpec::BrightBlue => Color::BrightBlue,
-        ColorSpec::BrightMagenta => Color::BrightMagenta,
-        ColorSpec::BrightCyan => Color::BrightCyan,
-        ColorSpec::BrightWhite => Color::BrightWhite,
+fn get_color_for_label(label: &str) -> ColoredString {
+    let colors = ["blue", "green", "yellow", "red", "magenta", "cyan"];
+    let color_index = label
+        .chars()
+        .fold(0usize, |acc, c| (acc + c as usize) % colors.len());
+
+    match colors[color_index] {
+        "blue" => label.blue(),
+        "green" => label.green(),
+        "yellow" => label.yellow(),
+        "red" => label.red(),
+        "magenta" => label.magenta(),
+        "cyan" => label.cyan(),
+        _ => label.green(),
     }
 }
 
-/// Applies the optional color to the given string.
 fn apply_color(text: &str, color_spec: Option<&ColorSpec>) -> ColoredString {
-    if let Some(spec) = color_spec {
-        text.color(to_colored_color(spec))
+    if let Some(color) = color_spec {
+        match color {
+            ColorSpec::Black => text.black(),
+            ColorSpec::Red => text.red(),
+            ColorSpec::Green => text.green(),
+            ColorSpec::Yellow => text.yellow(),
+            ColorSpec::Blue => text.blue(),
+            ColorSpec::Magenta => text.magenta(),
+            ColorSpec::Cyan => text.cyan(),
+            ColorSpec::White => text.white(),
+            ColorSpec::BrightBlack => text.bright_black(),
+            ColorSpec::BrightRed => text.bright_red(),
+            ColorSpec::BrightGreen => text.bright_green(),
+            ColorSpec::BrightYellow => text.bright_yellow(),
+            ColorSpec::BrightBlue => text.bright_blue(),
+            ColorSpec::BrightMagenta => text.bright_magenta(),
+            ColorSpec::BrightCyan => text.bright_cyan(),
+            ColorSpec::BrightWhite => text.bright_white(),
+        }
     } else {
-        text.normal()
+        get_color_for_label(text)
     }
 }
 
@@ -390,8 +401,7 @@ impl TaskManager {
             task_key.to_string()
         };
 
-        let padding_width = PrintCommandPlugin::get_stored_padding_width()
-            .max(format!("[{}]", prefix_str).len() + 1);
+        let padding_width = PrintCommandPlugin::get_stored_padding_width();
 
         PrefixSettings {
             prefix: prefix_str,
