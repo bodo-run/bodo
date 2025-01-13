@@ -28,7 +28,8 @@ default_task:
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("[Custom]")); // Basic prefix check
+    assert!(!stdout.contains("[Custom]"));
+    assert!(stdout.contains("Hello from task"));
 }
 
 #[test]
@@ -99,5 +100,5 @@ tasks:
     println!("Actual stdout: {}", stdout);
     // Check fallback prefixes
     assert!(stdout.contains("[test:subtask]")); // Task reference format
-    assert!(stdout.contains("[test:command]")); // Command format
+    assert!(stdout.contains("[test:command1]")); // Command format with index
 }

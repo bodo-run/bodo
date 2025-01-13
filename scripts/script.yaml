@@ -1,0 +1,11 @@
+name: Root Script
+description: Root level tasks
+
+default_task:
+  command: "echo 'Hello from bodo!'"
+  description: "Default greeting"
+
+tasks:
+  echo:
+    command: "echo 'Hello from `bodo echo`!'"
+    description: "Default greeting"

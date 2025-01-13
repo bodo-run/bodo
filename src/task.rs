@@ -114,6 +114,7 @@ impl TaskManager {
     ) -> Result<(), Box<dyn Error>> {
         // Prepare the prefix and optional color
         let prefix_settings = self.compute_prefix_settings(task_key, command, output_config);
+        let is_concurrent = self.config.concurrently.is_some();
 
         // Let plugins know
         self.plugin_manager.on_command_ready(command, task_key)?;
@@ -139,24 +140,30 @@ impl TaskManager {
 
         // Move prefix settings into arcs so each thread can read them
         let shared_prefix = Arc::new(prefix_settings);
+        let shared_is_concurrent = Arc::new(is_concurrent);
 
         // Handle stdout
         let stdout_handle = if let Some(stdout) = child.stdout.take() {
             let sp = Arc::clone(&shared_prefix);
+            let sic = Arc::clone(&shared_is_concurrent);
             let task_for_err = task_key.to_string();
             Some(thread::spawn(move || {
                 let reader = BufReader::new(stdout);
                 for line in reader.lines() {
                     match line {
                         Ok(line) => {
-                            let prefix = format!("[{}]", sp.prefix);
-                            let prefix_colored = apply_color(&prefix, sp.color.as_ref());
-                            println!(
-                                "{:<width$}{}",
-                                prefix_colored,
-                                line,
-                                width = sp.padding_width
-                            );
+                            if *sic {
+                                let prefix = format!("[{}]", sp.prefix);
+                                let prefix_colored = apply_color(&prefix, sp.color.as_ref());
+                                println!(
+                                    "{:<width$}{}",
+                                    prefix_colored,
+                                    line,
+                                    width = sp.padding_width
+                                );
+                            } else {
+                                println!("{}", line);
+                            }
                         }
                         Err(e) => {
                             eprintln!(
@@ -175,20 +182,25 @@ impl TaskManager {
         // Handle stderr
         let stderr_handle = if let Some(stderr) = child.stderr.take() {
             let sp = Arc::clone(&shared_prefix);
+            let sic = Arc::clone(&shared_is_concurrent);
             let task_for_err = task_key.to_string();
             Some(thread::spawn(move || {
                 let reader = BufReader::new(stderr);
                 for line in reader.lines() {
                     match line {
                         Ok(line) => {
-                            let prefix = format!("[{}]", sp.prefix);
-                            let prefix_colored = apply_color(&prefix, sp.color.as_ref());
-                            eprintln!(
-                                "{:<width$}{}",
-                                prefix_colored,
-                                line,
-                                width = sp.padding_width
-                            );
+                            if *sic {
+                                let prefix = format!("[{}]", sp.prefix);
+                                let prefix_colored = apply_color(&prefix, sp.color.as_ref());
+                                eprintln!(
+                                    "{:<width$}{}",
+                                    prefix_colored,
+                                    line,
+                                    width = sp.padding_width
+                                );
+                            } else {
+                                eprintln!("{}", line);
+                            }
                         }
                         Err(e) => {
                             eprintln!(
@@ -236,7 +248,17 @@ impl TaskManager {
 
     pub fn run_concurrently(&mut self, parent_task_name: &str) -> Result<(), Box<dyn Error>> {
         if let Some(concurrent_items) = &self.config.concurrently {
-            let current_script_config = load_script_config(parent_task_name)?;
+            let current_script_config = if parent_task_name.contains(':') {
+                let parts: Vec<&str> = parent_task_name.split(':').collect();
+                if parts.len() != 2 {
+                    return Err(
+                        format!("Invalid task reference format: {}", parent_task_name).into(),
+                    );
+                }
+                load_script_config(parts[0])?
+            } else {
+                load_script_config(parent_task_name)?
+            };
 
             // Compute and store padding width for all concurrent items
             let (group, _) = parent_task_name
@@ -282,16 +304,11 @@ impl TaskManager {
                             script_config.default_task
                         };
 
-                        if let Some(command) = task_config.command {
-                            let subtask_name = format!("{}:{}", parent_task_name, task);
-                            self.plugin_manager
-                                .on_command_ready(&command, &subtask_name)?;
-                            let child = self.spawn_command_concurrent(
-                                &command,
-                                &subtask_name,
-                                output.clone(),
-                            )?;
-                            children.push((child, subtask_name));
+                        if let Some(command) = &task_config.command {
+                            let task_key = format!("{}:{}", parent_task_name, task);
+                            let child =
+                                self.spawn_and_wait_concurrent(command, &task_key, output.clone())?;
+                            children.push(child);
                         }
                     }
                     ConcurrentItem::Command {
@@ -299,33 +316,26 @@ impl TaskManager {
                         output,
                         name,
                     } => {
-                        let command_name = if let Some(name) = name {
+                        let task_key = if let Some(name) = name {
                             format!("{}:{}", parent_task_name, name)
                         } else {
-                            let name = format!("{}:command{}", parent_task_name, command_number);
+                            let task_key =
+                                format!("{}:command{}", parent_task_name, command_number);
                             command_number += 1;
-                            name
+                            task_key
                         };
-                        self.plugin_manager
-                            .on_command_ready(command, &command_name)?;
                         let child =
-                            self.spawn_command_concurrent(command, &command_name, output.clone())?;
-                        children.push((child, command_name));
+                            self.spawn_and_wait_concurrent(command, &task_key, output.clone())?;
+                        children.push(child);
                     }
                 }
             }
 
-            for (mut child, subtask_name) in children {
+            // Wait for all children to complete
+            for mut child in children {
                 let status = child.wait()?;
                 if !status.success() {
-                    let error = TaskError {
-                        message: format!(
-                            "Task '{}' failed. All concurrent tasks have been stopped.",
-                            subtask_name
-                        ),
-                    };
-                    self.plugin_manager.on_error(&subtask_name, &error)?;
-                    return Err(Box::new(error));
+                    return Err(format!("Task failed with status: {}", status).into());
                 }
             }
         }
@@ -333,24 +343,67 @@ impl TaskManager {
         Ok(())
     }
 
-    fn spawn_command_concurrent(
+    /// Build the final prefix settings from the config, or fallback if missing.
+    fn compute_prefix_settings(
+        &self,
+        task_key: &str,
+        command: &str,
+        output_config: Option<OutputConfig>,
+    ) -> PrefixSettings {
+        let color = output_config.as_ref().and_then(|o| o.color.clone());
+        let prefix_str = if let Some(o) = output_config {
+            o.prefix.unwrap_or_else(|| task_key.to_string())
+        } else if task_key.contains(':') {
+            // For subtasks, use the full task reference
+            task_key.to_string()
+        } else if task_key.ends_with(":command") {
+            // For raw commands, use the command text
+            command.to_string()
+        } else {
+            // Default to task key
+            task_key.to_string()
+        };
+
+        let padding_width = PrintCommandPlugin::get_stored_padding_width();
+
+        PrefixSettings {
+            prefix: prefix_str,
+            color,
+            padding_width,
+        }
+    }
+
+    fn spawn_and_wait_concurrent(
         &self,
         command: &str,
         task_key: &str,
         output_config: Option<OutputConfig>,
     ) -> Result<Child, Box<dyn Error>> {
+        // Prepare the prefix and optional color
+        let prefix_settings = self.compute_prefix_settings(task_key, command, output_config);
+        let shared_prefix = Arc::new(prefix_settings);
+
+        // Let plugins know
+        self.plugin_manager.on_command_ready(command, task_key)?;
+
+        // Spawn process
         let mut cmd = Command::new("sh");
         cmd.arg("-c").arg(command);
+        // Grab environment from the config if needed
+        if let Some(env_vars) = &self.config.env {
+            for (key, value) in env_vars {
+                cmd.env(key, value);
+            }
+        }
 
         // Make sure we can read output
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
-        let mut child = cmd.spawn()?;
-
-        // Prepare the prefix and optional color
-        let prefix_settings = self.compute_prefix_settings(task_key, command, output_config);
-        let shared_prefix = Arc::new(prefix_settings);
+        let mut child = cmd.spawn().map_err(|e| {
+            let boxed: Box<dyn Error> = Box::new(e);
+            boxed
+        })?;
 
         // Handle stdout
         if let Some(stdout) = child.stdout.take() {
@@ -413,36 +466,6 @@ impl TaskManager {
         }
 
         Ok(child)
-    }
-
-    /// Build the final prefix settings from the config, or fallback if missing.
-    fn compute_prefix_settings(
-        &self,
-        task_key: &str,
-        command: &str,
-        output_config: Option<OutputConfig>,
-    ) -> PrefixSettings {
-        let color = output_config.as_ref().and_then(|o| o.color.clone());
-        let prefix_str = if let Some(o) = output_config {
-            o.prefix.unwrap_or_else(|| task_key.to_string())
-        } else if task_key.contains(':') {
-            // For subtasks, use the full task reference
-            task_key.to_string()
-        } else if task_key.ends_with(":command") {
-            // For raw commands, use the command text
-            command.to_string()
-        } else {
-            // Default to task key
-            task_key.to_string()
-        };
-
-        let padding_width = PrintCommandPlugin::get_stored_padding_width();
-
-        PrefixSettings {
-            prefix: prefix_str,
-            color,
-            padding_width,
-        }
     }
 }
 

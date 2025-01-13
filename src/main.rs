@@ -12,19 +12,6 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::path::PathBuf;
 
-#[derive(Debug)]
-struct BodoError {
-    message: String,
-}
-
-impl std::fmt::Display for BodoError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message.red())
-    }
-}
-
-impl Error for BodoError {}
-
 fn get_task_config(
     script_config: &bodo::config::ScriptConfig,
     subtask: Option<&str>,
@@ -245,30 +232,56 @@ fn run_task(
     )
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let cli = BodoCli::parse();
-
-    // Set verbose mode
     debug::set_verbose(cli.verbose);
 
-    if let Err(e) = run(cli) {
-        eprintln!("{}", e);
-        std::process::exit(1);
-    }
-}
-
-fn run(cli: BodoCli) -> Result<(), Box<dyn Error>> {
+    // Handle `--list` first
     if cli.list {
         return list_tasks(cli.task.as_deref());
     }
 
-    let task_name = cli.task.ok_or_else(|| BodoError {
-        message: "No task specified. Use --list to see available tasks.".to_string(),
-    })?;
-    let subtask = if !cli.args.is_empty() {
+    // If `bodo` was run with no <task>, use scripts/script.yaml
+    let (task_name, subtask) = match &cli.task {
+        Some(t) => {
+            // First check if this is a subtask in root script
+            let root_script = std::env::current_dir()?.join("scripts").join("script.yaml");
+            if root_script.exists() {
+                let root_config_str = std::fs::read_to_string(&root_script)?;
+                let root_config: bodo::config::ScriptConfig =
+                    serde_yaml::from_str(&root_config_str)?;
+                if let Some(tasks) = &root_config.tasks {
+                    if tasks.contains_key(t) {
+                        // It's a subtask in root script
+                        (".".to_string(), Some(t.as_str()))
+                    } else {
+                        // Not a subtask, treat as separate script
+                        (t.clone(), None)
+                    }
+                } else {
+                    // No tasks in root script, treat as separate script
+                    (t.clone(), None)
+                }
+            } else {
+                // No root script, treat as separate script
+                (t.clone(), None)
+            }
+        }
+        None => {
+            let root_script = std::env::current_dir()?.join("scripts").join("script.yaml");
+            if root_script.exists() {
+                (".".to_string(), None)
+            } else {
+                return Err("No task specified and no scripts/script.yaml found. Use --list to see available tasks.".into());
+            }
+        }
+    };
+
+    // Additional subtask from args (only if we don't already have a subtask)
+    let subtask = if subtask.is_none() && !cli.args.is_empty() {
         Some(cli.args[0].as_str())
     } else {
-        None
+        subtask
     };
 
     // Initialize managers
@@ -279,33 +292,36 @@ fn run(cli: BodoCli) -> Result<(), Box<dyn Error>> {
 
     // Load global bodo config
     let bodo_config = load_bodo_config()?;
-
-    // Register plugins from bodo.yaml
     if let Some(plugins) = bodo_config.plugins {
         for plugin_path in plugins {
             plugin_manager.register_plugin(PathBuf::from(&plugin_path));
         }
     }
 
-    // Load script config for environment setup
-    let script_config = load_script_config(&task_name)?;
+    // Now attempt to load the script for the task
+    let script_config = if task_name == "." {
+        // Load root script directly
+        let config_str =
+            std::fs::read_to_string(std::env::current_dir()?.join("scripts").join("script.yaml"))?;
+        serde_yaml::from_str(&config_str)?
+    } else {
+        load_script_config(&task_name)?
+    };
 
-    // Load environment variables from script config
+    // Merge top-level env from script.yaml
     if let Some(env_vars) = &script_config.env {
         for (key, value) in env_vars {
             std::env::set_var(key, value);
         }
     }
 
-    // Load exec paths if present
+    // Merge exec paths if present
     if let Some(exec_paths) = &script_config.exec_paths {
         env_manager.inject_exec_paths(exec_paths);
     }
 
-    // Get task config
+    // Now run the user's requested task, or watch
     let task_config = get_task_config(&script_config, subtask)?;
-
-    // Create task manager
     let task_manager = TaskManager::new(
         task_config,
         env_manager.clone(),
@@ -313,7 +329,6 @@ fn run(cli: BodoCli) -> Result<(), Box<dyn Error>> {
         prompt_manager.clone(),
     );
 
-    // Run the task
     if cli.watch {
         let watch_manager = WatchManager::new(task_manager);
         watch_manager.watch_and_run(&task_name, subtask)?;
