@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 static MAX_LABEL_WIDTH: AtomicUsize = AtomicUsize::new(0);
 static HEADER_PRINTED: AtomicBool = AtomicBool::new(false);
+static COMMAND_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone)]
 pub struct PrintCommandPlugin;
@@ -25,13 +26,20 @@ impl PrintCommandPlugin {
         group: &str,
     ) -> usize {
         let mut max_len = 0;
+        let mut command_number = 1;
         for item in concurrent_items {
             let label = match item {
                 crate::config::ConcurrentItem::Task { task, .. } => {
                     format!("[{}:{}]", group, task)
                 }
-                crate::config::ConcurrentItem::Command { .. } => {
-                    format!("[{}:command]", group)
+                crate::config::ConcurrentItem::Command { name, .. } => {
+                    if let Some(name) = name {
+                        format!("[{}:{}]", group, name)
+                    } else {
+                        let label = format!("[{}:command{}]", group, command_number);
+                        command_number += 1;
+                        label
+                    }
                 }
             };
             max_len = max_len.max(label.len());
@@ -146,6 +154,7 @@ impl BodoPlugin for PrintCommandPlugin {
                         // Store the padding width for all subsequent uses
                         Self::get_padding_width(concurrent_items, group);
 
+                        let mut command_number = 1;
                         for item in concurrent_items {
                             match item {
                                 crate::config::ConcurrentItem::Task { task, .. } => {
@@ -171,8 +180,17 @@ impl BodoPlugin for PrintCommandPlugin {
                                         }
                                     }
                                 }
-                                crate::config::ConcurrentItem::Command { command, .. } => {
-                                    let label = format!("[{}:command]", group);
+                                crate::config::ConcurrentItem::Command {
+                                    command, name, ..
+                                } => {
+                                    let label = if let Some(name) = name {
+                                        format!("[{}:{}]", group, name)
+                                    } else {
+                                        let label =
+                                            format!("[{}:command{}]", group, command_number);
+                                        command_number += 1;
+                                        label
+                                    };
                                     let (colored_label, _) = Self::get_colored_label(&label);
                                     let padded_label = format!(
                                         "{:<width$}",
@@ -207,7 +225,8 @@ impl BodoPlugin for PrintCommandPlugin {
     }
 
     fn on_before_task_run(&self, _task_name: &str) {
-        // Reset the header printed flag at the start of each task
+        // Reset the header printed flag and command counter at the start of each task
         HEADER_PRINTED.store(false, Ordering::SeqCst);
+        COMMAND_COUNTER.store(0, Ordering::SeqCst);
     }
 }

@@ -245,6 +245,7 @@ impl TaskManager {
             PrintCommandPlugin::get_padding_width(concurrent_items, group);
 
             let mut children = Vec::new();
+            let mut command_number = 1;
 
             for item in concurrent_items {
                 match item {
@@ -293,8 +294,18 @@ impl TaskManager {
                             children.push((child, subtask_name));
                         }
                     }
-                    ConcurrentItem::Command { command, output } => {
-                        let command_name = format!("{}:command", parent_task_name);
+                    ConcurrentItem::Command {
+                        command,
+                        output,
+                        name,
+                    } => {
+                        let command_name = if let Some(name) = name {
+                            format!("{}:{}", parent_task_name, name)
+                        } else {
+                            let name = format!("{}:command{}", parent_task_name, command_number);
+                            command_number += 1;
+                            name
+                        };
                         self.plugin_manager
                             .on_command_ready(command, &command_name)?;
                         let child =

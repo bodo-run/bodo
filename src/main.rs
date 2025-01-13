@@ -195,7 +195,11 @@ fn run_task_with_deps(
                         _ => return Err(format!("Invalid dependency format: {}", task).into()),
                     }
                 }
-                ConcurrentItem::Command { command, output: _ } => {
+                ConcurrentItem::Command {
+                    command,
+                    output: _,
+                    name: _,
+                } => {
                     let mut cmd = std::process::Command::new("sh");
                     cmd.arg("-c").arg(command);
                     let status = cmd.status()?;

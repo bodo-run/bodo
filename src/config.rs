@@ -24,6 +24,7 @@ pub enum ConcurrentItem {
     },
     Command {
         command: String,
+        name: Option<String>,
         output: Option<OutputConfig>,
     },
 }
@@ -32,7 +33,13 @@ impl fmt::Display for ConcurrentItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ConcurrentItem::Task { task, .. } => write!(f, "{}", task),
-            ConcurrentItem::Command { .. } => write!(f, "command"),
+            ConcurrentItem::Command { name, .. } => {
+                if let Some(name) = name {
+                    write!(f, "{}", name)
+                } else {
+                    write!(f, "command")
+                }
+            }
         }
     }
 }
