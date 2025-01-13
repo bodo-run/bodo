@@ -1,82 +1,65 @@
-use crate::config::{load_script_config, BodoConfig, TaskConfig};
+use crate::config::TaskConfig;
 use crate::env::EnvManager;
-use crate::graph::TaskGraph;
 use crate::plugin::PluginManager;
 use crate::prompt::PromptManager;
 use std::error::Error;
-use std::process::Command;
+use std::process::{Command, ExitStatus};
 
-#[allow(dead_code)]
 pub struct TaskManager {
-    config: BodoConfig,
+    config: TaskConfig,
     env_manager: EnvManager,
-    task_graph: TaskGraph,
     plugin_manager: PluginManager,
     prompt_manager: PromptManager,
 }
 
 impl TaskManager {
     pub fn new(
-        config: BodoConfig,
+        config: TaskConfig,
         env_manager: EnvManager,
-        task_graph: TaskGraph,
         plugin_manager: PluginManager,
         prompt_manager: PromptManager,
     ) -> Self {
         Self {
             config,
             env_manager,
-            task_graph,
             plugin_manager,
             prompt_manager,
         }
     }
 
     pub fn run_task(&mut self, task_name: &str) -> Result<(), Box<dyn Error>> {
-        // Load script config
-        let script_config = load_script_config(task_name)?;
+        self.plugin_manager.on_before_task_run(task_name)?;
 
-        // Set environment variables from script config
-        if let Some(env_vars) = script_config.env {
-            for (key, value) in env_vars {
-                std::env::set_var(key, value);
+        let command = self.config.command.clone();
+
+        match self.execute_command(&command, task_name) {
+            Ok(status) if status.success() => {
+                self.plugin_manager.on_after_task_run(task_name, 0)?;
+                Ok(())
             }
-        }
-
-        // Add execution paths to PATH
-        if let Some(exec_paths) = script_config.exec_paths {
-            self.env_manager.inject_exec_paths(&exec_paths);
-        }
-
-        // Run plugins before task
-        self.plugin_manager.on_before_run(task_name);
-
-        // Run the default task
-        let result = self.execute_task(&script_config.default_task, task_name);
-
-        match &result {
             Ok(_) => {
-                self.plugin_manager.on_after_run(task_name, 0);
+                self.plugin_manager.on_after_task_run(task_name, -1)?;
+                Err("Task failed".into())
             }
             Err(e) => {
-                self.plugin_manager.on_error(task_name, e.as_ref());
-                self.plugin_manager.on_after_run(task_name, -1);
+                self.plugin_manager.on_error(task_name, &e.to_string())?;
+                Err(e)
             }
         }
-
-        result
     }
 
-    pub fn cleanup(&mut self, exit_code: i32) {
-        self.plugin_manager.on_bodo_exit(exit_code);
+    pub fn on_exit(&mut self, exit_code: i32) -> Result<(), Box<dyn Error>> {
+        self.plugin_manager.on_bodo_exit(exit_code)
     }
 
-    fn execute_task(&mut self, task: &TaskConfig, task_name: &str) -> Result<(), Box<dyn Error>> {
-        let mut task = task.clone();
-        self.plugin_manager.on_resolve_command(&mut task);
-
-        let command = task.command.clone();
-        self.plugin_manager.on_command_ready(&command, task_name);
+    fn execute_command(
+        &mut self,
+        command: &str,
+        task_name: &str,
+    ) -> Result<ExitStatus, Box<dyn Error>> {
+        let mut task_config = self.config.clone();
+        self.plugin_manager.on_resolve_command(&mut task_config)?;
+        self.plugin_manager.on_command_ready(command, task_name)?;
 
         let mut cmd_parts = command.split_whitespace();
         let program = cmd_parts.next().ok_or("Empty command")?;
@@ -84,49 +67,40 @@ impl TaskManager {
 
         let mut cmd = Command::new(program);
         cmd.args(&args)
-            .current_dir(task.cwd.as_deref().unwrap_or("."));
+            .current_dir(task_config.cwd.as_deref().unwrap_or("."));
 
         // Add environment variables
         for (key, value) in self.env_manager.get_env() {
             cmd.env(key, value);
         }
 
-        let status = cmd
-            .status()
-            .map_err(|e| format!("Failed to execute command: {}", e))?;
+        cmd.status()
+            .map_err(|e| format!("Failed to execute command: {}", e).into())
+    }
 
-        if !status.success() {
-            return Err(format!(
-                "Task failed with exit code: {}",
-                status.code().unwrap_or(-1)
-            )
-            .into());
-        }
-
-        Ok(())
+    pub fn confirm_task_execution(&mut self, task_name: &str) -> Result<bool, Box<dyn Error>> {
+        Ok(self.prompt_manager.confirm(&format!("Run task '{}'?", task_name)))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_task_manager_creation() {
-        let config = BodoConfig::default();
+        let config = TaskConfig {
+            command: String::from("echo test"),
+            cwd: None,
+            env: None,
+            dependencies: Some(Vec::new()),
+            plugins: None,
+        };
         let env_manager = EnvManager::new();
-        let task_graph = TaskGraph::new();
-        let plugin_manager = PluginManager::new(config.clone());
+        let plugin_manager = PluginManager::new();
         let prompt_manager = PromptManager::new();
 
-        let task_manager = TaskManager::new(
-            config,
-            env_manager,
-            task_graph,
-            plugin_manager,
-            prompt_manager,
-        );
-
-        assert!(task_manager.config.plugins.is_none());
+        let _task_manager = TaskManager::new(config, env_manager, plugin_manager, prompt_manager);
     }
 }

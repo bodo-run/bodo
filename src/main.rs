@@ -1,40 +1,32 @@
+use bodo::config::TaskConfig;
+use bodo::env::EnvManager;
+use bodo::plugin::PluginManager;
+use bodo::prompt::PromptManager;
+use bodo::task::TaskManager;
 use std::error::Error;
 
-use bodo::{
-    config::load_bodo_config, BodoCli, EnvManager, PluginManager, PromptManager, TaskGraph,
-    TaskManager,
-};
-
 fn main() -> Result<(), Box<dyn Error>> {
-    let cli = BodoCli::new();
-    let config = load_bodo_config()?;
-
-    // Initialize components
+    // Initialize managers
     let env_manager = EnvManager::new();
-    let task_graph = TaskGraph::new();
+    let plugin_manager = PluginManager::new();
     let prompt_manager = PromptManager::new();
 
-    // Initialize plugins
-    let mut plugin_manager = PluginManager::new(config.clone());
-    plugin_manager.on_bodo_init();
+    // Create task config
+    let task_config = TaskConfig {
+        command: String::from("echo test"),
+        cwd: None,
+        env: None,
+        dependencies: Some(Vec::new()),
+        plugins: None,
+    };
 
     // Create task manager
-    let mut task_manager = TaskManager::new(
-        config,
-        env_manager,
-        task_graph,
-        plugin_manager,
-        prompt_manager,
-    );
+    let mut task_manager =
+        TaskManager::new(task_config, env_manager, plugin_manager, prompt_manager);
 
-    // Run the task
-    let result = task_manager.run_task(&cli.task);
-
-    // Clean up plugins
-    match &result {
-        Ok(_) => task_manager.cleanup(0),
-        Err(_) => task_manager.cleanup(1),
+    // Run task
+    match task_manager.run_task("test") {
+        Ok(_) => task_manager.on_exit(0),
+        Err(_) => task_manager.on_exit(1),
     }
-
-    result
 }
