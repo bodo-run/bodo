@@ -32,7 +32,7 @@ fn get_task_config(
     }
 }
 
-fn list_tasks() -> Result<(), Box<dyn Error>> {
+fn list_tasks(script_name: Option<&str>) -> Result<(), Box<dyn Error>> {
     // Find all script directories
     let current_dir = std::env::current_dir()?;
     let scripts_dir = current_dir.join("scripts");
@@ -49,8 +49,45 @@ fn list_tasks() -> Result<(), Box<dyn Error>> {
     }
 
     println!("\n{}", "Available Tasks:".bold().green());
+    println!();
 
-    // List all task directories
+    if let Some(name) = script_name {
+        let script_path = scripts_dir.join(name).join("script.yaml");
+        if script_path.exists() {
+            let script_config = load_script_config(name)?;
+
+            // Print task description
+            if let Some(desc) = script_config.description {
+                println!("{}", desc);
+            }
+
+            // Print default task
+            println!("default:");
+            if let Some(cmd) = script_config.default_task.command {
+                println!("  $ {}", cmd);
+            }
+            println!();
+
+            // Print subtasks
+            if let Some(subtasks) = script_config.subtasks {
+                for (name, task) in subtasks {
+                    if let Some(desc) = task.description {
+                        println!("{}:", name);
+                        println!("  {}", desc);
+                    } else {
+                        println!("{}:", name);
+                    }
+                    if let Some(cmd) = task.command {
+                        println!("  $ {}", cmd);
+                    }
+                    println!();
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    // List all task directories if no specific script is requested
     for entry in std::fs::read_dir(&scripts_dir)? {
         let entry = entry?;
         if entry.file_type()?.is_dir() {
@@ -186,7 +223,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     debug::set_verbose(cli.verbose);
 
     if cli.list {
-        return list_tasks();
+        return list_tasks(cli.task.as_deref());
     }
 
     let task_name = cli
