@@ -261,6 +261,11 @@ fn run_main() -> Result<(), Box<dyn Error>> {
                     serde_yaml::from_str(&root_config_str)?;
                 if let Some(tasks) = &root_config.tasks {
                     if tasks.contains_key(t) {
+                        // Check if there's also a script directory with the same name
+                        let script_dir = std::env::current_dir()?.join("scripts").join(t);
+                        if script_dir.exists() && script_dir.is_dir() {
+                            eprintln!("{}", format!("Warning: Task '{}' exists in both root script.yaml and as a script directory. Using the root script task.", t).yellow());
+                        }
                         // It's a subtask in root script
                         (".".to_string(), Some(t.as_str()))
                     } else {
