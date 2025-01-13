@@ -17,8 +17,40 @@ pub struct BodoConfig {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(untagged)]
 pub enum ConcurrentItem {
-    Task { task: String },
-    Command { command: String },
+    Task {
+        task: String,
+        output: Option<OutputConfig>,
+    },
+    Command {
+        command: String,
+        output: Option<OutputConfig>,
+    },
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub enum ColorSpec {
+    Black,
+    Red,
+    Green,
+    Yellow,
+    Blue,
+    Magenta,
+    Cyan,
+    White,
+    BrightBlack,
+    BrightRed,
+    BrightGreen,
+    BrightYellow,
+    BrightBlue,
+    BrightMagenta,
+    BrightCyan,
+    BrightWhite,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct OutputConfig {
+    pub prefix: Option<String>,
+    pub color: Option<ColorSpec>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -32,6 +64,7 @@ pub struct TaskConfig {
     pub concurrently: Option<Vec<ConcurrentItem>>,
     pub description: Option<String>,
     pub silent: Option<bool>,
+    pub output: Option<OutputConfig>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
