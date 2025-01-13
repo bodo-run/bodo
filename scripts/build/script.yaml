@@ -11,19 +11,20 @@ env:
   RUST_BACKTRACE: "1"
 
 # The default task is invoked by simply running `bodo build`
-defaultTask:
+default_task:
   command: cargo build
 
 # Subtasks
 subtasks:
   release:
     command: cargo build --release
-  
+
   check:
     command: cargo check
-    
+
   clippy:
     command: cargo clippy
-  
+    silent: true
+
   fmt:
     command: cargo fmt

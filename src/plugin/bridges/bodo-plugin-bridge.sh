@@ -3,9 +3,12 @@
 # Exit on any error
 set -e
 
-echo "[DEBUG] Starting bash bridge script" >&2
-echo "[DEBUG] BODO_OPTS=$BODO_OPTS" >&2
-echo "[DEBUG] BODO_PLUGIN_FILE=$BODO_PLUGIN_FILE" >&2
+# Only show debug output if BODO_VERBOSE is true
+if [ "$BODO_VERBOSE" = "true" ]; then
+    echo "[DEBUG] Starting bash bridge script" >&2
+    echo "[DEBUG] BODO_OPTS=$BODO_OPTS" >&2
+    echo "[DEBUG] BODO_PLUGIN_FILE=$BODO_PLUGIN_FILE" >&2
+fi
 
 # Check if BODO_OPTS is provided
 if [ -z "$BODO_OPTS" ]; then
@@ -32,7 +35,9 @@ if [ -z "$hook" ]; then
     exit 1
 fi
 
-echo "[DEBUG] Original hook name: $hook" >&2
+if [ "$BODO_VERBOSE" = "true" ]; then
+    echo "[DEBUG] Original hook name: $hook" >&2
+fi
 
 # Convert hook name using a lookup table
 case "$hook" in
@@ -48,18 +53,24 @@ case "$hook" in
     ;;
 esac
 
-echo "[DEBUG] Converted hook name: $hook_fn" >&2
+if [ "$BODO_VERBOSE" = "true" ]; then
+    echo "[DEBUG] Converted hook name: $hook_fn" >&2
+fi
 
 # Source the plugin file to get access to its functions
-echo "[DEBUG] Sourcing plugin file: $BODO_PLUGIN_FILE" >&2
+if [ "$BODO_VERBOSE" = "true" ]; then
+    echo "[DEBUG] Sourcing plugin file: $BODO_PLUGIN_FILE" >&2
+fi
 if ! source "$BODO_PLUGIN_FILE"; then
     echo "Failed to source plugin file $BODO_PLUGIN_FILE" >&2
     exit 1
 fi
 
-# List available functions
-echo "[DEBUG] Available functions:" >&2
-declare -F | grep -v "^declare -f _" >&2
+# List available functions if verbose
+if [ "$BODO_VERBOSE" = "true" ]; then
+    echo "[DEBUG] Available functions:" >&2
+    declare -F | grep -v "^declare -f _" >&2
+fi
 
 # Check if the function exists
 if ! declare -F "$hook_fn" >/dev/null; then
@@ -67,32 +78,42 @@ if ! declare -F "$hook_fn" >/dev/null; then
     exit 1
 fi
 
-echo "[DEBUG] Found function: $hook_fn" >&2
+if [ "$BODO_VERBOSE" = "true" ]; then
+    echo "[DEBUG] Found function: $hook_fn" >&2
+fi
 
 # Extract arguments based on hook type
 case "$hook_fn" in
 on_before_task_run)
     task_name=$(echo "$opts" | jq -r '.taskName')
     cwd=$(echo "$opts" | jq -r '.cwd')
-    echo "[DEBUG] Calling $hook_fn with task_name=$task_name cwd=$cwd" >&2
+    if [ "$BODO_VERBOSE" = "true" ]; then
+        echo "[DEBUG] Calling $hook_fn with task_name=$task_name cwd=$cwd" >&2
+    fi
     "$hook_fn" "$task_name" "$cwd"
     ;;
 on_after_task_run)
     task_name=$(echo "$opts" | jq -r '.taskName')
     status=$(echo "$opts" | jq -r '.status')
-    echo "[DEBUG] Calling $hook_fn with task_name=$task_name status=$status" >&2
+    if [ "$BODO_VERBOSE" = "true" ]; then
+        echo "[DEBUG] Calling $hook_fn with task_name=$task_name status=$status" >&2
+    fi
     "$hook_fn" "$task_name" "$status"
     ;;
 on_error)
     task_name=$(echo "$opts" | jq -r '.taskName')
     error=$(echo "$opts" | jq -r '.error')
-    echo "[DEBUG] Calling $hook_fn with task_name=$task_name error=$error" >&2
+    if [ "$BODO_VERBOSE" = "true" ]; then
+        echo "[DEBUG] Calling $hook_fn with task_name=$task_name error=$error" >&2
+    fi
     "$hook_fn" "$task_name" "$error"
     ;;
 on_resolve_command)
     task_json=$(echo "$opts" | jq -r '.task')
-    echo "[DEBUG] Task JSON: $task_json" >&2
-    echo "[DEBUG] Calling $hook_fn with task_json=$task_json" >&2
+    if [ "$BODO_VERBOSE" = "true" ]; then
+        echo "[DEBUG] Task JSON: $task_json" >&2
+        echo "[DEBUG] Calling $hook_fn with task_json=$task_json" >&2
+    fi
     result=$("$hook_fn" "$task_json")
     # Validate that the result is valid JSON
     if ! echo "$result" | jq '.' >/dev/null 2>&1; then
@@ -104,12 +125,16 @@ on_resolve_command)
 on_command_ready)
     command=$(echo "$opts" | jq -r '.command')
     task_name=$(echo "$opts" | jq -r '.taskName')
-    echo "[DEBUG] Calling $hook_fn with command=$command task_name=$task_name" >&2
+    if [ "$BODO_VERBOSE" = "true" ]; then
+        echo "[DEBUG] Calling $hook_fn with command=$command task_name=$task_name" >&2
+    fi
     "$hook_fn" "$command" "$task_name"
     ;;
 on_bodo_exit)
     exit_code=$(echo "$opts" | jq -r '.exitCode')
-    echo "[DEBUG] Calling $hook_fn with exit_code=$exit_code" >&2
+    if [ "$BODO_VERBOSE" = "true" ]; then
+        echo "[DEBUG] Calling $hook_fn with exit_code=$exit_code" >&2
+    fi
     "$hook_fn" "$exit_code"
     ;;
 *)

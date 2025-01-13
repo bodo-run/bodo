@@ -23,37 +23,6 @@ impl EnvManager {
         }
     }
 
-    fn load_env_file(&mut self, file_path: &str) -> std::io::Result<()> {
-        let path = Path::new(file_path);
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-
-        for line in reader.lines() {
-            let line = line?;
-            let line = line.trim();
-
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-
-            if let Some((key, value)) = line.split_once('=') {
-                let key = key.trim().to_string();
-                let mut value = value.trim().to_string();
-
-                // Only remove quotes if they match at start and end
-                if (value.starts_with('\'') && value.ends_with('\''))
-                    || (value.starts_with('"') && value.ends_with('"'))
-                {
-                    value = value[1..value.len() - 1].to_string();
-                }
-
-                self.env_vars.insert(key.clone(), value.clone());
-                std::env::set_var(key, value);
-            }
-        }
-        Ok(())
-    }
-
     pub fn inject_exec_paths(&mut self, exec_paths: &[String]) {
         if let Ok(current_path) = std::env::var("PATH") {
             let new_paths: Vec<String> = exec_paths
@@ -81,6 +50,37 @@ impl EnvManager {
 
             std::env::set_var("PATH", new_path);
         }
+    }
+
+    fn load_env_file(&mut self, file_path: &str) -> std::io::Result<()> {
+        let path = Path::new(file_path);
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+
+        for line in reader.lines() {
+            let line = line?;
+            let line = line.trim();
+
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+
+            if let Some((key, value)) = line.split_once('=') {
+                let key = key.trim().to_string();
+                let mut value = value.trim().to_string();
+
+                // Remove quotes if present
+                if (value.starts_with('"') && value.ends_with('"'))
+                    || (value.starts_with('\'') && value.ends_with('\''))
+                {
+                    value = value[1..value.len() - 1].to_string();
+                }
+
+                self.env_vars.insert(key, value);
+            }
+        }
+
+        Ok(())
     }
 
     pub fn get_env(&self) -> &HashMap<String, String> {

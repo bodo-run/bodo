@@ -22,6 +22,10 @@ pub struct BodoCli {
     #[arg(short, long)]
     pub list: bool,
 
+    /// Show verbose output including debug messages
+    #[arg(short, long)]
+    pub verbose: bool,
+
     /// Subtask arguments
     #[arg(index = 2, num_args = 0..)]
     pub args: Vec<String>,

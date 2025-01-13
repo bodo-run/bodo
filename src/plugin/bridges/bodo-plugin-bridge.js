@@ -3,18 +3,24 @@
 const fs = require('fs');
 const path = require('path');
 
+function debug(message) {
+    if (process.env.BODO_VERBOSE === 'true') {
+        console.error(`[DEBUG] ${message}`);
+    }
+}
+
 function loadPlugin(pluginPath) {
     const absPath = path.resolve(pluginPath);
-    console.error("[DEBUG] Loading plugin from:", absPath);
+    debug(`Loading plugin from: ${absPath}`);
     try {
         const plugin = require(absPath);
-        console.error("[DEBUG] Plugin loaded successfully");
-        console.error("[DEBUG] Plugin exports:", Object.keys(plugin));
+        debug('Plugin loaded successfully');
+        debug(`Plugin exports: ${Object.keys(plugin)}`);
         return plugin;
     } catch (err) {
-        console.error("[DEBUG] Failed to load plugin:", err);
-        console.error("[DEBUG] Current directory:", process.cwd());
-        console.error("[DEBUG] Plugin file exists:", fs.existsSync(absPath));
+        debug(`Failed to load plugin: ${err}`);
+        debug(`Current directory: ${process.cwd()}`);
+        debug(`Plugin file exists: ${fs.existsSync(absPath)}`);
         return null;
     }
 }
@@ -22,8 +28,8 @@ function loadPlugin(pluginPath) {
 const pluginFile = process.env.BODO_PLUGIN_FILE;
 const opts = process.env.BODO_OPTS ? JSON.parse(process.env.BODO_OPTS) : {};
 
-console.error("[DEBUG] Plugin file:", pluginFile);
-console.error("[DEBUG] Options:", JSON.stringify(opts));
+debug(`Plugin file: ${pluginFile}`);
+debug(`Options: ${JSON.stringify(opts)}`);
 
 if (!pluginFile) {
     console.error("BODO_PLUGIN_FILE environment variable not set");

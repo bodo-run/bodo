@@ -1,9 +1,16 @@
 #!/usr/bin/env ruby
 require 'json'
 
+def debug(message)
+  STDERR.puts "[DEBUG] #{message}" if ENV['BODO_VERBOSE'] == 'true'
+end
+
 # Get environment variables
 opts_json = ENV['BODO_OPTS']
 plugin_file = ENV['BODO_PLUGIN_FILE']
+
+debug "Plugin file: #{plugin_file}"
+debug "Options: #{opts_json}"
 
 if opts_json.nil? || plugin_file.nil?
   STDERR.puts "Missing required environment variables"
@@ -13,6 +20,7 @@ end
 # Parse options
 begin
   opts = JSON.parse(opts_json)
+  debug "Parsed options: #{opts}"
 rescue JSON::ParserError => e
   STDERR.puts "Failed to parse BODO_OPTS JSON: #{e}"
   exit 1
@@ -25,9 +33,12 @@ if hook_name.nil?
   exit 1
 end
 
+debug "Hook name: #{hook_name}"
+
 # Load plugin
 begin
   require_relative plugin_file
+  debug "Plugin loaded successfully"
 rescue LoadError => e
   STDERR.puts "Failed to load plugin #{plugin_file}: #{e}"
   exit 1
@@ -40,10 +51,15 @@ unless plugin_module.respond_to?(hook_name)
   exit 1
 end
 
+debug "Found hook function: #{hook_name}"
+
 # Execute hook
 begin
   result = plugin_module.send(hook_name, opts)
-  puts result.to_json if result
+  if result
+    debug "Hook result: #{result}"
+    puts result.to_json
+  end
   exit 0
 rescue StandardError => e
   STDERR.puts "Plugin error: #{e}"

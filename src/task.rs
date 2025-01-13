@@ -39,96 +39,65 @@ impl TaskManager {
 
             self.plugin_manager.on_command_ready(command, task_name)?;
 
-            let status = cmd.status()?;
+            let status = cmd.status().map_err(|e| {
+                let error: Box<dyn Error> = Box::new(e);
+                self.plugin_manager
+                    .on_error(task_name, error.as_ref())
+                    .unwrap();
+                error
+            })?;
+
+            self.plugin_manager
+                .on_after_task_run(task_name, status.code().unwrap_or(1))?;
+
             if !status.success() {
-                let error = format!("Task '{}' failed", task_name);
-                self.plugin_manager.on_error(task_name, &error)?;
-                return Err(error.into());
+                let error: Box<dyn Error> = Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Command failed with status: {}", status),
+                ));
+                self.plugin_manager.on_error(task_name, error.as_ref())?;
+                return Err(error);
             }
         }
 
-        self.plugin_manager.on_after_task_run(task_name, 0)?;
         Ok(())
     }
 
-    pub fn run_concurrently(&mut self, _task_name: &str) -> Result<(), Box<dyn Error>> {
+    pub fn run_concurrently(&mut self, task_name: &str) -> Result<(), Box<dyn Error>> {
         if let Some(concurrent_items) = &self.config.concurrently {
-            let mut handles = vec![];
+            let mut children = Vec::new();
 
             for item in concurrent_items {
                 match item {
                     ConcurrentItem::Task { task } => {
-                        let parts: Vec<&str> = task.split(':').collect();
-                        let (task_name, subtask) = match parts.as_slice() {
-                            [task, subtask] => (*task, Some(*subtask)),
-                            [task] => (*task, None),
-                            _ => {
-                                return Err(Box::<dyn Error>::from(format!(
-                                    "Invalid task format: {}",
-                                    task
-                                )))
-                            }
-                        };
-
-                        let script_config = load_script_config(task_name)?;
-                        let task_config = if let Some(subtask_name) = subtask {
-                            if let Some(subtasks) = &script_config.subtasks {
-                                subtasks
-                                    .get(subtask_name)
-                                    .ok_or_else(|| {
-                                        Box::<dyn Error>::from(format!(
-                                            "Subtask '{}' not found",
-                                            subtask_name
-                                        ))
-                                    })?
-                                    .clone()
-                            } else {
-                                return Err(Box::<dyn Error>::from(format!(
-                                    "No subtasks defined in {}",
-                                    task_name
-                                )));
-                            }
-                        } else {
-                            script_config.default_task
-                        };
-
-                        let handle = self.spawn_task_with_config(&task_config)?;
-                        handles.push(handle);
+                        let script_config = load_script_config(task)?;
+                        let task_config = script_config.default_task;
+                        if let Some(command) = task_config.command {
+                            let child = self.spawn_command(&command)?;
+                            children.push(child);
+                        }
                     }
                     ConcurrentItem::Command { command } => {
-                        let handle = self.spawn_command(command)?;
-                        handles.push(handle);
+                        let child = self.spawn_command(command)?;
+                        children.push(child);
                     }
                 }
             }
 
-            // Wait for all tasks/commands to finish
-            for mut handle in handles {
-                let status = handle.wait()?;
+            for mut child in children {
+                let status = child.wait()?;
                 if !status.success() {
-                    return Err(Box::<dyn Error>::from("A concurrent task/command failed"));
+                    let error: Box<dyn Error> = Box::new(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Concurrent task failed with status: {}", status),
+                    ));
+                    self.plugin_manager.on_error(task_name, error.as_ref())?;
+                    return Err(error);
                 }
             }
         }
 
         Ok(())
-    }
-
-    fn spawn_task_with_config(&self, task_config: &TaskConfig) -> Result<Child, Box<dyn Error>> {
-        // Build command
-        let mut cmd = Command::new("sh");
-        if let Some(command) = &task_config.command {
-            cmd.arg("-c").arg(command);
-        }
-
-        // Set environment
-        if let Some(env_vars) = &task_config.env {
-            for (key, value) in env_vars {
-                cmd.env(key, value);
-            }
-        }
-
-        Ok(cmd.spawn()?)
     }
 
     fn spawn_command(&self, command: &str) -> Result<Child, Box<dyn Error>> {
@@ -154,6 +123,7 @@ mod tests {
             plugins: None,
             concurrently: None,
             description: None,
+            silent: None,
         };
         let env_manager = EnvManager::new();
         let plugin_manager = PluginManager::new();

@@ -41,7 +41,7 @@ Create a `scripts/` directory in your project root. and make a `script.yaml` fil
 
 ```yaml
 # scripts/script.yaml
-defaultTask:
+default_task:
   command: "echo 'Hello, World!'"
 ```
 
@@ -113,7 +113,7 @@ env:
   NODE_OPTIONS: --max-old-space-size=4096
 
 # The default task is invoked by simply running `bodo`
-defaultTask:
+default_task:
   command: "tsc -p tsconfig.json"
 
 # Subtasks
@@ -126,7 +126,7 @@ subtasks:
 
   test:
     pre_deps:
-      - defaultTask
+      - default_task
     command: "cargo test"
 ```
 
@@ -136,7 +136,7 @@ bodo supports running tasks in parallel similar to [`concurrently`](https://gith
 
 ```yaml
 # scripts/test/script.yaml
-defaultTask:
+default_task:
   concurrently:
     # mix tasks and commands
     - task: test
@@ -370,7 +370,7 @@ MY_GLOBAL_ENV=123
 # scripts/env-example.yaml
 env:
   MY_GLOBAL_ENV: "overridden-value"
-defaultTask:
+default_task:
   command: "echo $MY_GLOBAL_ENV"
 ```
 

@@ -1,7 +1,7 @@
 name: check
 description: Run all checks for the project, including clippy
 
-defaultTask:
+default_task:
   command: echo "All checks completed"
   pre_deps:
     - clean
@@ -17,13 +17,13 @@ defaultTask:
 subtasks:
   check:
     command: cargo check
-    
+
   clean:
-    command: cargo clean 
-  
+    command: cargo clean
+
   clippy:
     command: cargo clippy
-  
+
   test:
     command: cargo test
 
