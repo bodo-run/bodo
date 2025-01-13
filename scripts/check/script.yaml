@@ -5,7 +5,7 @@ default_task:
   command: echo "All checks completed"
   pre_deps:
     - clean
-    - task: build # from scripts/build/script.yaml
+    - build
     - release
     - check
     - clippy
