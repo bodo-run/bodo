@@ -76,15 +76,21 @@ pub fn load_bodo_config() -> Result<BodoConfig, Box<dyn Error>> {
 }
 
 pub fn load_script_config(task_name: &str) -> Result<ScriptConfig, Box<dyn Error>> {
-    // Start from current directory and walk up until we find a scripts directory
+    // Start from the current directory
     let mut current_dir = std::env::current_dir()?;
+    eprintln!(
+        "[DEBUG] Starting search from current directory: {}",
+        current_dir.display()
+    );
 
     loop {
         let script_path = current_dir
             .join("scripts")
             .join(task_name)
             .join("script.yaml");
+        eprintln!("[DEBUG] Checking path: {}", script_path.display());
         if script_path.exists() {
+            eprintln!("[DEBUG] Found script at: {}", script_path.display());
             let contents = fs::read_to_string(&script_path)?;
             let config: ScriptConfig = serde_yaml::from_str(&contents)?;
             return Ok(config);
@@ -92,11 +98,45 @@ pub fn load_script_config(task_name: &str) -> Result<ScriptConfig, Box<dyn Error
 
         // Try parent directory
         if !current_dir.pop() {
+            eprintln!("[DEBUG] Reached root directory, no more parents");
             break;
+        }
+        eprintln!(
+            "[DEBUG] Moving to parent directory: {}",
+            current_dir.display()
+        );
+    }
+
+    // Fallback: Try resolving relative to the `bodo` executable's directory
+    if let Ok(exe_path) = std::env::current_exe() {
+        eprintln!("[DEBUG] Executable path: {}", exe_path.display());
+        if let Some(exe_dir) = exe_path.parent() {
+            let script_path = exe_dir.join("scripts").join(task_name).join("script.yaml");
+            eprintln!(
+                "[DEBUG] Checking executable directory path: {}",
+                script_path.display()
+            );
+
+            if script_path.exists() {
+                eprintln!(
+                    "[DEBUG] Found script at executable directory: {}",
+                    script_path.display()
+                );
+                let contents = fs::read_to_string(&script_path)?;
+                let config: ScriptConfig = serde_yaml::from_str(&contents)?;
+                return Ok(config);
+            }
         }
     }
 
-    Err(format!("Script file not found: scripts/{}/script.yaml", task_name).into())
+    let current_dir = std::env::current_dir()?;
+    Err(format!(
+        "Task '{}' not found. Create a script.yaml file at:\n  - {}/scripts/{}/script.yaml\nor run bodo from a directory containing a scripts/{} directory",
+        task_name,
+        current_dir.display(),
+        task_name,
+        task_name
+    ).into())
 }
 
 #[cfg(test)]

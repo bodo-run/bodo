@@ -1,3 +1,11 @@
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="./docs/logo/logo-white-bg.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/logo/logo-black-bg.svg">
+    <img src="./docs/logo/logo-white-bg.svg" alt="bodo logo" width="200">
+  </picture>
+</div>
+
 # `bodo`
 
 A task runner with intuitive organization and powerful features.
@@ -24,7 +32,21 @@ A task runner with intuitive organization and powerful features.
 ## Installation
 
 ```bash
-cargo install bodo
+curl -fsSL https://bodo.run | bash
+```
+
+## Quick Start
+
+Create a `scripts/` directory in your project root. and make a `script.yaml` file in it.
+
+```yaml
+# scripts/script.yaml
+defaultTask:
+  command: "echo 'Hello, World!'"
+```
+
+```bash
+bodo
 ```
 
 ## Usage
