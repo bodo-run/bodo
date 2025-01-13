@@ -1,11 +1,26 @@
-use assert_cmd::Command;
+use assert_cmd::Command as AssertCommand;
 use predicates::str::contains;
 use std::fs;
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::Duration;
 use tempfile::tempdir;
+
+// Helper function to get the cargo run path
+pub fn cargo_run_path() -> String {
+    std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("bodo")
+        .to_str()
+        .unwrap()
+        .to_string()
+}
 
 /// Helper to run `bodo` from a given directory
 fn run_bodo_in_dir(dir: &std::path::Path, args: &[&str]) -> assert_cmd::assert::Assert {
-    Command::cargo_bin("bodo")
+    AssertCommand::cargo_bin("bodo")
         .expect("bodo binary not found")
         .current_dir(dir)
         .args(args)
@@ -147,10 +162,14 @@ default_task:
     )
     .unwrap();
 
-    // Simulate watch mode `bodo -w`
-    let assert = run_bodo_in_dir(project_root, &["-w"]);
-    // Since watch mode is not fully implemented, just check it succeeds
-    assert.success();
+    // Run bodo -w and check that it starts successfully, but kill after 1 second
+    let assert = AssertCommand::cargo_bin("bodo")
+        .expect("bodo binary not found")
+        .current_dir(project_root)
+        .arg("-w")
+        .timeout(Duration::from_secs(1))
+        .assert()
+        .success();
 }
 
 #[test]
@@ -170,10 +189,15 @@ default_task:
     )
     .unwrap();
 
-    // Run `bodo -w dev`
-    let assert = run_bodo_in_dir(project_root, &["-w", "dev"]);
-    // Since watch mode is not fully implemented, just check it succeeds
-    assert.success();
+    // Run bodo -w dev and check that it starts successfully, but kill after 1 second
+    let assert = AssertCommand::cargo_bin("bodo")
+        .expect("bodo binary not found")
+        .current_dir(project_root)
+        .arg("-w")
+        .arg("dev")
+        .timeout(Duration::from_secs(1))
+        .assert()
+        .success();
 }
 
 #[test]
@@ -218,8 +242,8 @@ default_task:
   concurrently_options:
     fail_fast: true
   concurrently:
-    - command: "echo Start1 && sleep 1 && exit 1"
-    - command: "echo Start2 && sleep 5 && echo 'You should never see me'"
+    - command: "echo Start1 && sleep 0.01 && exit 1"
+    - command: "echo Start2 && sleep 0.02 && echo 'You should never see me'"
 "#,
     )
     .unwrap();

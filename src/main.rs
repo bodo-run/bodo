@@ -203,7 +203,8 @@ fn run_task_with_deps(
         TaskManager::new(task_config, env_manager, plugin_manager, prompt_manager);
 
     if task_manager.config.concurrently.is_some() {
-        task_manager.run_concurrently(&task_key)?;
+        let items = task_manager.config.concurrently.clone().unwrap_or_default();
+        task_manager.run_concurrently(items, &task_key)?;
     } else {
         task_manager.run_task(&task_key)?;
     }

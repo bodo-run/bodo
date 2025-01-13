@@ -1,8 +1,27 @@
-use crate::config::load_script_config;
+use crate::config::{load_bodo_config, load_script_config, ColorSpec, ConcurrentItem};
 use crate::plugin::BodoPlugin;
 use colored::Colorize;
 use dialoguer::console::Term;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+/// Helper function to determine if color should be enabled based on config hierarchy
+fn is_color_enabled(
+    global_config: &Option<bool>,
+    script_config: &Option<bool>,
+    task_config: &Option<bool>,
+    output_config: &Option<bool>,
+) -> bool {
+    // Check configs in order of precedence (highest to lowest)
+    // If any level explicitly disables color, return false
+    if output_config.unwrap_or(false)
+        || task_config.unwrap_or(false)
+        || script_config.unwrap_or(false)
+        || global_config.unwrap_or(false)
+    {
+        return false;
+    }
+    true
+}
 
 static MAX_LABEL_WIDTH: AtomicUsize = AtomicUsize::new(0);
 static HEADER_PRINTED: AtomicBool = AtomicBool::new(false);
@@ -27,24 +46,51 @@ impl PrintCommandPlugin {
     ) -> usize {
         let mut max_len = 0;
         let mut command_number = 1;
+
         for item in concurrent_items {
             let label = match item {
-                crate::config::ConcurrentItem::Task { task, .. } => {
-                    format!("[{}:{}]", group, task)
-                }
-                crate::config::ConcurrentItem::Command { name, .. } => {
-                    if let Some(name) = name {
-                        format!("[{}:{}]", group, name)
+                crate::config::ConcurrentItem::Task { task, output } => {
+                    // If output prefix is specified, use it; otherwise fallback
+                    if let Some(o) = output {
+                        if let Some(prefix) = &o.prefix {
+                            format!("[{}]", prefix)
+                        } else {
+                            format!("[{}:{}]", group, task)
+                        }
                     } else {
-                        let label = format!("[{}:command{}]", group, command_number);
+                        format!("[{}:{}]", group, task)
+                    }
+                }
+                crate::config::ConcurrentItem::Command {
+                    command: _,
+                    name,
+                    output,
+                } => {
+                    let label_name = if let Some(n) = name {
+                        n.to_string()
+                    } else {
+                        let auto_label = format!("command{}", command_number);
                         command_number += 1;
-                        label
+                        auto_label
+                    };
+
+                    // If output prefix is specified, use it; otherwise fallback
+                    if let Some(o) = output {
+                        if let Some(prefix) = &o.prefix {
+                            format!("[{}]", prefix)
+                        } else {
+                            format!("[{}:{}]", group, label_name)
+                        }
+                    } else {
+                        format!("[{}:{}]", group, label_name)
                     }
                 }
             };
+
             max_len = max_len.max(label.len());
         }
-        let final_padding = max_len + 1; // Just one space after the label
+
+        let final_padding = max_len + 1; // +1 space after label
         MAX_LABEL_WIDTH.store(final_padding, Ordering::SeqCst);
         final_padding
     }
@@ -67,44 +113,34 @@ impl PrintCommandPlugin {
         }
     }
 
-    fn get_colored_label(label: &str) -> (String, usize) {
-        let colors = ["blue", "green", "yellow", "red", "magenta", "cyan"];
-        let color_index = label
-            .chars()
-            .fold(0usize, |acc, c| (acc + c as usize) % colors.len());
+    fn get_colored_label(
+        label: &str,
+        color_spec: Option<&ColorSpec>,
+        color_enabled: bool,
+    ) -> String {
+        if !color_enabled {
+            return label.to_string();
+        }
 
-        let padded_width = PrintCommandPlugin::get_stored_padding_width();
-        let colored_label = match colors[color_index] {
-            "blue" => format!("{:<width$}", label, width = padded_width)
-                .blue()
-                .bold()
-                .to_string(),
-            "green" => format!("{:<width$}", label, width = padded_width)
-                .green()
-                .bold()
-                .to_string(),
-            "yellow" => format!("{:<width$}", label, width = padded_width)
-                .yellow()
-                .bold()
-                .to_string(),
-            "red" => format!("{:<width$}", label, width = padded_width)
-                .red()
-                .bold()
-                .to_string(),
-            "magenta" => format!("{:<width$}", label, width = padded_width)
-                .magenta()
-                .bold()
-                .to_string(),
-            "cyan" => format!("{:<width$}", label, width = padded_width)
-                .cyan()
-                .bold()
-                .to_string(),
-            _ => format!("{:<width$}", label, width = padded_width)
-                .green()
-                .bold()
-                .to_string(),
-        };
-        (colored_label, color_index)
+        match color_spec {
+            Some(ColorSpec::Black) => label.black().to_string(),
+            Some(ColorSpec::Red) => label.red().to_string(),
+            Some(ColorSpec::Green) => label.green().to_string(),
+            Some(ColorSpec::Yellow) => label.yellow().to_string(),
+            Some(ColorSpec::Blue) => label.blue().to_string(),
+            Some(ColorSpec::Magenta) => label.magenta().to_string(),
+            Some(ColorSpec::Cyan) => label.cyan().to_string(),
+            Some(ColorSpec::White) => label.white().to_string(),
+            Some(ColorSpec::BrightBlack) => label.bright_black().to_string(),
+            Some(ColorSpec::BrightRed) => label.bright_red().to_string(),
+            Some(ColorSpec::BrightGreen) => label.bright_green().to_string(),
+            Some(ColorSpec::BrightYellow) => label.bright_yellow().to_string(),
+            Some(ColorSpec::BrightBlue) => label.bright_blue().to_string(),
+            Some(ColorSpec::BrightMagenta) => label.bright_magenta().to_string(),
+            Some(ColorSpec::BrightCyan) => label.bright_cyan().to_string(),
+            Some(ColorSpec::BrightWhite) => label.bright_white().to_string(),
+            None => label.green().to_string(),
+        }
     }
 
     fn get_colored_output(output: &str, color_index: usize) -> String {
@@ -129,99 +165,26 @@ impl Default for PrintCommandPlugin {
 
 impl BodoPlugin for PrintCommandPlugin {
     fn on_command_ready(&self, command: &str, task_name: &str) {
-        // Don't print if the task is marked as silent
-        if let Some((group, task)) = task_name.split_once(':') {
-            if let Ok(script_config) = load_script_config(group) {
-                if let Some(tasks) = &script_config.tasks {
-                    if let Some(task_config) = tasks.get(task) {
-                        if task_config.silent.unwrap_or(false) {
-                            return;
-                        }
-                    }
-                }
-
-                // Check if this task is part of a concurrent group
-                if let Some(concurrent_items) = &script_config.default_task.concurrently {
-                    let max_width = Self::get_max_width();
-
-                    // Print the header only once
-                    if !HEADER_PRINTED.load(Ordering::SeqCst) {
-                        println!(
-                            "{}",
-                            format!("\nRunning {} concurrent tasks:", concurrent_items.len())
-                                .bold()
-                        );
-                        // Store the padding width for all subsequent uses
-                        Self::get_padding_width(concurrent_items, group);
-
-                        let mut command_number = 1;
-                        for item in concurrent_items {
-                            match item {
-                                crate::config::ConcurrentItem::Task { task, .. } => {
-                                    if let Some(tasks) = &script_config.tasks {
-                                        if let Some(task_config) = tasks.get(task) {
-                                            let label = format!("[{}:{}]", group, task);
-                                            let (colored_label, _) =
-                                                Self::get_colored_label(&label);
-                                            let padded_label = format!(
-                                                "{:<width$}",
-                                                colored_label,
-                                                width = Self::get_stored_padding_width()
-                                            );
-                                            println!(
-                                                "{}{}",
-                                                padded_label,
-                                                Self::truncate_str(
-                                                    task_config.command.as_deref().unwrap_or(""),
-                                                    max_width
-                                                )
-                                                .dimmed()
-                                            );
-                                        }
-                                    }
-                                }
-                                crate::config::ConcurrentItem::Command {
-                                    command, name, ..
-                                } => {
-                                    let label = if let Some(name) = name {
-                                        format!("[{}:{}]", group, name)
-                                    } else {
-                                        let label =
-                                            format!("[{}:command{}]", group, command_number);
-                                        command_number += 1;
-                                        label
-                                    };
-                                    let (colored_label, _) = Self::get_colored_label(&label);
-                                    let padded_label = format!(
-                                        "{:<width$}",
-                                        colored_label,
-                                        width = Self::get_stored_padding_width()
-                                    );
-                                    println!(
-                                        "{}{}",
-                                        padded_label,
-                                        Self::truncate_str(command, max_width).dimmed()
-                                    );
-                                }
-                            }
-                        }
-                        println!();
-                        HEADER_PRINTED.store(true, Ordering::SeqCst);
-                    }
-                    return;
-                }
+        if !command.is_empty() {
+            let prefix = if task_name.starts_with(".:") {
+                format!("[{}]", task_name)
+            } else if task_name.contains(':') {
+                format!("> {}", task_name)
+            } else {
+                format!("> {}: ", task_name)
+            };
+            if task_name.starts_with(".:") {
+                println!("{} {}", prefix, command);
+            } else if task_name.contains(':') {
+                println!("{}{}", prefix, command);
+            } else {
+                println!("{}{}", prefix, command);
             }
         }
+    }
 
-        let max_width = Self::get_max_width();
-        let (colored_label, color_index) = Self::get_colored_label(task_name);
-        let truncated = Self::truncate_str(command, max_width);
-        println!(
-            "{} {}: {}",
-            ">".bold(),
-            colored_label,
-            Self::get_colored_output(&truncated, color_index)
-        );
+    fn on_error(&self, task_name: &str, error: &dyn std::error::Error) {
+        eprintln!("[{}] Error: {}", task_name.red(), error);
     }
 
     fn on_before_task_run(&self, _task_name: &str) {

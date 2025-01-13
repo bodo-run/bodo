@@ -132,11 +132,14 @@ mod tests {
     fn test_load_env_file() {
         let content = "TEST_KEY=test_value\n# comment\nTEST_KEY2='quoted value'\n";
         let temp_path = create_temp_env_file(content);
+        println!("Created temp file at: {:?}", temp_path);
+        println!("File content:\n{}", content);
 
         let mut env_manager = EnvManager::new();
         env_manager.merge_env_files(&[temp_path.to_string_lossy().to_string()]);
 
         let env_vars = env_manager.get_env();
+        println!("Loaded env vars: {:?}", env_vars);
         assert!(env_vars.contains_key("TEST_KEY"));
         assert!(env_vars.contains_key("TEST_KEY2"));
         assert_eq!(env_vars.get("TEST_KEY").unwrap(), "test_value");

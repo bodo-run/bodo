@@ -14,6 +14,7 @@ pub struct BodoConfig {
     pub executable_map: Option<Vec<ExecutableMap>>,
     pub max_concurrency: Option<usize>,
     pub plugins: Option<Vec<String>>,
+    pub disable_color: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -69,6 +70,12 @@ pub enum ColorSpec {
 pub struct OutputConfig {
     pub prefix: Option<String>,
     pub color: Option<ColorSpec>,
+    pub disable_color: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ConcurrentlyOptions {
+    pub fail_fast: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -80,9 +87,12 @@ pub struct TaskConfig {
     pub dependencies: Option<Vec<ConcurrentItem>>,
     pub plugins: Option<Vec<String>>,
     pub concurrently: Option<Vec<ConcurrentItem>>,
+    pub concurrently_options: Option<ConcurrentlyOptions>,
     pub description: Option<String>,
     pub silent: Option<bool>,
     pub output: Option<OutputConfig>,
+    pub disable_color: Option<bool>,
+    pub tasks: Option<HashMap<String, TaskConfig>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -99,6 +109,7 @@ pub struct ScriptConfig {
     pub env: Option<HashMap<String, String>>,
     pub default_task: TaskConfig,
     pub tasks: Option<HashMap<String, TaskConfig>>,
+    pub disable_color: Option<bool>,
 }
 
 pub fn load_bodo_config() -> Result<BodoConfig, Box<dyn Error>> {
@@ -137,14 +148,25 @@ pub fn load_script_config(task_name: &str) -> Result<ScriptConfig, Box<dyn Error
     );
 
     loop {
-        let script_path = current_dir
-            .join("scripts")
-            .join(task_name)
-            .join("script.yaml");
+        // First try to find script.yaml in the scripts directory
+        let script_path = current_dir.join("scripts").join("script.yaml");
         debug!("Checking path: {}", script_path.display());
         if script_path.exists() {
             debug!("Found script at: {}", script_path.display());
             let contents = fs::read_to_string(&script_path)?;
+            let config: ScriptConfig = serde_yaml::from_str(&contents)?;
+            return Ok(config);
+        }
+
+        // Then try to find script.yaml in the task-specific directory
+        let task_script_path = current_dir
+            .join("scripts")
+            .join(task_name)
+            .join("script.yaml");
+        debug!("Checking path: {}", task_script_path.display());
+        if task_script_path.exists() {
+            debug!("Found script at: {}", task_script_path.display());
+            let contents = fs::read_to_string(&task_script_path)?;
             let config: ScriptConfig = serde_yaml::from_str(&contents)?;
             return Ok(config);
         }

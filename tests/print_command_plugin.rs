@@ -35,6 +35,7 @@ tasks:
         .clone();
 
     let stdout = String::from_utf8_lossy(&output);
+    println!("Actual stdout: {}", stdout);
 
     // Check if the command is printed
     assert!(stdout.contains("> test: echo 'Hello, BODO!'"));

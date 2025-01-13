@@ -1,15 +1,43 @@
-use crate::config::{load_script_config, ColorSpec, ConcurrentItem, OutputConfig, TaskConfig};
+use std::collections::HashMap;
+use std::error::Error;
+use std::fmt;
+use std::io::{BufRead, BufReader};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
+
+use crate::config::{
+    load_bodo_config, load_script_config, ColorSpec, ConcurrentItem, OutputConfig, TaskConfig,
+};
 use crate::env::EnvManager;
 use crate::plugin::print_command_plugin::PrintCommandPlugin;
 use crate::plugin::PluginManager;
 use crate::prompt::PromptManager;
 use colored::{ColoredString, Colorize};
-use std::error::Error;
-use std::fmt;
-use std::io::{BufRead, BufReader};
-use std::process::{Child, Command, Stdio};
-use std::sync::Arc;
-use std::thread;
+
+pub struct ConcurrentChild {
+    pub child: Child,
+    pub stdout_handle: Option<JoinHandle<()>>,
+    pub stderr_handle: Option<JoinHandle<()>>,
+}
+
+impl ConcurrentChild {
+    pub fn wait(&mut self) -> std::io::Result<ExitStatus> {
+        let status = self.child.wait()?;
+        if let Some(handle) = self.stdout_handle.take() {
+            let _ = handle.join();
+        }
+        if let Some(handle) = self.stderr_handle.take() {
+            let _ = handle.join();
+        }
+        Ok(status)
+    }
+
+    pub fn kill(&mut self) -> Result<(), Box<dyn Error>> {
+        self.child.kill().map_err(|e| Box::new(e) as Box<dyn Error>)
+    }
+}
 
 #[derive(Debug)]
 struct TaskError {
@@ -82,11 +110,26 @@ pub struct TaskManager {
 
 impl TaskManager {
     pub fn new(
-        config: TaskConfig,
+        mut config: TaskConfig,
         _env_manager: EnvManager,
         plugin_manager: PluginManager,
         _prompt_manager: PromptManager,
     ) -> Self {
+        // If we have a script path, load the script config
+        if let Ok(script_config) = load_script_config("") {
+            // Merge top-level tasks into config so concurrency sees them
+            if let Some(script_tasks) = script_config.tasks {
+                if config.tasks.is_none() {
+                    config.tasks = Some(HashMap::new());
+                }
+                if let Some(ref mut existing) = config.tasks {
+                    for (k, v) in script_tasks {
+                        existing.insert(k, v);
+                    }
+                }
+            }
+        }
+
         Self {
             config,
             plugin_manager,
@@ -98,7 +141,34 @@ impl TaskManager {
 
         if let Some(command) = &self.config.command {
             let output_config = self.config.output.clone();
+            self.plugin_manager.on_command_ready(command, task_name)?;
             self.spawn_and_wait(command, task_name, output_config)?;
+        } else if let Some(items) = &self.config.concurrently {
+            self.run_concurrently(items.clone(), task_name)?;
+        } else {
+            // Try to load the task from the script config
+            if let Ok(script_config) = load_script_config(task_name) {
+                let mut merged_config = script_config.default_task;
+                // Copy over the top-level tasks so concurrency can find them
+                merged_config.tasks = script_config.tasks.clone();
+                // Also merge any tasks from the current config
+                if let Some(current_tasks) = &self.config.tasks {
+                    if let Some(merged_tasks) = &mut merged_config.tasks {
+                        for (key, value) in current_tasks {
+                            merged_tasks.insert(key.clone(), value.clone());
+                        }
+                    }
+                }
+                let env_manager = EnvManager::new();
+                let prompt_manager = PromptManager::new();
+                let mut task_manager = TaskManager::new(
+                    merged_config,
+                    env_manager,
+                    self.plugin_manager.clone(),
+                    prompt_manager,
+                );
+                task_manager.run_task(task_name)?;
+            }
         }
 
         Ok(())
@@ -112,12 +182,30 @@ impl TaskManager {
         task_key: &str,
         output_config: Option<OutputConfig>,
     ) -> Result<(), Box<dyn Error>> {
+        // Get color settings from all config levels
+        let global_disable = load_bodo_config().ok().and_then(|c| c.disable_color);
+
+        let script_disable = if let Some((group, _)) = task_key.split_once(':') {
+            load_script_config(group).ok().and_then(|c| c.disable_color)
+        } else {
+            load_script_config(task_key)
+                .ok()
+                .and_then(|c| c.disable_color)
+        };
+
+        let task_disable = self.config.disable_color;
+        let output_disable = output_config.as_ref().and_then(|o| o.disable_color);
+
+        let _color_enabled = is_color_enabled(
+            &global_disable,
+            &script_disable,
+            &task_disable,
+            &output_disable,
+        );
+
         // Prepare the prefix and optional color
         let prefix_settings = self.compute_prefix_settings(task_key, command, output_config);
         let is_concurrent = self.config.concurrently.is_some();
-
-        // Let plugins know
-        self.plugin_manager.on_command_ready(command, task_key)?;
 
         // Spawn process
         let mut cmd = Command::new("sh");
@@ -246,98 +334,113 @@ impl TaskManager {
         Ok(())
     }
 
-    pub fn run_concurrently(&mut self, parent_task_name: &str) -> Result<(), Box<dyn Error>> {
-        if let Some(concurrent_items) = &self.config.concurrently {
-            let current_script_config = if parent_task_name.contains(':') {
-                let parts: Vec<&str> = parent_task_name.split(':').collect();
-                if parts.len() != 2 {
-                    return Err(
-                        format!("Invalid task reference format: {}", parent_task_name).into(),
-                    );
+    pub fn get_task_config(&self, task_key: &str) -> Option<TaskConfig> {
+        if task_key.contains(':') {
+            let parts: Vec<&str> = task_key.split(':').collect();
+            if parts.len() != 2 {
+                return None;
+            }
+            if let Ok(script_config) = load_script_config(parts[0]) {
+                if let Some(tasks) = &script_config.tasks {
+                    return tasks.get(parts[1]).cloned();
                 }
-                load_script_config(parts[0])?
-            } else {
-                load_script_config(parent_task_name)?
-            };
+            }
+        } else if let Ok(script_config) = load_script_config(task_key) {
+            return Some(script_config.default_task);
+        }
+        None
+    }
 
-            // Compute and store padding width for all concurrent items
-            let (group, _) = parent_task_name
-                .split_once(':')
-                .unwrap_or((parent_task_name, ""));
-            PrintCommandPlugin::get_padding_width(concurrent_items, group);
+    pub fn run_concurrently(
+        &self,
+        items: Vec<ConcurrentItem>,
+        parent_task_name: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        let mut children = Vec::new();
+        let mut command_number = 0;
 
-            let mut children = Vec::new();
-            let mut command_number = 1;
+        for item in items {
+            match item {
+                ConcurrentItem::Task { task, output } => {
+                    let task_key = format!("{}:{}", parent_task_name, task);
+                    // First try to find the task in the current script's tasks
+                    let task_config = if let Some(tasks) = &self.config.tasks {
+                        tasks
+                            .get(&task)
+                            .cloned()
+                            .or_else(|| self.get_task_config(&task))
+                    } else {
+                        // If not found, try to find it in other scripts
+                        self.get_task_config(&task)
+                    };
 
-            for item in concurrent_items {
-                match item {
-                    ConcurrentItem::Task { task, output } => {
-                        let task_config = if task.contains(':') {
-                            let parts: Vec<&str> = task.split(':').collect();
-                            if parts.len() != 2 {
-                                return Err(
-                                    format!("Invalid task reference format: {}", task).into()
-                                );
+                    if let Some(task_config) = task_config {
+                        let command = task_config.command.unwrap_or_default();
+                        self.plugin_manager.on_command_ready(&command, &task_key)?;
+                        let child = self.spawn_and_wait_concurrent(&command, &task_key, output)?;
+                        children.push(child);
+                    } else {
+                        return Err(format!("Task {} not found", task).into());
+                    }
+                }
+                ConcurrentItem::Command {
+                    command,
+                    output,
+                    name,
+                } => {
+                    command_number += 1;
+                    let task_key = if let Some(name) = &name {
+                        format!("{}:{}", parent_task_name, name)
+                    } else {
+                        format!("{}:command{}", parent_task_name, command_number)
+                    };
+                    self.plugin_manager.on_command_ready(&command, &task_key)?;
+                    let child = self.spawn_and_wait_concurrent(&command, &task_key, output)?;
+                    children.push(child);
+                }
+            }
+        }
+
+        let mut any_failed = false;
+        let mut remaining = children.len();
+
+        while remaining > 0 {
+            for child in &mut children {
+                if let Some(status) = child.child.try_wait()? {
+                    if !status.success() {
+                        any_failed = true;
+                        if let Some(options) = &self.config.concurrently_options {
+                            if options.fail_fast {
+                                // Kill remaining processes if fail_fast is enabled
+                                for other_child in &mut children {
+                                    let _ = other_child.kill();
+                                }
+                                break;
                             }
-                            let script_config = load_script_config(parts[0])?;
-                            if let Some(tasks) = &script_config.tasks {
-                                tasks.get(parts[1]).cloned().ok_or_else(|| {
-                                    format!(
-                                        "Task '{}' not found in script '{}'",
-                                        parts[1], parts[0]
-                                    )
-                                })?
-                            } else {
-                                return Err(
-                                    format!("No tasks defined in script '{}'", parts[0]).into()
-                                );
-                            }
-                        } else if let Some(tasks) = &current_script_config.tasks {
-                            if let Some(task_config) = tasks.get(task) {
-                                task_config.clone()
-                            } else {
-                                let script_config = load_script_config(task)?;
-                                script_config.default_task
-                            }
-                        } else {
-                            let script_config = load_script_config(task)?;
-                            script_config.default_task
-                        };
-
-                        if let Some(command) = &task_config.command {
-                            let task_key = format!("{}:{}", parent_task_name, task);
-                            let child =
-                                self.spawn_and_wait_concurrent(command, &task_key, output.clone())?;
-                            children.push(child);
                         }
                     }
-                    ConcurrentItem::Command {
-                        command,
-                        output,
-                        name,
-                    } => {
-                        let task_key = if let Some(name) = name {
-                            format!("{}:{}", parent_task_name, name)
-                        } else {
-                            let task_key =
-                                format!("{}:command{}", parent_task_name, command_number);
-                            command_number += 1;
-                            task_key
-                        };
-                        let child =
-                            self.spawn_and_wait_concurrent(command, &task_key, output.clone())?;
-                        children.push(child);
-                    }
+                    remaining -= 1;
                 }
             }
 
-            // Wait for all children to complete
-            for mut child in children {
-                let status = child.wait()?;
-                if !status.success() {
-                    return Err(format!("Task failed with status: {}", status).into());
-                }
+            if remaining > 0 {
+                thread::sleep(Duration::from_millis(100));
             }
+        }
+
+        // Wait for all children to complete and join their stdout/stderr threads
+        for mut child in children {
+            let _ = child.child.wait();
+            if let Some(handle) = child.stdout_handle {
+                let _ = handle.join();
+            }
+            if let Some(handle) = child.stderr_handle {
+                let _ = handle.join();
+            }
+        }
+
+        if any_failed {
+            return Err("One or more concurrent tasks failed".into());
         }
 
         Ok(())
@@ -350,17 +453,23 @@ impl TaskManager {
         command: &str,
         output_config: Option<OutputConfig>,
     ) -> PrefixSettings {
-        let color = output_config.as_ref().and_then(|o| o.color.clone());
-        let prefix_str = if let Some(o) = output_config {
-            o.prefix.unwrap_or_else(|| task_key.to_string())
+        let color = output_config.as_ref().and_then(|c| c.color.clone());
+
+        let prefix_str = if let Some(output_config) = output_config {
+            if let Some(prefix) = output_config.prefix {
+                prefix
+            } else if task_key.contains(':') {
+                task_key.to_string()
+            } else if task_key.ends_with("command") {
+                command.to_string()
+            } else {
+                task_key.to_string()
+            }
         } else if task_key.contains(':') {
-            // For subtasks, use the full task reference
             task_key.to_string()
-        } else if task_key.ends_with(":command") {
-            // For raw commands, use the command text
+        } else if task_key.ends_with("command") {
             command.to_string()
         } else {
-            // Default to task key
             task_key.to_string()
         };
 
@@ -373,43 +482,35 @@ impl TaskManager {
         }
     }
 
-    fn spawn_and_wait_concurrent(
+    pub fn spawn_and_wait_concurrent(
         &self,
         command: &str,
         task_key: &str,
         output_config: Option<OutputConfig>,
-    ) -> Result<Child, Box<dyn Error>> {
-        // Prepare the prefix and optional color
-        let prefix_settings = self.compute_prefix_settings(task_key, command, output_config);
+    ) -> Result<ConcurrentChild, Box<dyn Error>> {
+        let prefix_settings =
+            self.compute_prefix_settings(task_key, command, output_config.clone());
         let shared_prefix = Arc::new(prefix_settings);
-
-        // Let plugins know
-        self.plugin_manager.on_command_ready(command, task_key)?;
 
         // Spawn process
         let mut cmd = Command::new("sh");
         cmd.arg("-c").arg(command);
-        // Grab environment from the config if needed
+
         if let Some(env_vars) = &self.config.env {
             for (key, value) in env_vars {
                 cmd.env(key, value);
             }
         }
 
-        // Make sure we can read output
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
-        let mut child = cmd.spawn().map_err(|e| {
-            let boxed: Box<dyn Error> = Box::new(e);
-            boxed
-        })?;
+        let mut child = cmd.spawn().map_err(|e| Box::new(e) as Box<dyn Error>)?;
 
-        // Handle stdout
-        if let Some(stdout) = child.stdout.take() {
+        let stdout_handle = if let Some(stdout) = child.stdout.take() {
             let sp = Arc::clone(&shared_prefix);
             let task_for_err = task_key.to_string();
-            thread::spawn(move || {
+            Some(thread::spawn(move || {
                 let reader = BufReader::new(stdout);
                 for line in reader.lines() {
                     match line {
@@ -432,14 +533,15 @@ impl TaskManager {
                         }
                     }
                 }
-            });
-        }
+            }))
+        } else {
+            None
+        };
 
-        // Handle stderr
-        if let Some(stderr) = child.stderr.take() {
+        let stderr_handle = if let Some(stderr) = child.stderr.take() {
             let sp = Arc::clone(&shared_prefix);
             let task_for_err = task_key.to_string();
-            thread::spawn(move || {
+            Some(thread::spawn(move || {
                 let reader = BufReader::new(stderr);
                 for line in reader.lines() {
                     match line {
@@ -462,11 +564,36 @@ impl TaskManager {
                         }
                     }
                 }
-            });
-        }
+            }))
+        } else {
+            None
+        };
 
-        Ok(child)
+        Ok(ConcurrentChild {
+            child,
+            stdout_handle,
+            stderr_handle,
+        })
     }
+}
+
+/// Helper function to determine if color should be enabled based on config hierarchy
+fn is_color_enabled(
+    global_config: &Option<bool>,
+    script_config: &Option<bool>,
+    task_config: &Option<bool>,
+    output_config: &Option<bool>,
+) -> bool {
+    // Check configs in order of precedence (highest to lowest)
+    // If any level explicitly disables color, return false
+    if output_config.unwrap_or(false)
+        || task_config.unwrap_or(false)
+        || script_config.unwrap_or(false)
+        || global_config.unwrap_or(false)
+    {
+        return false;
+    }
+    true
 }
 
 #[cfg(test)]
@@ -484,9 +611,12 @@ mod tests {
             dependencies: Some(Vec::new()),
             plugins: None,
             concurrently: None,
+            concurrently_options: None,
             description: None,
             silent: None,
             output: None,
+            disable_color: None,
+            tasks: None,
         };
         let env_manager = EnvManager::new();
         let plugin_manager = PluginManager::new();
