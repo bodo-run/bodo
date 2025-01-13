@@ -6,39 +6,8 @@ use colored::{Color, ColoredString, Colorize};
 use std::error::Error;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
-
-static COLOR_INDEX: AtomicUsize = AtomicUsize::new(0);
-
-/// Get a default color from our predefined list based on an index
-fn get_default_color(index: usize) -> ColorSpec {
-    let colors = [
-        ColorSpec::Cyan,
-        ColorSpec::Green,
-        ColorSpec::Yellow,
-        ColorSpec::Blue,
-        ColorSpec::Magenta,
-        ColorSpec::Red,
-        ColorSpec::BrightCyan,
-        ColorSpec::BrightGreen,
-        ColorSpec::BrightYellow,
-        ColorSpec::BrightBlue,
-        ColorSpec::BrightMagenta,
-        ColorSpec::BrightRed,
-        ColorSpec::White,
-        ColorSpec::BrightWhite,
-        ColorSpec::Black,
-        ColorSpec::BrightBlack,
-        // Repeat some nice colors to reach 20
-        ColorSpec::Cyan,
-        ColorSpec::Green,
-        ColorSpec::Yellow,
-        ColorSpec::Blue,
-    ];
-    colors[index % colors.len()].clone()
-}
 
 /// Converts our `ColorSpec` enum to a `colored::Color`.
 fn to_colored_color(spec: &ColorSpec) -> Color {
@@ -392,29 +361,23 @@ impl TaskManager {
                 prefix: prefix_str,
                 color,
             }
+        } else if task_key.contains(':') {
+            // For subtasks, use the full task reference
+            PrefixSettings {
+                prefix: task_key.to_string(),
+                color: None,
+            }
+        } else if task_key.ends_with(":command") {
+            // For raw commands, use the command text
+            PrefixSettings {
+                prefix: command.to_string(),
+                color: None,
+            }
         } else {
-            // Get next color index atomically
-            let color_index = COLOR_INDEX.fetch_add(1, Ordering::Relaxed);
-            let default_color = Some(get_default_color(color_index));
-
-            if task_key.contains(':') {
-                // For subtasks, use the full task reference
-                PrefixSettings {
-                    prefix: task_key.to_string(),
-                    color: default_color,
-                }
-            } else if task_key.ends_with(":command") {
-                // For raw commands, use the command text
-                PrefixSettings {
-                    prefix: command.to_string(),
-                    color: default_color,
-                }
-            } else {
-                // Default to task key
-                PrefixSettings {
-                    prefix: task_key.to_string(),
-                    color: default_color,
-                }
+            // Default to task key
+            PrefixSettings {
+                prefix: task_key.to_string(),
+                color: None,
             }
         }
     }

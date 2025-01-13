@@ -18,7 +18,11 @@ tasks:
     command: 'echo "World task"'
 
   slow:
-    command: 'sleep 5 && echo "Slow task"'
+    command: |
+      sleep $((RANDOM % 5)) && echo "Slow task output 1" && \
+      sleep $((RANDOM % 5)) && echo "Slow task output 2"
 
   fast:
-    command: 'sleep 1 && echo "Fast task"'
+    command: |
+      sleep $((RANDOM % 5)) && echo "Fast task output 1" && \
+      sleep $((RANDOM % 5)) && echo "Fast task output 2"

@@ -4,6 +4,7 @@ use serde_json;
 use serde_yaml;
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt;
 use std::fs;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -25,6 +26,15 @@ pub enum ConcurrentItem {
         command: String,
         output: Option<OutputConfig>,
     },
+}
+
+impl fmt::Display for ConcurrentItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConcurrentItem::Task { task, .. } => write!(f, "{}", task),
+            ConcurrentItem::Command { .. } => write!(f, "command"),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
