@@ -76,6 +76,8 @@ pub struct OutputConfig {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConcurrentlyOptions {
     pub fail_fast: bool,
+    #[serde(default)]
+    pub timeout: Option<u64>, // in seconds
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

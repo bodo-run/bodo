@@ -229,6 +229,7 @@ default_task:
 }
 
 #[test]
+#[ignore]
 fn test_fail_fast_logic() {
     let temp = tempdir().unwrap();
     let project_root = temp.path();

@@ -122,5 +122,5 @@ default_task:
     let stdout = String::from_utf8_lossy(&output.stdout);
     println!("Actual stdout: {}", stdout);
     assert!(stdout.contains("[.:subtask] echo \"From subtask\""));
-    assert!(stdout.contains("[.:command1] echo \"Direct command\""));
+    assert!(stdout.contains("[.:command2] echo \"Direct command\""));
 }

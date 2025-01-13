@@ -3,9 +3,9 @@ use std::error::Error;
 use std::fmt;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::config::{
     load_bodo_config, load_script_config, ColorSpec, ConcurrentItem, OutputConfig, TaskConfig,
@@ -25,6 +25,7 @@ pub struct ConcurrentChild {
 impl ConcurrentChild {
     pub fn wait(&mut self) -> std::io::Result<ExitStatus> {
         let status = self.child.wait()?;
+        // Join stdout/stderr threads after process exits
         if let Some(handle) = self.stdout_handle.take() {
             let _ = handle.join();
         }
@@ -35,22 +36,31 @@ impl ConcurrentChild {
     }
 
     pub fn kill(&mut self) -> Result<(), Box<dyn Error>> {
-        self.child.kill().map_err(|e| Box::new(e) as Box<dyn Error>)
+        // First close stdout/stderr to prevent any more output
+        if let Some(handle) = self.stdout_handle.take() {
+            let _ = handle.join();
+        }
+        if let Some(handle) = self.stderr_handle.take() {
+            let _ = handle.join();
+        }
+        // Then kill the process
+        let _ = self.child.kill();
+        // Wait for it to ensure it's dead
+        let _ = self.child.wait();
+        Ok(())
     }
 }
 
 #[derive(Debug)]
-struct TaskError {
-    message: String,
-}
+struct TaskError(String);
+
+impl std::error::Error for TaskError {}
 
 impl fmt::Display for TaskError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message)
+        write!(f, "{}", self.0)
     }
 }
-
-impl Error for TaskError {}
 
 fn get_color_for_label(label: &str) -> ColoredString {
     let colors = ["blue", "green", "yellow", "red", "magenta", "cyan"];
@@ -320,13 +330,11 @@ impl TaskManager {
 
         // Check success
         if !status.success() {
-            let err = TaskError {
-                message: format!(
-                    "Task '{}' failed with exit code {}",
-                    task_key,
-                    status.code().unwrap_or(1)
-                ),
-            };
+            let err = TaskError(format!(
+                "Task '{}' failed with exit code {}",
+                task_key,
+                status.code().unwrap_or(1)
+            ));
             self.plugin_manager.on_error(task_key, &err)?;
             return Err(Box::new(err));
         }
@@ -356,91 +364,184 @@ impl TaskManager {
         items: Vec<ConcurrentItem>,
         parent_task_name: &str,
     ) -> Result<(), Box<dyn Error>> {
-        let mut children = Vec::new();
-        let mut command_number = 0;
+        // Gather concurrency options
+        let concurrently_options = self.config.concurrently_options.clone();
+        let fail_fast = concurrently_options.as_ref().map_or(false, |c| c.fail_fast);
+        let timeout_secs = concurrently_options
+            .as_ref()
+            .and_then(|c| c.timeout)
+            .unwrap_or(0);
 
-        for item in items {
-            match item {
+        // This will hold all children across threads
+        let children = Arc::new(Mutex::new(Vec::<(String, ConcurrentChild)>::new()));
+        // We'll store success/failure in a shared RwLock so any thread can set failure.
+        let any_failure = Arc::new(RwLock::new(None::<String>)); // store error message if any
+
+        // Spawn each item
+        for (index, item) in items.into_iter().enumerate() {
+            let task_key = match &item {
+                ConcurrentItem::Task { task, .. } => format!("{}:{}", parent_task_name, task),
+                ConcurrentItem::Command { name, .. } => {
+                    if let Some(n) = name {
+                        format!("{}:{}", parent_task_name, n)
+                    } else {
+                        // fallback name for command
+                        format!("{}:command{}", parent_task_name, index + 1)
+                    }
+                }
+            };
+
+            let (command, output_conf) = match item {
                 ConcurrentItem::Task { task, output } => {
-                    let task_key = format!("{}:{}", parent_task_name, task);
-                    // First try to find the task in the current script's tasks
-                    let task_config = if let Some(tasks) = &self.config.tasks {
+                    // We either find the subtask config or error
+                    let subtask_config = if let Some(tasks) = &self.config.tasks {
                         tasks
                             .get(&task)
                             .cloned()
                             .or_else(|| self.get_task_config(&task))
                     } else {
-                        // If not found, try to find it in other scripts
                         self.get_task_config(&task)
                     };
 
-                    if let Some(task_config) = task_config {
-                        let command = task_config.command.unwrap_or_default();
-                        self.plugin_manager.on_command_ready(&command, &task_key)?;
-                        let child = self.spawn_and_wait_concurrent(&command, &task_key, output)?;
-                        children.push(child);
-                    } else {
-                        return Err(format!("Task {} not found", task).into());
-                    }
+                    let subtask_config = match subtask_config {
+                        Some(c) => c,
+                        None => {
+                            return Err(format!("Task '{}' not found", task).into());
+                        }
+                    };
+
+                    let cmd = subtask_config.command.clone().unwrap_or_default();
+                    (cmd, output)
                 }
                 ConcurrentItem::Command {
                     command,
                     output,
-                    name,
-                } => {
-                    command_number += 1;
-                    let task_key = if let Some(name) = &name {
-                        format!("{}:{}", parent_task_name, name)
-                    } else {
-                        format!("{}:command{}", parent_task_name, command_number)
-                    };
-                    self.plugin_manager.on_command_ready(&command, &task_key)?;
-                    let child = self.spawn_and_wait_concurrent(&command, &task_key, output)?;
-                    children.push(child);
-                }
-            }
+                    name: _,
+                } => (command, output),
+            };
+
+            // Let the plugin manager know
+            self.plugin_manager.on_command_ready(&command, &task_key)?;
+
+            // Spawn the process and store in the shared list
+            let child = self.spawn_and_wait_concurrent(&command, &task_key, output_conf)?;
+            let mut locked_children = children.lock().unwrap();
+            locked_children.push((task_key.clone(), child));
         }
 
-        let mut any_failed = false;
-        let mut remaining = children.len();
+        // If we have a timeout, start a watchdog that kills everything on expiry
+        let children_clone_for_watchdog = Arc::clone(&children);
+        let any_failure_watchdog = Arc::clone(&any_failure);
+        let watchdog_handle = if timeout_secs > 0 {
+            let deadline = Instant::now() + Duration::from_secs(timeout_secs);
+            Some(thread::spawn(move || {
+                while Instant::now() < deadline {
+                    // if something already failed, no need to check further
+                    if any_failure_watchdog.read().unwrap().is_some() {
+                        return;
+                    }
+                    thread::sleep(Duration::from_millis(200));
+                }
+                // If we got here, time is up
+                let mut locked = children_clone_for_watchdog.lock().unwrap();
+                for (_, ch) in locked.iter_mut() {
+                    let _ = ch.kill(); // kill them all
+                }
+                // Mark any_failure so everyone knows we timed out
+                *any_failure_watchdog.write().unwrap() = Some(format!(
+                    "Concurrent tasks timed out after {}s",
+                    timeout_secs
+                ));
+            }))
+        } else {
+            None
+        };
 
-        while remaining > 0 {
-            for child in &mut children {
-                if let Some(status) = child.child.try_wait()? {
-                    if !status.success() {
-                        any_failed = true;
-                        if let Some(options) = &self.config.concurrently_options {
-                            if options.fail_fast {
-                                // Kill remaining processes if fail_fast is enabled
-                                for other_child in &mut children {
+        // Wait for processes in a loop until they're done or we have a failure
+        // We track how many are still alive
+        loop {
+            let mut still_alive = 0;
+            {
+                let mut locked = children.lock().unwrap();
+                for (task_key, ch) in locked.iter_mut() {
+                    // If there's already a failure, kill everything
+                    if any_failure.read().unwrap().is_some() {
+                        let _ = ch.kill();
+                        continue;
+                    }
+                    // Poll the status
+                    match ch.child.try_wait() {
+                        Ok(Some(status)) => {
+                            // Process exited
+                            if !status.success() {
+                                let code = status.code().unwrap_or(1);
+                                // Mark failure
+                                *any_failure.write().unwrap() = Some(format!(
+                                    "Task '{}' failed (exit code: {})",
+                                    task_key, code
+                                ));
+
+                                if fail_fast {
+                                    // Kill the rest immediately
+                                    for (_, other_child) in locked.iter_mut() {
+                                        let _ = other_child.kill();
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        Ok(None) => {
+                            // Still running
+                            still_alive += 1;
+                        }
+                        Err(e) => {
+                            // Some error
+                            *any_failure.write().unwrap() =
+                                Some(format!("Error checking status of '{}': {}", task_key, e));
+                            if fail_fast {
+                                // kill everyone
+                                for (_, other_child) in locked.iter_mut() {
                                     let _ = other_child.kill();
                                 }
                                 break;
                             }
                         }
                     }
-                    remaining -= 1;
                 }
             }
 
-            if remaining > 0 {
-                thread::sleep(Duration::from_millis(100));
+            if any_failure.read().unwrap().is_some() {
+                break; // already have an error, we're done
+            }
+            if still_alive == 0 {
+                // All are finished successfully
+                break;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+
+        // Wait for all threads (stdout/stderr) to complete
+        {
+            let mut locked = children.lock().unwrap();
+            for (_, child) in locked.iter_mut() {
+                let _ = child.wait(); // to ensure output threads join
             }
         }
 
-        // Wait for all children to complete and join their stdout/stderr threads
-        for mut child in children {
-            let _ = child.child.wait();
-            if let Some(handle) = child.stdout_handle {
-                let _ = handle.join();
-            }
-            if let Some(handle) = child.stderr_handle {
-                let _ = handle.join();
-            }
+        // If we had a watchdog thread, wait on it too
+        if let Some(handle) = watchdog_handle {
+            let _ = handle.join();
         }
 
-        if any_failed {
-            return Err("One or more concurrent tasks failed".into());
+        // Check final error
+        if let Some(ref err) = *any_failure.read().unwrap() {
+            // Create a TaskError from the error string
+            let task_error = TaskError(err.clone());
+            // Let the plugin manager know
+            self.plugin_manager
+                .on_error(parent_task_name, &task_error)?;
+            // Return error
+            return Err(Box::new(task_error));
         }
 
         Ok(())
@@ -488,41 +589,64 @@ impl TaskManager {
         task_key: &str,
         output_config: Option<OutputConfig>,
     ) -> Result<ConcurrentChild, Box<dyn Error>> {
-        let prefix_settings =
-            self.compute_prefix_settings(task_key, command, output_config.clone());
-        let shared_prefix = Arc::new(prefix_settings);
+        // Prepare the prefix and optional color
+        let prefix_settings = self.compute_prefix_settings(task_key, command, output_config);
+        let is_concurrent = self.config.concurrently.is_some();
 
         // Spawn process
         let mut cmd = Command::new("sh");
         cmd.arg("-c").arg(command);
-
+        // Grab environment from the config if needed
         if let Some(env_vars) = &self.config.env {
             for (key, value) in env_vars {
                 cmd.env(key, value);
             }
         }
 
+        // Make sure we can read output
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
-        let mut child = cmd.spawn().map_err(|e| Box::new(e) as Box<dyn Error>)?;
+        let mut child = cmd.spawn().map_err(|e| {
+            let boxed: Box<dyn Error> = Box::new(e);
+            boxed
+        })?;
 
-        let stdout_handle = if let Some(stdout) = child.stdout.take() {
+        // Move prefix settings into arcs so each thread can read them
+        let shared_prefix = Arc::new(prefix_settings);
+        let shared_is_concurrent = Arc::new(is_concurrent);
+
+        // Create a channel for each output stream
+        let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
+        let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
+
+        // Take ownership of the output streams
+        let stdout = child.stdout.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
+
+        // Spawn stdout thread
+        let stdout_handle = {
             let sp = Arc::clone(&shared_prefix);
+            let sic = Arc::clone(&shared_is_concurrent);
             let task_for_err = task_key.to_string();
             Some(thread::spawn(move || {
                 let reader = BufReader::new(stdout);
                 for line in reader.lines() {
                     match line {
                         Ok(line) => {
-                            let prefix = format!("[{}]", sp.prefix);
-                            let prefix_colored = apply_color(&prefix, sp.color.as_ref());
-                            println!(
-                                "{:<width$}{}",
-                                prefix_colored,
-                                line,
-                                width = sp.padding_width
-                            );
+                            if *sic {
+                                let prefix = format!("[{}]", sp.prefix);
+                                let prefix_colored = apply_color(&prefix, sp.color.as_ref());
+                                let output = format!(
+                                    "{:<width$}{}",
+                                    prefix_colored,
+                                    line,
+                                    width = sp.padding_width
+                                );
+                                let _ = stdout_tx.send(output);
+                            } else {
+                                let _ = stdout_tx.send(line);
+                            }
                         }
                         Err(e) => {
                             eprintln!(
@@ -534,26 +658,31 @@ impl TaskManager {
                     }
                 }
             }))
-        } else {
-            None
         };
 
-        let stderr_handle = if let Some(stderr) = child.stderr.take() {
+        // Spawn stderr thread
+        let stderr_handle = {
             let sp = Arc::clone(&shared_prefix);
+            let sic = Arc::clone(&shared_is_concurrent);
             let task_for_err = task_key.to_string();
             Some(thread::spawn(move || {
                 let reader = BufReader::new(stderr);
                 for line in reader.lines() {
                     match line {
                         Ok(line) => {
-                            let prefix = format!("[{}]", sp.prefix);
-                            let prefix_colored = apply_color(&prefix, sp.color.as_ref());
-                            eprintln!(
-                                "{:<width$}{}",
-                                prefix_colored,
-                                line,
-                                width = sp.padding_width
-                            );
+                            if *sic {
+                                let prefix = format!("[{}]", sp.prefix);
+                                let prefix_colored = apply_color(&prefix, sp.color.as_ref());
+                                let output = format!(
+                                    "{:<width$}{}",
+                                    prefix_colored,
+                                    line,
+                                    width = sp.padding_width
+                                );
+                                let _ = stderr_tx.send(output);
+                            } else {
+                                let _ = stderr_tx.send(line);
+                            }
                         }
                         Err(e) => {
                             eprintln!(
@@ -565,9 +694,20 @@ impl TaskManager {
                     }
                 }
             }))
-        } else {
-            None
         };
+
+        // Spawn output printer threads
+        thread::spawn(move || {
+            while let Ok(line) = stdout_rx.recv() {
+                println!("{}", line);
+            }
+        });
+
+        thread::spawn(move || {
+            while let Ok(line) = stderr_rx.recv() {
+                eprintln!("{}", line);
+            }
+        });
 
         Ok(ConcurrentChild {
             child,
