@@ -11,6 +11,7 @@ use colored::*;
 use std::collections::HashSet;
 use std::error::Error;
 use std::path::PathBuf;
+use std::process;
 
 fn get_task_config(
     script_config: &bodo::config::ScriptConfig,
@@ -232,7 +233,15 @@ fn run_task(
     )
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
+    let result = run_main();
+    if let Err(err) = result {
+        eprintln!("{}", err.to_string().red());
+        process::exit(1);
+    }
+}
+
+fn run_main() -> Result<(), Box<dyn Error>> {
     let cli = BodoCli::parse();
     debug::set_verbose(cli.verbose);
 

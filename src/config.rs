@@ -1,4 +1,5 @@
 use crate::debug;
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_yaml;
@@ -163,9 +164,11 @@ pub fn load_script_config(task_name: &str) -> Result<ScriptConfig, Box<dyn Error
         .join(task_name)
         .join("script.yaml");
     Err(format!(
-        "Task '{}' not found. Create a script.yaml file at:\n  - {}\nor run bodo from a directory containing a scripts/{} directory",
-        task_name,
+        "Task {} not found. Create a script.yaml file at:{}  - {}{}or run bodo from a directory containing a scripts/{} directory",
+        task_name.red(),
+        "\n",
         expected_path.display(),
+        "\n",
         task_name
     ).into())
 }
