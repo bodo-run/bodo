@@ -2,9 +2,10 @@ use crate::config::load_script_config;
 use crate::plugin::BodoPlugin;
 use colored::Colorize;
 use dialoguer::console::Term;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 static MAX_LABEL_WIDTH: AtomicUsize = AtomicUsize::new(0);
+static HEADER_PRINTED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone)]
 pub struct PrintCommandPlugin;
@@ -135,8 +136,8 @@ impl BodoPlugin for PrintCommandPlugin {
                 if let Some(concurrent_items) = &script_config.default_task.concurrently {
                     let max_width = Self::get_max_width();
 
-                    // Print the header only for the first task
-                    if task == concurrent_items[0].to_string() {
+                    // Print the header only once
+                    if !HEADER_PRINTED.load(Ordering::SeqCst) {
                         println!(
                             "{}",
                             format!("\nRunning {} concurrent tasks:", concurrent_items.len())
@@ -187,6 +188,7 @@ impl BodoPlugin for PrintCommandPlugin {
                             }
                         }
                         println!();
+                        HEADER_PRINTED.store(true, Ordering::SeqCst);
                     }
                     return;
                 }
@@ -202,5 +204,10 @@ impl BodoPlugin for PrintCommandPlugin {
             colored_label,
             Self::get_colored_output(&truncated, color_index)
         );
+    }
+
+    fn on_before_task_run(&self, _task_name: &str) {
+        // Reset the header printed flag at the start of each task
+        HEADER_PRINTED.store(false, Ordering::SeqCst);
     }
 }
