@@ -1,0 +1,3 @@
+Most things are implemented as a Rust plugin if possible.
+
+Always run tests and clippy after writing code to ensure it works.

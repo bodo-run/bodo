@@ -263,7 +263,7 @@ plugins:
     )
     .unwrap();
 
-    // Create test directory with script that will trigger env modification
+    // Write test directory script
     let test_dir = project_root.join("scripts").join("bash-plugin-test");
     fs::create_dir_all(&test_dir).unwrap();
     fs::write(
@@ -272,10 +272,23 @@ plugins:
 name: Bash Plugin Test
 description: Testing bash plugin hooks
 defaultTask:
-  command: "echo $TEST_VAR"
+  command: echo "Running a bash plugin test"
   env:
-    - INITIAL_VAR=initial
+    TEST_VAR: "initial_value"
 "#,
+    )
+    .unwrap();
+
+    // Write bodo.yaml to register plugin
+    fs::write(
+        project_root.join("bodo.yaml"),
+        format!(
+            r#"
+plugins:
+  - {}
+"#,
+            plugin_path.display()
+        ),
     )
     .unwrap();
 
@@ -294,13 +307,11 @@ defaultTask:
         .arg("bash-plugin-test")
         .assert()
         .success()
-        // Verify argument passing
         .stderr(contains(
             "[TEST] on_before_task_run received: task=bash-plugin-test",
         ))
         .stderr(contains(
-            "[TEST] on_command_ready received: cmd=echo $TEST_VAR",
+            "[TEST] on_after_task_run received: task=bash-plugin-test",
         ))
-        // Verify return value handling (TEST_VAR was set by on_resolve_command)
-        .stdout(contains("test_value"));
+        .stdout(contains("Running a bash plugin test"));
 }

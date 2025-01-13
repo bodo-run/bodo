@@ -12,12 +12,13 @@ fn test_concurrent_tasks() {
     std::fs::write(
         dir.join("script.yaml"),
         r#"
+name: "Test Script"
 defaultTask:
   concurrently:
-    - task: "test1"
+    - task: "test:test"
     - command: "echo 'Hello from command'"
 subtasks:
-  test1:
+  test:
     command: "echo 'Hello from test1'"
 "#,
     )
