@@ -44,6 +44,7 @@ impl PluginManager {
             "js" | "ts" => Some(("node", "bodo-plugin-bridge.js")),
             "py" => Some(("python3", "bodo-plugin-bridge.py")),
             "rb" => Some(("ruby", "bodo-plugin-bridge.rb")),
+            "sh" => Some(("bash", "bodo-plugin-bridge.sh")),
             _ => None,
         }
     }
