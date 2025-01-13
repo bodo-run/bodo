@@ -8,4 +8,4 @@ pub trait BodoPlugin {
     fn on_resolve_command(&mut self, _task: &mut TaskConfig) {}
     fn on_command_ready(&mut self, _command: &str, _task_name: &str) {}
     fn on_bodo_exit(&mut self, _exit_code: i32) {}
-} 
+}

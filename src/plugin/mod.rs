@@ -7,7 +7,7 @@ use serde_json::json;
 use std::error::Error;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 #[derive(Debug)]
 pub struct PluginError {
@@ -24,7 +24,7 @@ impl Error for PluginError {}
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct PluginManager {
     plugins: Vec<PathBuf>,
 }
@@ -35,6 +35,7 @@ impl PluginManager {
     }
 
     pub fn register_plugin(&mut self, plugin_path: PathBuf) {
+        eprintln!("[DEBUG] Registering plugin: {}", plugin_path.display());
         self.plugins.push(plugin_path);
     }
 
@@ -47,34 +48,81 @@ impl PluginManager {
         }
     }
 
-    fn run_plugin_hook(&self, _hook_name: &str, data: serde_json::Value) -> Result<()> {
+    fn run_plugin_hook(&self, hook_name: &str, data: serde_json::Value) -> Result<()> {
+        eprintln!("[DEBUG] Running hook '{}' with data: {}", hook_name, data);
         for plugin_path in &self.plugins {
+            eprintln!("[DEBUG] Processing plugin: {}", plugin_path.display());
             let (interpreter, bridge) =
                 Self::get_bridge_script(plugin_path).ok_or_else(|| PluginError {
                     message: "Unsupported plugin file extension".to_string(),
                 })?;
 
-            let bridge_path = PathBuf::from("src/plugin/bridges").join(bridge);
+            // Get the absolute path to the plugin bridge
+            let bridge_path = if cfg!(test) {
+                plugin_path
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .join("src")
+                    .join("plugin")
+                    .join("bridges")
+                    .join(bridge)
+            } else {
+                std::env::current_dir()?
+                    .join("src")
+                    .join("plugin")
+                    .join("bridges")
+                    .join(bridge)
+            };
 
-            let status = Command::new(interpreter)
-                .arg(bridge_path)
-                .env("BODO_PLUGIN_FILE", plugin_path)
+            eprintln!("[DEBUG] Bridge path: {}", bridge_path.display());
+
+            // Get the absolute path to the plugin
+            let plugin_abs_path = if plugin_path.is_absolute() {
+                plugin_path.clone()
+            } else {
+                std::env::current_dir()?.join(plugin_path)
+            };
+
+            eprintln!(
+                "[DEBUG] Plugin absolute path: {}",
+                plugin_abs_path.display()
+            );
+            eprintln!("[DEBUG] Running {} with bridge {}", interpreter, bridge);
+
+            let output = Command::new(interpreter)
+                .arg(&bridge_path)
+                .env("BODO_PLUGIN_FILE", &plugin_abs_path)
                 .env("BODO_OPTS", data.to_string())
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .status()
+                .current_dir(
+                    plugin_abs_path
+                        .parent()
+                        .unwrap_or(&std::env::current_dir()?),
+                )
+                .output()
                 .map_err(|e| PluginError {
                     message: format!("Failed to execute {} plugin: {}", plugin_path.display(), e),
                 })?;
 
-            if !status.success() {
+            if !output.status.success() {
                 return Err(Box::new(PluginError {
                     message: format!(
                         "Plugin {} failed with code {:?}",
                         plugin_path.display(),
-                        status.code()
+                        output.status.code()
                     ),
                 }));
+            }
+
+            // Print stdout and stderr
+            if !output.stdout.is_empty() {
+                print!("{}", String::from_utf8_lossy(&output.stdout));
+            }
+            if !output.stderr.is_empty() {
+                eprint!("{}", String::from_utf8_lossy(&output.stderr));
             }
         }
         Ok(())
@@ -119,18 +167,6 @@ impl PluginManager {
         self.run_plugin_hook("onError", data)
     }
 
-    pub fn on_bodo_exit(&self, exit_code: i32) -> Result<()> {
-        let data = json!({
-            "hook": "onBodoExit",
-            "exitCode": exit_code,
-            "timestamp": std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        });
-        self.run_plugin_hook("onBodoExit", data)
-    }
-
     pub fn on_resolve_command(&self, task: &mut TaskConfig) -> Result<()> {
         let data = json!({
             "hook": "onResolveCommand",
@@ -154,5 +190,17 @@ impl PluginManager {
                 .as_secs(),
         });
         self.run_plugin_hook("onCommandReady", data)
+    }
+
+    pub fn on_bodo_exit(&self, exit_code: i32) -> Result<()> {
+        let data = json!({
+            "hook": "onBodoExit",
+            "exitCode": exit_code,
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        });
+        self.run_plugin_hook("onBodoExit", data)
     }
 }

@@ -1,5 +1,6 @@
 use dialoguer::{Confirm, Input, Select};
 
+#[derive(Clone)]
 pub struct PromptManager;
 
 impl PromptManager {

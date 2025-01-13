@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
+#[derive(Clone)]
 pub struct EnvManager {
     env_vars: HashMap<String, String>,
 }
@@ -40,9 +41,10 @@ impl EnvManager {
                 let mut value = value.trim().to_string();
 
                 // Only remove quotes if they match at start and end
-                if (value.starts_with('\'') && value.ends_with('\'')) ||
-                   (value.starts_with('"') && value.ends_with('"')) {
-                    value = value[1..value.len()-1].to_string();
+                if (value.starts_with('\'') && value.ends_with('\''))
+                    || (value.starts_with('"') && value.ends_with('"'))
+                {
+                    value = value[1..value.len() - 1].to_string();
                 }
 
                 self.env_vars.insert(key.clone(), value.clone());
@@ -101,10 +103,13 @@ mod tests {
 
     fn create_temp_env_file(content: &str) -> PathBuf {
         let mut temp_path = std::env::temp_dir();
-        let unique_name = format!("test_{}.env", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos());
+        let unique_name = format!(
+            "test_{}.env",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
         temp_path.push(unique_name);
 
         let mut file = File::create(&temp_path).unwrap();

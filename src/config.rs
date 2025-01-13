@@ -19,6 +19,7 @@ pub struct TaskConfig {
     pub command: String,
     pub cwd: Option<String>,
     pub env: Option<Vec<String>>,
+    #[serde(rename = "pre_deps")]
     pub dependencies: Option<Vec<String>>,
     pub plugins: Option<Vec<String>>,
 }

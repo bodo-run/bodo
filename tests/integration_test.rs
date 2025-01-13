@@ -96,7 +96,7 @@ watch:
         .current_dir(&project_root)
         .args(&["watch-test"])
         .assert()
-        // For a real watch test, we'd need more advanced setup; 
+        // For a real watch test, we'd need more advanced setup;
         // for now, just confirm it prints something
         .success()
         .stdout(predicates::str::contains("Watch mode run"));

@@ -32,7 +32,7 @@ impl TaskManager {
 
         let command = self.config.command.clone();
 
-        match self.execute_command(&command, task_name) {
+        let result = match self.execute_command(&command, task_name) {
             Ok(status) if status.success() => {
                 self.plugin_manager.on_after_task_run(task_name, 0)?;
                 Ok(())
@@ -45,7 +45,9 @@ impl TaskManager {
                 self.plugin_manager.on_error(task_name, &e.to_string())?;
                 Err(e)
             }
-        }
+        };
+
+        result
     }
 
     pub fn on_exit(&mut self, exit_code: i32) -> Result<(), Box<dyn Error>> {
@@ -61,16 +63,20 @@ impl TaskManager {
         self.plugin_manager.on_resolve_command(&mut task_config)?;
         self.plugin_manager.on_command_ready(command, task_name)?;
 
-        let mut cmd_parts = command.split_whitespace();
-        let program = cmd_parts.next().ok_or("Empty command")?;
-        let args: Vec<_> = cmd_parts.collect();
+        // Use sh -c to ensure environment variables are expanded
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg(command);
 
-        let mut cmd = Command::new(program);
-        cmd.args(&args)
-            .current_dir(task_config.cwd.as_deref().unwrap_or("."));
+        // Set working directory if specified
+        cmd.current_dir(task_config.cwd.as_deref().unwrap_or("."));
 
-        // Add environment variables
+        // Add environment variables from env_manager
         for (key, value) in self.env_manager.get_env() {
+            cmd.env(key, value);
+        }
+
+        // Add environment variables from current process
+        for (key, value) in std::env::vars() {
             cmd.env(key, value);
         }
 
@@ -79,7 +85,9 @@ impl TaskManager {
     }
 
     pub fn confirm_task_execution(&mut self, task_name: &str) -> Result<bool, Box<dyn Error>> {
-        Ok(self.prompt_manager.confirm(&format!("Run task '{}'?", task_name)))
+        Ok(self
+            .prompt_manager
+            .confirm(&format!("Run task '{}'?", task_name)))
     }
 }
 

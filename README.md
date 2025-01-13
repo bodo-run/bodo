@@ -1,13 +1,14 @@
-# BODO
+# `bodo`
 
-A task runner with intuitive organization and powerful features. 
+A task runner with intuitive organization and powerful features.
 
-> The name "BODO" comes from Farsi, meaning "run," and it's fast to type on a QWERTY keyboard.
+> The name "bodo" comes from Farsi, meaning "run," and it's fast to type on a QWERTY keyboard.
 
 ## Who is this for?
 
 - Bodo is made for large repos with a lot of scripts
 - You have a huge `Makefile`/`package.json`/other script runner and you want to organize it
+- You have lots of scripts in various languages
 - You want each team to own their own scripts and enforce standards
 - You want to enforce `CODEOWNERS` for scripts
 
@@ -33,11 +34,13 @@ Create a `scripts/` directory in your project root. Each subdirectory in `script
 ### Basic Commands
 
 - **Default task**:
+
   ```bash
   bodo <subdirectory>
   ```
 
 - **Subtask**:
+
   ```bash
   bodo <subdirectory> <subtask>
   ```
@@ -98,28 +101,33 @@ subtasks:
 
 ## Plugin System
 
-BODO provides a powerful plugin system that allows you to hook into every stage of the task runner lifecycle:
+bodo provides a powerful plugin system that allows you to hook into every stage of the task runner lifecycle:
 
 ### Graph Construction Hooks
+
 - `on_task_graph_construct_start`: Modify tasks before graph construction
 - `on_task_graph_construct_end`: Inspect or modify the final dependency graph
 
 ### Command Resolution Hooks
+
 - `on_resolve_command`: Transform commands or inject environment variables
 - `on_command_ready`: Inspect the final resolved command
 
 ### Execution Lifecycle Hooks
+
 - `on_before_run`: Run before task execution
 - `on_after_run`: Run after task execution
 - `on_error`: Handle task errors
 
 ### Watch Hooks
+
 - `on_before_watch`: Modify watch patterns
 - `on_after_watch_event`: React to file changes
 
 ### Global Lifecycle Hooks
-- `on_bodo_init`: Run during BODO initialization
-- `on_bodo_exit`: Run before BODO exits
+
+- `on_bodo_init`: Run during bodo initialization
+- `on_bodo_exit`: Run before bodo exits
 
 ### Creating a Plugin
 
@@ -166,35 +174,35 @@ impl BodoPlugin for MyPlugin {
 
 ```typescript
 // plugins/my-plugin.ts
-import { Plugin, TaskConfig } from 'bodo';
+import { Plugin, TaskConfig } from "bodo";
 
 export class MyPlugin implements Plugin {
-    onBeforeTaskRun(opts: { taskName: string, cwd: string }): void {
-        console.log(`Starting task: ${opts.taskName} in ${opts.cwd}`);
-    }
+  onBeforeTaskRun(opts: { taskName: string; cwd: string }): void {
+    console.log(`Starting task: ${opts.taskName} in ${opts.cwd}`);
+  }
 
-    onAfterTaskRun(opts: { taskName: string, status: number }): void {
-        console.log(`Task ${opts.taskName} finished with status ${opts.status}`);
-    }
+  onAfterTaskRun(opts: { taskName: string; status: number }): void {
+    console.log(`Task ${opts.taskName} finished with status ${opts.status}`);
+  }
 
-    onError(opts: { taskName: string, error: string }): void {
-        console.error(`Task ${opts.taskName} failed: ${opts.error}`);
-    }
+  onError(opts: { taskName: string; error: string }): void {
+    console.error(`Task ${opts.taskName} failed: ${opts.error}`);
+  }
 
-    onResolveCommand(opts: { task: TaskConfig }): void {
-        // Transform commands or inject environment variables
-        if (opts.task.command.startsWith('ts-node')) {
-            opts.task.command = `npx ${opts.task.command}`;
-        }
+  onResolveCommand(opts: { task: TaskConfig }): void {
+    // Transform commands or inject environment variables
+    if (opts.task.command.startsWith("ts-node")) {
+      opts.task.command = `npx ${opts.task.command}`;
     }
+  }
 
-    onCommandReady(opts: { command: string, taskName: string }): void {
-        console.log(`Command ready for ${opts.taskName}:`, opts.command);
-    }
+  onCommandReady(opts: { command: string; taskName: string }): void {
+    console.log(`Command ready for ${opts.taskName}:`, opts.command);
+  }
 
-    onBodoExit(opts: { exitCode: number }): void {
-        console.log('Bodo exiting with code:', opts.exitCode);
-    }
+  onBodoExit(opts: { exitCode: number }): void {
+    console.log("Bodo exiting with code:", opts.exitCode);
+  }
 }
 ```
 
@@ -296,7 +304,7 @@ plugin_manager.registerPlugin(new MyPlugin());
 
 ## Environment Variables
 
-BODO automatically loads environment variables from `.env` in the project root:
+bodo automatically loads environment variables from `.env` in the project root:
 
 ```
 # .env
@@ -324,13 +332,14 @@ watch:
 ```
 
 Usage:
+
 ```bash
 bodo watch <subdirectory>
 ```
 
 ## Configuration
 
-`bodo.yaml` (or `bodo.yml`, `bodo.json`) configures BODO globally:
+`bodo.yaml` (or `bodo.yml`, `bodo.json`) configures bodo globally:
 
 ```yaml
 # Maximum number of concurrent tasks

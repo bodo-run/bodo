@@ -43,6 +43,12 @@ if (typeof hookFn !== "function") {
   process.exit(1);
 }
 
+// Override console.log to write to stdout
+const originalConsoleLog = console.log;
+console.log = (...args) => {
+  process.stdout.write(args.join(" ") + "\n");
+};
+
 // Call the function with our data
 Promise.resolve(hookFn(opts))
   .then(() => {
