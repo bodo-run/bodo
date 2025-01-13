@@ -12,6 +12,19 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::path::PathBuf;
 
+#[derive(Debug)]
+struct BodoError {
+    message: String,
+}
+
+impl std::fmt::Display for BodoError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message.red())
+    }
+}
+
+impl Error for BodoError {}
+
 fn get_task_config(
     script_config: &bodo::config::ScriptConfig,
     subtask: Option<&str>,
@@ -228,19 +241,26 @@ fn run_task(
     )
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
     let cli = BodoCli::parse();
 
     // Set verbose mode
     debug::set_verbose(cli.verbose);
 
+    if let Err(e) = run(cli) {
+        eprintln!("{}", e);
+        std::process::exit(1);
+    }
+}
+
+fn run(cli: BodoCli) -> Result<(), Box<dyn Error>> {
     if cli.list {
         return list_tasks(cli.task.as_deref());
     }
 
-    let task_name = cli
-        .task
-        .ok_or("No task specified. Use --list to see available tasks.")?;
+    let task_name = cli.task.ok_or_else(|| BodoError {
+        message: "No task specified. Use --list to see available tasks.".to_string(),
+    })?;
     let subtask = if !cli.args.is_empty() {
         Some(cli.args[0].as_str())
     } else {

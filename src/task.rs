@@ -5,10 +5,24 @@ use crate::plugin::PluginManager;
 use crate::prompt::PromptManager;
 use colored::{ColoredString, Colorize};
 use std::error::Error;
+use std::fmt;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::thread;
+
+#[derive(Debug)]
+struct TaskError {
+    message: String,
+}
+
+impl fmt::Display for TaskError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Error for TaskError {}
 
 fn get_color_for_label(label: &str) -> ColoredString {
     let colors = ["blue", "green", "yellow", "red", "magenta", "cyan"];
@@ -206,16 +220,15 @@ impl TaskManager {
 
         // Check success
         if !status.success() {
-            let err: Box<dyn Error> = Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!(
+            let err = TaskError {
+                message: format!(
                     "Task '{}' failed with exit code {}",
                     task_key,
                     status.code().unwrap_or(1)
                 ),
-            ));
-            self.plugin_manager.on_error(task_key, err.as_ref())?;
-            return Err(err);
+            };
+            self.plugin_manager.on_error(task_key, &err)?;
+            return Err(Box::new(err));
         }
 
         Ok(())
@@ -294,16 +307,14 @@ impl TaskManager {
             for (mut child, subtask_name) in children {
                 let status = child.wait()?;
                 if !status.success() {
-                    let error: Box<dyn Error> = Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!(
+                    let error = TaskError {
+                        message: format!(
                             "Task '{}' failed. All concurrent tasks have been stopped.",
                             subtask_name
                         ),
-                    ));
-                    self.plugin_manager
-                        .on_error(&subtask_name, error.as_ref())?;
-                    return Err(error);
+                    };
+                    self.plugin_manager.on_error(&subtask_name, &error)?;
+                    return Err(Box::new(error));
                 }
             }
         }
