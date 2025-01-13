@@ -32,7 +32,7 @@ impl PrintCommandPlugin {
             };
             max_len = max_len.max(label.len());
         }
-        let final_padding = max_len + 3; // Add 3 spaces for consistent alignment
+        let final_padding = max_len + 1; // Just one space after the label
         MAX_LABEL_WIDTH.store(final_padding, Ordering::SeqCst);
         final_padding
     }
