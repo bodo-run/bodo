@@ -1,0 +1,1102 @@
+>>>> graph.rs
+use petgraph::graph::DiGraph;
+use std::collections::HashMap;
+
+pub struct TaskGraph {
+    graph: DiGraph<String, ()>,
+    node_map: HashMap<String, petgraph::graph::NodeIndex>,
+}
+
+impl TaskGraph {
+    pub fn new() -> Self {
+        TaskGraph {
+            graph: DiGraph::new(),
+            node_map: HashMap::new(),
+        }
+    }
+
+    pub fn add_task(&mut self, task: String) {
+        if let std::collections::hash_map::Entry::Vacant(e) = self.node_map.entry(task.clone()) {
+            let node_idx = self.graph.add_node(task);
+            e.insert(node_idx);
+        }
+    }
+
+    pub fn add_dependency(&mut self, task: String, dependency: String) {
+        self.add_task(task.clone());
+        self.add_task(dependency.clone());
+
+        let task_idx = self.node_map[&task];
+        let dep_idx = self.node_map[&dependency];
+
+        if !self.graph.contains_edge(dep_idx, task_idx) {
+            self.graph.add_edge(dep_idx, task_idx, ());
+        }
+    }
+
+    pub fn get_execution_order(&self) -> Vec<String> {
+        let mut order = Vec::new();
+        let mut visited = HashMap::new();
+
+        for node in self.graph.node_indices() {
+            self.visit_node(node, &mut visited, &mut order);
+        }
+
+        order
+    }
+
+    fn visit_node(
+        &self,
+        node: petgraph::graph::NodeIndex,
+        visited: &mut HashMap<petgraph::graph::NodeIndex, bool>,
+        order: &mut Vec<String>,
+    ) {
+        if visited.contains_key(&node) {
+            return;
+        }
+
+        visited.insert(node, true);
+
+        for neighbor in self
+            .graph
+            .neighbors_directed(node, petgraph::Direction::Incoming)
+        {
+            self.visit_node(neighbor, visited, order);
+        }
+
+        if let Some(task) = self.graph.node_weight(node) {
+            order.push(task.clone());
+        }
+    }
+}
+
+impl Default for TaskGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_task_graph() {
+        let mut graph = TaskGraph::new();
+
+        // Add tasks
+        graph.add_task("task1".to_string());
+        graph.add_task("task2".to_string());
+        graph.add_task("task3".to_string());
+
+        // Add dependencies
+        graph.add_dependency("task2".to_string(), "task1".to_string());
+        graph.add_dependency("task3".to_string(), "task2".to_string());
+
+        // Get execution order
+        let order = graph.get_execution_order();
+
+        // Check order
+        assert!(order.contains(&"task1".to_string()));
+        assert!(order.contains(&"task2".to_string()));
+        assert!(order.contains(&"task3".to_string()));
+    }
+}
+
+
+>>>> config.rs
+use serde::{Deserialize, Serialize};
+use serde_json;
+use serde_yaml;
+use std::collections::HashMap;
+use std::error::Error;
+use std::fs;
+use std::path::Path;
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct BodoConfig {
+    pub env_files: Option<Vec<String>>,
+    pub executable_map: Option<Vec<ExecutableMap>>,
+    pub max_concurrency: Option<usize>,
+    pub plugins: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct TaskConfig {
+    pub command: String,
+    pub cwd: Option<String>,
+    pub env: Option<Vec<String>>,
+    pub dependencies: Option<Vec<String>>,
+    pub plugins: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ExecutableMap {
+    pub executable: Option<String>,
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ScriptConfig {
+    pub name: String,
+    pub description: Option<String>,
+    pub exec_paths: Option<Vec<String>>,
+    pub env: Option<HashMap<String, String>>,
+    #[serde(rename = "defaultTask")]
+    pub default_task: TaskConfig,
+    pub subtasks: Option<HashMap<String, TaskConfig>>,
+}
+
+pub fn load_bodo_config() -> Result<BodoConfig, Box<dyn Error>> {
+    let config_paths = [
+        "bodo.json",
+        "bodo.yaml",
+        "bodo.yml",
+        ".bodo/config.json",
+        ".bodo/config.yaml",
+        ".bodo/config.yml",
+    ];
+
+    for path in config_paths.iter() {
+        if let Ok(contents) = fs::read_to_string(path) {
+            let config = if path.ends_with(".json") {
+                serde_json::from_str(&contents).ok()
+            } else {
+                serde_yaml::from_str(&contents).ok()
+            };
+
+            if let Some(config) = config {
+                return Ok(config);
+            }
+        }
+    }
+
+    Ok(BodoConfig::default())
+}
+
+pub fn load_script_config(task_name: &str) -> Result<ScriptConfig, Box<dyn Error>> {
+    let script_path = format!("scripts/{}/script.yaml", task_name);
+    let path = Path::new(&script_path);
+
+    if !path.exists() {
+        return Err(format!("Script file not found: {}", script_path).into());
+    }
+
+    let contents = fs::read_to_string(path)?;
+    let config: ScriptConfig = serde_yaml::from_str(&contents)?;
+    Ok(config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::PathBuf;
+
+    fn create_temp_config_file(content: &str, extension: &str) -> PathBuf {
+        let mut temp_path = std::env::temp_dir();
+        temp_path.push(format!("test_config.{}", extension));
+
+        let mut file = File::create(&temp_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        temp_path
+    }
+
+    fn cleanup_temp_file(path: PathBuf) {
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn test_default_config() {
+        let config = BodoConfig::default();
+        assert!(config.env_files.is_none());
+        assert!(config.executable_map.is_none());
+        assert!(config.max_concurrency.is_none());
+        assert!(config.plugins.is_none());
+    }
+
+    #[test]
+    fn test_load_json_config() {
+        let content = r#"{
+            "env_files": [".env"],
+            "executable_map": [
+                {
+                    "executable": "node",
+                    "path": "/usr/local/bin/node"
+                }
+            ],
+            "max_concurrency": 4,
+            "plugins": ["plugin1"]
+        }"#;
+
+        let temp_path = create_temp_config_file(content, "json");
+        std::env::set_current_dir(temp_path.parent().unwrap()).unwrap();
+
+        let config: BodoConfig = serde_json::from_str(content).unwrap();
+        assert!(config.env_files.is_some());
+        assert!(config.executable_map.is_some());
+        assert_eq!(config.max_concurrency, Some(4));
+
+        cleanup_temp_file(temp_path);
+    }
+
+    #[test]
+    fn test_load_yaml_config() {
+        let content = r#"
+env_files:
+  - .env
+executable_map:
+  - executable: node
+    path: /usr/local/bin/node
+max_concurrency: 4
+plugins:
+  - plugin1
+"#;
+
+        let temp_path = create_temp_config_file(content, "yaml");
+        std::env::set_current_dir(temp_path.parent().unwrap()).unwrap();
+
+        let config: BodoConfig = serde_yaml::from_str(content).unwrap();
+        assert!(config.env_files.is_some());
+        assert!(config.executable_map.is_some());
+        assert_eq!(config.max_concurrency, Some(4));
+
+        cleanup_temp_file(temp_path);
+    }
+
+    #[test]
+    fn test_executable_map() {
+        let map = ExecutableMap {
+            executable: Some("node".to_string()),
+            path: Some("/usr/local/bin/node".to_string()),
+        };
+
+        assert_eq!(map.executable.as_ref().unwrap(), "node");
+        assert_eq!(map.path.as_ref().unwrap(), "/usr/local/bin/node");
+    }
+}
+
+
+>>>> env.rs
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
+
+pub struct EnvManager {
+    env_vars: HashMap<String, String>,
+}
+
+impl EnvManager {
+    pub fn new() -> Self {
+        EnvManager {
+            env_vars: HashMap::new(),
+        }
+    }
+
+    pub fn merge_env_files(&mut self, env_files: &[String]) {
+        for file_path in env_files {
+            if let Err(e) = self.load_env_file(file_path) {
+                eprintln!("[BODO] Error loading env file {}: {}", file_path, e);
+            }
+        }
+    }
+
+    fn load_env_file(&mut self, file_path: &str) -> std::io::Result<()> {
+        let path = Path::new(file_path);
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+
+        for line in reader.lines() {
+            let line = line?;
+            let line = line.trim();
+
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+
+            if let Some((key, value)) = line.split_once('=') {
+                let key = key.trim().to_string();
+                let mut value = value.trim().to_string();
+
+                // Only remove quotes if they match at start and end
+                if (value.starts_with('\'') && value.ends_with('\'')) ||
+                   (value.starts_with('"') && value.ends_with('"')) {
+                    value = value[1..value.len()-1].to_string();
+                }
+
+                self.env_vars.insert(key.clone(), value.clone());
+                std::env::set_var(key, value);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn inject_exec_paths(&mut self, exec_paths: &[String]) {
+        if let Ok(current_path) = std::env::var("PATH") {
+            let new_paths: Vec<String> = exec_paths
+                .iter()
+                .map(|p| {
+                    if p.starts_with("./") {
+                        std::env::current_dir()
+                            .map(|d| d.join(&p[2..]))
+                            .and_then(|p| p.canonicalize())
+                            .map(|p| p.to_string_lossy().to_string())
+                            .unwrap_or_else(|_| p.clone())
+                    } else {
+                        p.clone()
+                    }
+                })
+                .collect();
+
+            let path_separator = if cfg!(windows) { ";" } else { ":" };
+            let new_path = format!(
+                "{}{}{}",
+                new_paths.join(path_separator),
+                path_separator,
+                current_path
+            );
+
+            std::env::set_var("PATH", new_path);
+        }
+    }
+
+    pub fn get_env(&self) -> &HashMap<String, String> {
+        &self.env_vars
+    }
+}
+
+impl Default for EnvManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::PathBuf;
+
+    fn create_temp_env_file(content: &str) -> PathBuf {
+        let mut temp_path = std::env::temp_dir();
+        let unique_name = format!("test_{}.env", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos());
+        temp_path.push(unique_name);
+
+        let mut file = File::create(&temp_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        temp_path
+    }
+
+    fn cleanup_temp_file(path: PathBuf) {
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn test_new_env_manager() {
+        let env_manager = EnvManager::new();
+        assert!(env_manager.env_vars.is_empty());
+    }
+
+    #[test]
+    fn test_load_env_file() {
+        let content = "TEST_KEY=test_value\n# comment\nTEST_KEY2='quoted value'\n";
+        let temp_path = create_temp_env_file(content);
+
+        let mut env_manager = EnvManager::new();
+        env_manager.merge_env_files(&[temp_path.to_string_lossy().to_string()]);
+
+        let env_vars = env_manager.get_env();
+        assert!(env_vars.contains_key("TEST_KEY"));
+        assert!(env_vars.contains_key("TEST_KEY2"));
+        assert_eq!(env_vars.get("TEST_KEY").unwrap(), "test_value");
+        assert_eq!(env_vars.get("TEST_KEY2").unwrap(), "quoted value");
+
+        cleanup_temp_file(temp_path);
+    }
+
+    #[test]
+    fn test_load_env_file_with_empty_lines() {
+        let content = "\nTEST_KEY=test_value\n\n";
+        let temp_path = create_temp_env_file(content);
+
+        let mut env_manager = EnvManager::new();
+        env_manager
+            .load_env_file(&temp_path.to_string_lossy().to_string())
+            .unwrap();
+
+        let env_vars = env_manager.get_env();
+        assert_eq!(env_vars.get("TEST_KEY").unwrap(), "test_value");
+
+        cleanup_temp_file(temp_path);
+    }
+
+    #[test]
+    fn test_inject_exec_paths() {
+        let mut env_manager = EnvManager::new();
+        let original_path = std::env::var("PATH").unwrap();
+
+        env_manager.inject_exec_paths(&["./bin".to_string()]);
+
+        let new_path = std::env::var("PATH").unwrap();
+        let separator = if cfg!(windows) { ";" } else { ":" };
+
+        assert!(new_path.starts_with(&format!("./bin{}", separator)));
+        assert!(new_path.contains(&original_path));
+
+        // Restore original PATH
+        std::env::set_var("PATH", original_path);
+    }
+}
+
+
+>>>> lib.rs
+pub mod cli;
+pub mod config;
+pub mod env;
+pub mod graph;
+pub mod plugin;
+pub mod prompt;
+pub mod task;
+pub mod watch;
+
+pub use cli::BodoCli;
+pub use config::{BodoConfig, TaskConfig};
+pub use env::EnvManager;
+pub use graph::TaskGraph;
+pub use plugin::PluginManager;
+pub use prompt::PromptManager;
+pub use task::TaskManager;
+pub use watch::WatchManager;
+
+// Re-export external crates
+pub use serde;
+pub use serde_json;
+pub use serde_yaml;
+
+
+>>>> plugin/types.rs
+use crate::config::TaskConfig;
+use std::error::Error;
+
+pub trait BodoPlugin {
+    fn on_before_task_run(&mut self, _task_name: &str) {}
+    fn on_after_task_run(&mut self, _task_name: &str, _status_code: i32) {}
+    fn on_error(&mut self, _task_name: &str, _err: &dyn Error) {}
+    fn on_resolve_command(&mut self, _task: &mut TaskConfig) {}
+    fn on_command_ready(&mut self, _command: &str, _task_name: &str) {}
+    fn on_bodo_exit(&mut self, _exit_code: i32) {}
+} 
+
+>>>> plugin/bridges/bodo-plugin-bridge.rb
+#!/usr/bin/env ruby
+require 'json'
+
+# Get environment variables
+opts_json = ENV['BODO_OPTS']
+plugin_file = ENV['BODO_PLUGIN_FILE']
+
+if opts_json.nil? || plugin_file.nil?
+  STDERR.puts "Missing required environment variables"
+  exit 1
+end
+
+# Parse options
+begin
+  opts = JSON.parse(opts_json)
+rescue JSON::ParserError => e
+  STDERR.puts "Failed to parse BODO_OPTS JSON: #{e}"
+  exit 1
+end
+
+# Get hook name
+hook_name = opts['hook']
+if hook_name.nil?
+  STDERR.puts "No hook specified in opts"
+  exit 1
+end
+
+# Load plugin
+begin
+  require_relative plugin_file
+rescue LoadError => e
+  STDERR.puts "Failed to load plugin #{plugin_file}: #{e}"
+  exit 1
+end
+
+# Get plugin module
+plugin_module = Object.const_get('BodoPlugin')
+unless plugin_module.respond_to?(hook_name)
+  STDERR.puts "Plugin does not export a '#{hook_name}' function"
+  exit 1
+end
+
+# Execute hook
+begin
+  result = plugin_module.send(hook_name, opts)
+  puts result.to_json if result
+  exit 0
+rescue StandardError => e
+  STDERR.puts "Plugin error: #{e}"
+  exit 1
+end 
+
+>>>> plugin/bridges/bodo-plugin-bridge.js
+#!/usr/bin/env node
+
+const optsJson = process.env.BODO_OPTS;
+if (!optsJson) {
+  console.error("No BODO_OPTS provided");
+  process.exit(1);
+}
+
+const pluginFile = process.env.BODO_PLUGIN_FILE;
+if (!pluginFile) {
+  console.error("No BODO_PLUGIN_FILE provided");
+  process.exit(1);
+}
+
+// Parse JSON
+let opts;
+try {
+  opts = JSON.parse(optsJson);
+} catch (err) {
+  console.error("Failed to parse BODO_OPTS JSON:", err);
+  process.exit(1);
+}
+
+// Dynamically require the plugin
+let plugin;
+try {
+  plugin = require(pluginFile);
+} catch (err) {
+  console.error(`Failed to load plugin file ${pluginFile}:`, err);
+  process.exit(1);
+}
+
+// Get the hook name and function
+const hookName = opts.hook;
+if (!hookName) {
+  console.error("No hook specified in opts");
+  process.exit(1);
+}
+
+const hookFn = plugin[hookName];
+if (typeof hookFn !== "function") {
+  console.error(`Plugin does not export a '${hookName}' function`);
+  process.exit(1);
+}
+
+// Call the function with our data
+Promise.resolve(hookFn(opts))
+  .then(() => {
+    process.exit(0);
+  })
+  .catch(err => {
+    console.error("Plugin error:", err);
+    process.exit(1);
+  }); 
+
+>>>> plugin/bridges/bodo-plugin-bridge.py
+#!/usr/bin/env python3
+import os
+import json
+import sys
+import importlib.util
+from typing import Any, Dict
+
+def load_plugin(plugin_file: str) -> Any:
+    spec = importlib.util.spec_from_file_location("bodo_plugin", plugin_file)
+    if not spec or not spec.loader:
+        raise ImportError(f"Could not load plugin from {plugin_file}")
+    
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+def main() -> None:
+    # Get environment variables
+    opts_json = os.getenv("BODO_OPTS")
+    plugin_file = os.getenv("BODO_PLUGIN_FILE")
+
+    if not opts_json or not plugin_file:
+        print("Missing required environment variables", file=sys.stderr)
+        sys.exit(1)
+
+    # Parse options
+    try:
+        opts: Dict[str, Any] = json.loads(opts_json)
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse BODO_OPTS JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Get hook name
+    hook_name = opts.get("hook")
+    if not hook_name:
+        print("No hook specified in opts", file=sys.stderr)
+        sys.exit(1)
+
+    # Load plugin
+    try:
+        plugin = load_plugin(plugin_file)
+    except Exception as e:
+        print(f"Failed to load plugin {plugin_file}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Get hook function
+    hook_fn = getattr(plugin, hook_name, None)
+    if not hook_fn or not callable(hook_fn):
+        print(f"Plugin does not export a '{hook_name}' function", file=sys.stderr)
+        sys.exit(1)
+
+    # Execute hook
+    try:
+        result = hook_fn(opts)
+        if result:
+            print(json.dumps(result))
+        sys.exit(0)
+    except Exception as e:
+        print(f"Plugin error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main() 
+
+>>>> plugin/mod.rs
+mod types;
+
+pub use types::BodoPlugin;
+
+use crate::config::TaskConfig;
+use serde_json::json;
+use std::error::Error;
+use std::fmt;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
+#[derive(Debug)]
+pub struct PluginError {
+    message: String,
+}
+
+impl fmt::Display for PluginError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Error for PluginError {}
+
+pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
+
+#[derive(Debug, Default)]
+pub struct PluginManager {
+    plugins: Vec<PathBuf>,
+}
+
+impl PluginManager {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn register_plugin(&mut self, plugin_path: PathBuf) {
+        self.plugins.push(plugin_path);
+    }
+
+    fn get_bridge_script(plugin_path: &Path) -> Option<(&'static str, &'static str)> {
+        match plugin_path.extension()?.to_str()? {
+            "js" | "ts" => Some(("node", "bodo-plugin-bridge.js")),
+            "py" => Some(("python3", "bodo-plugin-bridge.py")),
+            "rb" => Some(("ruby", "bodo-plugin-bridge.rb")),
+            _ => None,
+        }
+    }
+
+    fn run_plugin_hook(&self, _hook_name: &str, data: serde_json::Value) -> Result<()> {
+        for plugin_path in &self.plugins {
+            let (interpreter, bridge) =
+                Self::get_bridge_script(plugin_path).ok_or_else(|| PluginError {
+                    message: "Unsupported plugin file extension".to_string(),
+                })?;
+
+            let bridge_path = PathBuf::from("src/plugin/bridges").join(bridge);
+
+            let status = Command::new(interpreter)
+                .arg(bridge_path)
+                .env("BODO_PLUGIN_FILE", plugin_path)
+                .env("BODO_OPTS", data.to_string())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status()
+                .map_err(|e| PluginError {
+                    message: format!("Failed to execute {} plugin: {}", plugin_path.display(), e),
+                })?;
+
+            if !status.success() {
+                return Err(Box::new(PluginError {
+                    message: format!(
+                        "Plugin {} failed with code {:?}",
+                        plugin_path.display(),
+                        status.code()
+                    ),
+                }));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn on_before_task_run(&self, task_name: &str) -> Result<()> {
+        let data = json!({
+            "hook": "onBeforeTaskRun",
+            "taskName": task_name,
+            "cwd": std::env::current_dir()?.to_string_lossy(),
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        });
+        self.run_plugin_hook("onBeforeTaskRun", data)
+    }
+
+    pub fn on_after_task_run(&self, task_name: &str, status: i32) -> Result<()> {
+        let data = json!({
+            "hook": "onAfterTaskRun",
+            "taskName": task_name,
+            "status": status,
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        });
+        self.run_plugin_hook("onAfterTaskRun", data)
+    }
+
+    pub fn on_error(&self, task_name: &str, error: &str) -> Result<()> {
+        let data = json!({
+            "hook": "onError",
+            "taskName": task_name,
+            "error": error,
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        });
+        self.run_plugin_hook("onError", data)
+    }
+
+    pub fn on_bodo_exit(&self, exit_code: i32) -> Result<()> {
+        let data = json!({
+            "hook": "onBodoExit",
+            "exitCode": exit_code,
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        });
+        self.run_plugin_hook("onBodoExit", data)
+    }
+
+    pub fn on_resolve_command(&self, task: &mut TaskConfig) -> Result<()> {
+        let data = json!({
+            "hook": "onResolveCommand",
+            "task": task,
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        });
+        self.run_plugin_hook("onResolveCommand", data)
+    }
+
+    pub fn on_command_ready(&self, command: &str, task_name: &str) -> Result<()> {
+        let data = json!({
+            "hook": "onCommandReady",
+            "command": command,
+            "taskName": task_name,
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        });
+        self.run_plugin_hook("onCommandReady", data)
+    }
+}
+
+
+>>>> task.rs
+use crate::config::TaskConfig;
+use crate::env::EnvManager;
+use crate::plugin::PluginManager;
+use crate::prompt::PromptManager;
+use std::error::Error;
+use std::process::{Command, ExitStatus};
+
+pub struct TaskManager {
+    config: TaskConfig,
+    env_manager: EnvManager,
+    plugin_manager: PluginManager,
+    prompt_manager: PromptManager,
+}
+
+impl TaskManager {
+    pub fn new(
+        config: TaskConfig,
+        env_manager: EnvManager,
+        plugin_manager: PluginManager,
+        prompt_manager: PromptManager,
+    ) -> Self {
+        Self {
+            config,
+            env_manager,
+            plugin_manager,
+            prompt_manager,
+        }
+    }
+
+    pub fn run_task(&mut self, task_name: &str) -> Result<(), Box<dyn Error>> {
+        self.plugin_manager.on_before_task_run(task_name)?;
+
+        let command = self.config.command.clone();
+
+        match self.execute_command(&command, task_name) {
+            Ok(status) if status.success() => {
+                self.plugin_manager.on_after_task_run(task_name, 0)?;
+                Ok(())
+            }
+            Ok(_) => {
+                self.plugin_manager.on_after_task_run(task_name, -1)?;
+                Err("Task failed".into())
+            }
+            Err(e) => {
+                self.plugin_manager.on_error(task_name, &e.to_string())?;
+                Err(e)
+            }
+        }
+    }
+
+    pub fn on_exit(&mut self, exit_code: i32) -> Result<(), Box<dyn Error>> {
+        self.plugin_manager.on_bodo_exit(exit_code)
+    }
+
+    fn execute_command(
+        &mut self,
+        command: &str,
+        task_name: &str,
+    ) -> Result<ExitStatus, Box<dyn Error>> {
+        let mut task_config = self.config.clone();
+        self.plugin_manager.on_resolve_command(&mut task_config)?;
+        self.plugin_manager.on_command_ready(command, task_name)?;
+
+        let mut cmd_parts = command.split_whitespace();
+        let program = cmd_parts.next().ok_or("Empty command")?;
+        let args: Vec<_> = cmd_parts.collect();
+
+        let mut cmd = Command::new(program);
+        cmd.args(&args)
+            .current_dir(task_config.cwd.as_deref().unwrap_or("."));
+
+        // Add environment variables
+        for (key, value) in self.env_manager.get_env() {
+            cmd.env(key, value);
+        }
+
+        cmd.status()
+            .map_err(|e| format!("Failed to execute command: {}", e).into())
+    }
+
+    pub fn confirm_task_execution(&mut self, task_name: &str) -> Result<bool, Box<dyn Error>> {
+        Ok(self.prompt_manager.confirm(&format!("Run task '{}'?", task_name)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_task_manager_creation() {
+        let config = TaskConfig {
+            command: String::from("echo test"),
+            cwd: None,
+            env: None,
+            dependencies: Some(Vec::new()),
+            plugins: None,
+        };
+        let env_manager = EnvManager::new();
+        let plugin_manager = PluginManager::new();
+        let prompt_manager = PromptManager::new();
+
+        let _task_manager = TaskManager::new(config, env_manager, plugin_manager, prompt_manager);
+    }
+}
+
+
+>>>> watch.rs
+use crate::task::TaskManager;
+use std::error::Error;
+
+#[allow(dead_code)]
+pub struct WatchManager {
+    task_manager: TaskManager,
+}
+
+impl WatchManager {
+    pub fn new(task_manager: TaskManager) -> Self {
+        Self { task_manager }
+    }
+
+    pub fn watch_and_run(
+        &self,
+        _task_group: &str,
+        _subtask: Option<&str>,
+    ) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+}
+
+
+>>>> prompt.rs
+use dialoguer::{Confirm, Input, Select};
+
+pub struct PromptManager;
+
+impl PromptManager {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub fn confirm(&self, message: &str) -> bool {
+        Confirm::new()
+            .with_prompt(message)
+            .default(true)
+            .interact()
+            .unwrap_or(false)
+    }
+
+    pub fn input(&self, message: &str) -> Option<String> {
+        Input::<String>::new()
+            .with_prompt(message)
+            .interact_text()
+            .ok()
+    }
+
+    pub fn select(&self, message: &str, options: &[String]) -> Option<usize> {
+        Select::new()
+            .with_prompt(message)
+            .items(options)
+            .default(0)
+            .interact()
+            .ok()
+    }
+}
+
+impl Default for PromptManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_prompt_manager_creation() {
+        let prompt_manager = PromptManager::new();
+        // Just verify it can be created
+        assert!(true);
+    }
+
+    // Note: We can't easily test the interactive methods (confirm, input, select)
+    // in automated tests because they require user interaction.
+    // In a real-world scenario, we might want to:
+    // 1. Mock the dialoguer crate
+    // 2. Create a trait for the prompt interface and use a test double
+    // 3. Add integration tests for the interactive features
+}
+
+
+>>>> main.rs
+use bodo::config::load_script_config;
+use bodo::env::EnvManager;
+use bodo::plugin::PluginManager;
+use bodo::prompt::PromptManager;
+use bodo::task::TaskManager;
+use std::error::Error;
+use std::env;
+
+fn main() -> Result<(), Box<dyn Error>> {
+    // Get command-line arguments
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        return Err("Usage: bodo <task_name>".into());
+    }
+    let task_name = &args[1];
+
+    // Initialize managers
+    let env_manager = EnvManager::new();
+    let plugin_manager = PluginManager::new();
+    let prompt_manager = PromptManager::new();
+
+    // Load script config
+    let script_config = load_script_config(task_name)?;
+    let task_config = script_config.default_task;
+
+    // Create task manager
+    let mut task_manager =
+        TaskManager::new(task_config, env_manager, plugin_manager, prompt_manager);
+
+    // Run task
+    match task_manager.run_task(task_name) {
+        Ok(_) => task_manager.on_exit(0),
+        Err(_) => task_manager.on_exit(1),
+    }
+}
+
+
+>>>> cli.rs
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+#[command(name = "bodo")]
+#[command(author = "Mohsen")]
+#[command(version = "0.1.0")]
+#[command(about = "Task runner in Rust", long_about = None)]
+pub struct BodoCli {
+    /// Task to run
+    #[arg(index = 1)]
+    pub task: String,
+
+    /// Watch for changes
+    #[arg(short, long)]
+    pub watch: bool,
+
+    /// Target environment
+    #[arg(short, long)]
+    pub target: Option<String>,
+
+    /// Subtask arguments
+    #[arg(index = 2, num_args = 0..)]
+    pub args: Vec<String>,
+}
+
+impl BodoCli {
+    pub fn new() -> Self {
+        Self::parse()
+    }
+}
+
+impl Default for BodoCli {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
