@@ -1,12 +1,13 @@
-use crate::config::TaskConfig;
+use crate::config::load_script_config;
+use crate::config::{ConcurrentItem, TaskConfig};
 use crate::env::EnvManager;
 use crate::plugin::PluginManager;
 use crate::prompt::PromptManager;
 use std::error::Error;
-use std::process::{Command, ExitStatus};
+use std::process::{Child, Command, ExitStatus};
 
 pub struct TaskManager {
-    config: TaskConfig,
+    pub config: TaskConfig,
     env_manager: EnvManager,
     plugin_manager: PluginManager,
     prompt_manager: PromptManager,
@@ -28,64 +29,85 @@ impl TaskManager {
     }
 
     pub fn run_task(&mut self, task_name: &str) -> Result<(), Box<dyn Error>> {
-        self.plugin_manager.on_before_task_run(task_name)?;
+        if let Some(command) = &self.config.command {
+            let mut cmd = Command::new("sh");
+            cmd.arg("-c").arg(command);
 
-        let command = self.config.command.clone();
+            if let Some(env_vars) = &self.config.env {
+                for (key, value) in env_vars {
+                    cmd.env(key, value);
+                }
+            }
 
-        match self.execute_command(&command, task_name) {
-            Ok(status) if status.success() => {
-                self.plugin_manager.on_after_task_run(task_name, 0)?;
-                Ok(())
-            }
-            Ok(_) => {
-                self.plugin_manager.on_after_task_run(task_name, -1)?;
-                Err("Task failed".into())
-            }
-            Err(e) => {
-                self.plugin_manager.on_error(task_name, &e.to_string())?;
-                Err(e)
+            let status = cmd.status()?;
+            if !status.success() {
+                return Err(format!("Task '{}' failed", task_name).into());
             }
         }
+
+        Ok(())
     }
 
-    pub fn on_exit(&mut self, exit_code: i32) -> Result<(), Box<dyn Error>> {
-        self.plugin_manager.on_bodo_exit(exit_code)
+    pub fn run_concurrently(&mut self, task_name: &str) -> Result<(), Box<dyn Error>> {
+        if let Some(concurrent_items) = &self.config.concurrently {
+            let mut handles = vec![];
+
+            for item in concurrent_items {
+                match item {
+                    ConcurrentItem::Task { task } => {
+                        let mut handle = self.spawn_task(task)?;
+                        handles.push(handle);
+                    }
+                    ConcurrentItem::Command { command } => {
+                        let mut handle = self.spawn_command(command)?;
+                        handles.push(handle);
+                    }
+                }
+            }
+
+            // Wait for all tasks/commands to finish
+            for mut handle in handles {
+                let status = handle.wait()?;
+                if !status.success() {
+                    return Err(format!("A concurrent task/command failed").into());
+                }
+            }
+        }
+
+        Ok(())
     }
 
-    fn execute_command(
-        &mut self,
-        command: &str,
-        task_name: &str,
-    ) -> Result<ExitStatus, Box<dyn Error>> {
-        let mut task_config = self.config.clone();
-        self.plugin_manager.on_resolve_command(&mut task_config)?;
-        self.plugin_manager.on_command_ready(command, task_name)?;
+    fn spawn_task(&self, task_name: &str) -> Result<Child, Box<dyn Error>> {
+        let script_config = load_script_config(task_name)?;
+        let task_config = TaskConfig {
+            command: Some(script_config.default_task.command.unwrap_or_default()),
+            cwd: script_config.default_task.cwd,
+            env: script_config.default_task.env,
+            dependencies: script_config.default_task.dependencies,
+            plugins: script_config.default_task.plugins,
+            concurrently: None,
+        };
 
-        // Use sh -c to ensure environment variables are expanded
+        // Build command
+        let mut cmd = Command::new("sh");
+        if let Some(command) = &task_config.command {
+            cmd.arg("-c").arg(command);
+        }
+
+        // Set environment
+        if let Some(env_vars) = &task_config.env {
+            for (key, value) in env_vars {
+                cmd.env(key, value);
+            }
+        }
+
+        Ok(cmd.spawn()?)
+    }
+
+    fn spawn_command(&self, command: &str) -> Result<Child, Box<dyn Error>> {
         let mut cmd = Command::new("sh");
         cmd.arg("-c").arg(command);
-
-        // Set working directory if specified
-        cmd.current_dir(task_config.cwd.as_deref().unwrap_or("."));
-
-        // Add environment variables from env_manager
-        for (key, value) in self.env_manager.get_env() {
-            cmd.env(key, value);
-        }
-
-        // Add environment variables from current process
-        for (key, value) in std::env::vars() {
-            cmd.env(key, value);
-        }
-
-        cmd.status()
-            .map_err(|e| format!("Failed to execute command: {}", e).into())
-    }
-
-    pub fn confirm_task_execution(&mut self, task_name: &str) -> Result<bool, Box<dyn Error>> {
-        Ok(self
-            .prompt_manager
-            .confirm(&format!("Run task '{}'?", task_name)))
+        Ok(cmd.spawn()?)
     }
 }
 

@@ -14,13 +14,21 @@ pub struct BodoConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(untagged)]
+pub enum ConcurrentItem {
+    Task { task: String },
+    Command { command: String },
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TaskConfig {
-    pub command: String,
+    pub command: Option<String>,
     pub cwd: Option<String>,
-    pub env: Option<Vec<String>>,
+    pub env: Option<HashMap<String, String>>,
     #[serde(rename = "pre_deps")]
     pub dependencies: Option<Vec<String>>,
     pub plugins: Option<Vec<String>>,
+    pub concurrently: Option<Vec<ConcurrentItem>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

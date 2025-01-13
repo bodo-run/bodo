@@ -37,10 +37,7 @@ fn run_task_with_deps(
     script_config: &bodo::config::ScriptConfig,
     visited: &mut HashSet<String>,
 ) -> Result<(), Box<dyn Error>> {
-    // Get task config based on whether a subtask was specified
     let task_config = get_task_config(script_config, subtask)?;
-
-    // Check for circular dependencies
     let task_key = match subtask {
         Some(s) => format!("{}:{}", task_name, s),
         None => task_name.to_string(),
@@ -50,14 +47,12 @@ fn run_task_with_deps(
         return Err(format!("Circular dependency detected for task '{}'", task_key).into());
     }
 
-    // If task has dependencies, run them first
+    // Resolve dependencies
     if let Some(deps) = &task_config.dependencies {
         for dep in deps {
-            // Parse task path (format: "task:subtask" or "task")
             let parts: Vec<&str> = dep.split(':').collect();
             match parts.as_slice() {
                 [task, subtask] => {
-                    // External dependency
                     let dep_script_config = load_script_config(task)?;
                     run_task_with_deps(
                         task,
@@ -70,7 +65,6 @@ fn run_task_with_deps(
                     )?;
                 }
                 [task] => {
-                    // Local dependency (subtask)
                     run_task_with_deps(
                         task_name,
                         Some(task),
@@ -86,17 +80,18 @@ fn run_task_with_deps(
         }
     }
 
-    // Create task manager for this task
     let mut task_manager =
         TaskManager::new(task_config, env_manager, plugin_manager, prompt_manager);
 
-    // Run the task
-    let result = task_manager.run_task(&task_key);
+    if task_manager.config.concurrently.is_some() {
+        task_manager.run_concurrently(&task_key)?;
+    } else {
+        task_manager.run_task(&task_key)?;
+    }
 
-    // Remove the task from visited after execution
     visited.remove(&task_key);
 
-    result
+    Ok(())
 }
 
 fn run_task(

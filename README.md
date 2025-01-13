@@ -99,6 +99,30 @@ subtasks:
     command: "cargo test"
 ```
 
+#### Run tasks in parallel
+
+bodo supports running tasks in parallel similar to [`concurrently`](https://github.com/open-cli-tools/concurrently).
+
+```yaml
+# scripts/test/script.yaml
+defaultTask:
+  concurrently:
+    # mix tasks and commands
+    - task: test
+    - task: lint
+    - command: "cargo fmt"
+
+    # bring tasks from other scripts
+    - task: code-quality/spellcheck
+
+subtasks:
+  test:
+    command: "cargo test"
+
+  lint:
+    command: "cargo clippy"
+```
+
 ## Plugin System
 
 bodo provides a powerful plugin system that allows you to hook into every stage of the task runner lifecycle:
