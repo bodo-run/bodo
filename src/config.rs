@@ -4,7 +4,6 @@ use serde_yaml;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
-use std::path::Path;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct BodoConfig {

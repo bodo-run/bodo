@@ -19,7 +19,7 @@ fn get_task_config(
                 .ok_or_else(|| {
                     Box::<dyn Error>::from(format!("Subtask '{}' not found", subtask_name))
                 })
-                .map(|t| t.clone())
+                .cloned()
         } else {
             Err("No subtasks defined".into())
         }

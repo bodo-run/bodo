@@ -32,7 +32,7 @@ impl TaskManager {
 
         let command = self.config.command.clone();
 
-        let result = match self.execute_command(&command, task_name) {
+        match self.execute_command(&command, task_name) {
             Ok(status) if status.success() => {
                 self.plugin_manager.on_after_task_run(task_name, 0)?;
                 Ok(())
@@ -45,9 +45,7 @@ impl TaskManager {
                 self.plugin_manager.on_error(task_name, &e.to_string())?;
                 Err(e)
             }
-        };
-
-        result
+        }
     }
 
     pub fn on_exit(&mut self, exit_code: i32) -> Result<(), Box<dyn Error>> {
