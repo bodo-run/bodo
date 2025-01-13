@@ -69,16 +69,27 @@ pub fn load_bodo_config() -> Result<BodoConfig, Box<dyn Error>> {
 }
 
 pub fn load_script_config(task_name: &str) -> Result<ScriptConfig, Box<dyn Error>> {
-    let script_path = format!("scripts/{}/script.yaml", task_name);
-    let path = Path::new(&script_path);
+    // Start from current directory and walk up until we find a scripts directory
+    let mut current_dir = std::env::current_dir()?;
 
-    if !path.exists() {
-        return Err(format!("Script file not found: {}", script_path).into());
+    loop {
+        let script_path = current_dir
+            .join("scripts")
+            .join(task_name)
+            .join("script.yaml");
+        if script_path.exists() {
+            let contents = fs::read_to_string(&script_path)?;
+            let config: ScriptConfig = serde_yaml::from_str(&contents)?;
+            return Ok(config);
+        }
+
+        // Try parent directory
+        if !current_dir.pop() {
+            break;
+        }
     }
 
-    let contents = fs::read_to_string(path)?;
-    let config: ScriptConfig = serde_yaml::from_str(&contents)?;
-    Ok(config)
+    Err(format!("Script file not found: scripts/{}/script.yaml", task_name).into())
 }
 
 #[cfg(test)]
