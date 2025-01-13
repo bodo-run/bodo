@@ -9,3 +9,6 @@ tasks:
   echo:
     command: "echo 'Hello from `bodo echo`!'"
     description: "Default greeting"
+  build:
+    command: "cargo build"
+    description: "Build the project"
