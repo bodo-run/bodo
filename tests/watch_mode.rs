@@ -6,17 +6,19 @@ use tempfile::tempdir;
 /// Basic watch mode test. The README says `bodo watch <subdirectory>` will re-run tasks on file changes.
 #[test]
 fn test_watch_mode_basic() {
-    let temp = tempdir().unwrap();
-    let project_root = temp.path();
+    let temp_dir = tempdir().unwrap();
+    let project_root = temp_dir.path();
 
-    let watch_dir = project_root.join("scripts").join("watch-test");
+    // Create the scripts/watch directory structure
+    let watch_dir = project_root.join("scripts").join("watch");
     fs::create_dir_all(&watch_dir).unwrap();
     fs::write(
         watch_dir.join("script.yaml"),
         r#"
 name: Watch Script
-defaultTask:
+default_task:
   command: echo "Running watch script..."
+  description: "Default task for watch mode test"
 watch:
   patterns:
     - "src/**/*.rs"
@@ -36,7 +38,7 @@ watch:
     Command::cargo_bin("bodo")
         .unwrap()
         .current_dir(&project_root)
-        .args(&["watch", "watch-test"])
+        .args(&["watch"])
         .assert()
         .success()
         .stdout(contains("Running watch script..."));
