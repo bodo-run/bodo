@@ -1,9 +1,11 @@
 use bodo::cli::BodoCli;
 use bodo::config::{load_bodo_config, load_script_config, TaskConfig};
+use bodo::debug;
 use bodo::env::EnvManager;
 use bodo::plugin::PluginManager;
 use bodo::prompt::PromptManager;
 use bodo::task::TaskManager;
+use bodo::watch::WatchManager;
 use clap::Parser;
 use colored::*;
 use std::collections::HashSet;
@@ -180,6 +182,9 @@ fn run_task(
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = BodoCli::parse();
 
+    // Set verbose mode
+    debug::set_verbose(cli.verbose);
+
     if cli.list {
         return list_tasks();
     }
@@ -196,6 +201,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Initialize managers
     let mut env_manager = EnvManager::new();
     let mut plugin_manager = PluginManager::new();
+    plugin_manager.set_verbose(cli.verbose);
     let prompt_manager = PromptManager::new();
 
     // Load global bodo config
@@ -223,19 +229,31 @@ fn main() -> Result<(), Box<dyn Error>> {
         env_manager.inject_exec_paths(exec_paths);
     }
 
-    // Run the task and handle exit
-    match run_task(
-        &task_name,
-        subtask,
-        env_manager,
-        plugin_manager,
-        prompt_manager,
-        &script_config,
-    ) {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            eprintln!("Error: {:?}", e);
-            std::process::exit(1);
-        }
+    // Get task config
+    let task_config = get_task_config(&script_config, subtask)?;
+
+    // Create task manager
+    let task_manager = TaskManager::new(
+        task_config,
+        env_manager.clone(),
+        plugin_manager.clone(),
+        prompt_manager.clone(),
+    );
+
+    // Run the task
+    if cli.watch {
+        let watch_manager = WatchManager::new(task_manager);
+        watch_manager.watch_and_run(&task_name, subtask)?;
+    } else {
+        run_task(
+            &task_name,
+            subtask,
+            env_manager,
+            plugin_manager,
+            prompt_manager,
+            &script_config,
+        )?;
     }
+
+    Ok(())
 }

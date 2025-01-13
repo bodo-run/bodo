@@ -1,5 +1,6 @@
 pub mod cli;
 pub mod config;
+pub mod debug;
 pub mod env;
 pub mod graph;
 pub mod plugin;

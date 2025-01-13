@@ -1,3 +1,4 @@
+use crate::debug;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_yaml;
@@ -30,6 +31,7 @@ pub struct TaskConfig {
     pub plugins: Option<Vec<String>>,
     pub concurrently: Option<Vec<ConcurrentItem>>,
     pub description: Option<String>,
+    pub silent: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -78,8 +80,8 @@ pub fn load_bodo_config() -> Result<BodoConfig, Box<dyn Error>> {
 pub fn load_script_config(task_name: &str) -> Result<ScriptConfig, Box<dyn Error>> {
     // Start from the current directory
     let mut current_dir = std::env::current_dir()?;
-    eprintln!(
-        "[DEBUG] Starting search from current directory: {}",
+    debug!(
+        "Starting search from current directory: {}",
         current_dir.display()
     );
 
@@ -88,9 +90,9 @@ pub fn load_script_config(task_name: &str) -> Result<ScriptConfig, Box<dyn Error
             .join("scripts")
             .join(task_name)
             .join("script.yaml");
-        eprintln!("[DEBUG] Checking path: {}", script_path.display());
+        debug!("Checking path: {}", script_path.display());
         if script_path.exists() {
-            eprintln!("[DEBUG] Found script at: {}", script_path.display());
+            debug!("Found script at: {}", script_path.display());
             let contents = fs::read_to_string(&script_path)?;
             let config: ScriptConfig = serde_yaml::from_str(&contents)?;
             return Ok(config);
@@ -98,28 +100,25 @@ pub fn load_script_config(task_name: &str) -> Result<ScriptConfig, Box<dyn Error
 
         // Try parent directory
         if !current_dir.pop() {
-            eprintln!("[DEBUG] Reached root directory, no more parents");
+            debug!("Reached root directory, no more parents");
             break;
         }
-        eprintln!(
-            "[DEBUG] Moving to parent directory: {}",
-            current_dir.display()
-        );
+        debug!("Moving to parent directory: {}", current_dir.display());
     }
 
     // Fallback: Try resolving relative to the `bodo` executable's directory
     if let Ok(exe_path) = std::env::current_exe() {
-        eprintln!("[DEBUG] Executable path: {}", exe_path.display());
+        debug!("Executable path: {}", exe_path.display());
         if let Some(exe_dir) = exe_path.parent() {
             let script_path = exe_dir.join("scripts").join(task_name).join("script.yaml");
-            eprintln!(
-                "[DEBUG] Checking executable directory path: {}",
+            debug!(
+                "Checking executable directory path: {}",
                 script_path.display()
             );
 
             if script_path.exists() {
-                eprintln!(
-                    "[DEBUG] Found script at executable directory: {}",
+                debug!(
+                    "Found script at executable directory: {}",
                     script_path.display()
                 );
                 let contents = fs::read_to_string(&script_path)?;
