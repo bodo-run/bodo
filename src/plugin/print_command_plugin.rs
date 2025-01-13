@@ -26,6 +26,7 @@ impl BodoPlugin for PrintCommandPlugin {
                 return;
             }
         }
-        println!("> {}: {}", task_name, command);
+        use colored::Colorize;
+        println!("> {}", command.green());
     }
 }
