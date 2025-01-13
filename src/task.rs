@@ -92,40 +92,45 @@ impl TaskManager {
                                     format!("No tasks defined in script '{}'", parts[0]).into()
                                 );
                             }
-                        } else {
-                            if let Some(tasks) = &current_script_config.tasks {
-                                if let Some(task_config) = tasks.get(task) {
-                                    task_config.clone()
-                                } else {
-                                    let script_config = load_script_config(task)?;
-                                    script_config.default_task
-                                }
+                        } else if let Some(tasks) = &current_script_config.tasks {
+                            if let Some(task_config) = tasks.get(task) {
+                                task_config.clone()
                             } else {
                                 let script_config = load_script_config(task)?;
                                 script_config.default_task
                             }
+                        } else {
+                            let script_config = load_script_config(task)?;
+                            script_config.default_task
                         };
 
                         if let Some(command) = task_config.command {
+                            let subtask_name = format!("{}:{}", task_name, task);
+                            self.plugin_manager
+                                .on_command_ready(&command, &subtask_name)?;
                             let child = self.spawn_command(&command)?;
-                            children.push(child);
+                            children.push((child, subtask_name));
                         }
                     }
                     ConcurrentItem::Command { command } => {
+                        let command_name = format!("{}:command", task_name);
+                        self.plugin_manager
+                            .on_command_ready(command, &command_name)?;
                         let child = self.spawn_command(command)?;
-                        children.push(child);
+                        children.push((child, command_name));
                     }
                 }
             }
 
-            for mut child in children {
+            for (mut child, subtask_name) in children {
                 let status = child.wait()?;
                 if !status.success() {
                     let error: Box<dyn Error> = Box::new(std::io::Error::new(
                         std::io::ErrorKind::Other,
                         format!("Concurrent task failed with status: {}", status),
                     ));
-                    self.plugin_manager.on_error(task_name, error.as_ref())?;
+                    self.plugin_manager
+                        .on_error(&subtask_name, error.as_ref())?;
                     return Err(error);
                 }
             }
