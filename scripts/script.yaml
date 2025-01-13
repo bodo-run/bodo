@@ -3,6 +3,7 @@ description: Root level tasks
 
 default_task:
   command: "echo 'Hello from bodo!'"
+  description: "Default greeting"
 
 tasks:
   test:
@@ -16,3 +17,19 @@ tasks:
   format:
     command: "cargo fmt"
     description: "Format code"
+
+  coverage:
+    command: |
+      cargo install cargo-llvm-cov
+      rustup component add llvm-tools-preview
+      cargo llvm-cov --all-features --workspace --html
+    description: "Generate HTML coverage report"
+
+  clippy:
+    command: "cargo clippy -- -D warnings"
+    description: "Run clippy checks"
+
+  check-all:
+    command: "echo 'Running all checks'"
+    description: "Run all checks (tests, coverage, clippy)"
+    deps: [test, coverage, clippy]

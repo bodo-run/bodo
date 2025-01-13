@@ -26,3 +26,13 @@ tasks:
     command: |
       sleep $((RANDOM % 2)) && echo "Fast task output 1" && \
       sleep $((RANDOM % 2)) && echo "Fast task output 2"
+
+  fail-fast:
+    description: "Fail fast concurrently"
+    concurrently_options:
+      fail_fast: true
+    concurrently:
+      - command: 'echo "First output"'
+      - command: 'sleep 1 && echo "Failing..." && exit 1'
+      - command: 'echo "Third output"'
+      - command: 'sleep 2 && echo "Should not be run"'
