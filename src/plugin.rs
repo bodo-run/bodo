@@ -1,63 +1,101 @@
-use crate::config::BodoConfig;
-use std::process::Command;
+use crate::config::{BodoConfig, TaskConfig};
+use crate::graph::TaskGraph;
+use std::error::Error;
 
 pub trait BodoPlugin {
-    fn on_before_run(&self, task_name: &str);
-    fn on_after_run(&self, task_name: &str);
+    fn on_bodo_init(&mut self, _config: &mut BodoConfig) {}
+    fn on_task_graph_construct_start(&mut self, _tasks: &mut [TaskConfig]) {}
+    fn on_task_graph_construct_end(&mut self, _graph: &TaskGraph) {}
+    fn on_resolve_command(&mut self, _task: &mut TaskConfig) {}
+    fn on_command_ready(&mut self, _command: &str, _task_name: &str) {}
+    fn on_before_run(&mut self, _task_name: &str) {}
+    fn on_after_run(&mut self, _task_name: &str, _status_code: i32) {}
+    fn on_error(&mut self, _task_name: &str, _err: &dyn Error) {}
+    fn on_before_watch(&mut self, _patterns: &mut Vec<String>) {}
+    fn on_after_watch_event(&mut self, _changed_file: &str) {}
+    fn on_bodo_exit(&mut self, _exit_code: i32) {}
 }
 
-pub struct PluginManager<'a> {
-    config: &'a BodoConfig,
+pub struct PluginManager {
+    config: BodoConfig,
+    plugins: Vec<Box<dyn BodoPlugin>>,
 }
 
-impl<'a> PluginManager<'a> {
-    pub fn new(config: &'a BodoConfig) -> Self {
-        Self { config }
-    }
-
-    pub fn run_plugins_for_task(&self, task_name: &str) {
-        if let Some(plugins) = &self.config.plugins {
-            for plugin_path in plugins {
-                self.run_plugin(plugin_path, task_name);
-            }
+impl PluginManager {
+    pub fn new(config: BodoConfig) -> Self {
+        Self {
+            config,
+            plugins: vec![],
         }
     }
 
-    fn run_plugin(&self, plugin_path: &str, task_name: &str) {
-        println!(
-            "[BODO] Running plugin: {} for task: {}",
-            plugin_path, task_name
-        );
-        let mut cmd_vec = vec![];
+    pub fn register_plugin(&mut self, plugin: Box<dyn BodoPlugin>) {
+        self.plugins.push(plugin);
+    }
 
-        if plugin_path.ends_with(".ts") {
-            cmd_vec.push("npx");
-            cmd_vec.push("tsx");
-            cmd_vec.push(plugin_path);
-        } else if plugin_path.ends_with(".js") {
-            cmd_vec.push("node");
-            cmd_vec.push(plugin_path);
-        } else if plugin_path.ends_with(".sh") {
-            cmd_vec.push("sh");
-            cmd_vec.push(plugin_path);
-        } else {
-            // fallback
-            cmd_vec.push("sh");
-            cmd_vec.push(plugin_path);
+    pub fn on_bodo_init(&mut self) {
+        for plugin in &mut self.plugins {
+            plugin.on_bodo_init(&mut self.config);
         }
+    }
 
-        cmd_vec.push(task_name);
+    pub fn on_task_graph_construct_start(&mut self, tasks: &mut [TaskConfig]) {
+        for plugin in &mut self.plugins {
+            plugin.on_task_graph_construct_start(tasks);
+        }
+    }
 
-        let status = Command::new(cmd_vec[0])
-            .args(&cmd_vec[1..])
-            .status()
-            .expect("[BODO] Failed to spawn plugin");
+    pub fn on_task_graph_construct_end(&mut self, graph: &TaskGraph) {
+        for plugin in &mut self.plugins {
+            plugin.on_task_graph_construct_end(graph);
+        }
+    }
 
-        if !status.success() {
-            eprintln!(
-                "[BODO] Plugin process failed with code: {:?}",
-                status.code()
-            );
+    pub fn on_resolve_command(&mut self, task: &mut TaskConfig) {
+        for plugin in &mut self.plugins {
+            plugin.on_resolve_command(task);
+        }
+    }
+
+    pub fn on_command_ready(&mut self, command: &str, task_name: &str) {
+        for plugin in &mut self.plugins {
+            plugin.on_command_ready(command, task_name);
+        }
+    }
+
+    pub fn on_before_run(&mut self, task_name: &str) {
+        for plugin in &mut self.plugins {
+            plugin.on_before_run(task_name);
+        }
+    }
+
+    pub fn on_after_run(&mut self, task_name: &str, status_code: i32) {
+        for plugin in &mut self.plugins {
+            plugin.on_after_run(task_name, status_code);
+        }
+    }
+
+    pub fn on_error(&mut self, task_name: &str, err: &dyn Error) {
+        for plugin in &mut self.plugins {
+            plugin.on_error(task_name, err);
+        }
+    }
+
+    pub fn on_before_watch(&mut self, patterns: &mut Vec<String>) {
+        for plugin in &mut self.plugins {
+            plugin.on_before_watch(patterns);
+        }
+    }
+
+    pub fn on_after_watch_event(&mut self, changed_file: &str) {
+        for plugin in &mut self.plugins {
+            plugin.on_after_watch_event(changed_file);
+        }
+    }
+
+    pub fn on_bodo_exit(&mut self, exit_code: i32) {
+        for plugin in &mut self.plugins {
+            plugin.on_bodo_exit(exit_code);
         }
     }
 }
@@ -65,92 +103,27 @@ impl<'a> PluginManager<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
-    use std::io::Write;
-    #[cfg(unix)]
-    use std::os::unix::fs::PermissionsExt;
-    use std::path::PathBuf;
 
-    fn create_test_plugin(content: &str, extension: &str) -> PathBuf {
-        let mut temp_path = std::env::temp_dir();
-        temp_path.push(format!("test_plugin.{}", extension));
+    struct TestPlugin;
 
-        let mut file = File::create(&temp_path).unwrap();
-        file.write_all(content.as_bytes()).unwrap();
-
-        #[cfg(unix)]
-        std::fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o755)).unwrap();
-
-        temp_path
-    }
-
-    fn cleanup_temp_file(path: PathBuf) {
-        std::fs::remove_file(path).unwrap();
+    impl BodoPlugin for TestPlugin {
+        fn on_before_run(&mut self, task_name: &str) {
+            println!("Test plugin: before run {}", task_name);
+        }
     }
 
     #[test]
     fn test_plugin_manager_creation() {
         let config = BodoConfig::default();
-        let plugin_manager = PluginManager::new(&config);
-        assert!(plugin_manager.config.plugins.is_none());
+        let plugin_manager = PluginManager::new(config);
+        assert!(plugin_manager.plugins.is_empty());
     }
 
     #[test]
-    fn test_run_shell_plugin() {
-        let plugin_content = r#"#!/bin/sh
-echo "Running plugin for task: $1"
-exit 0
-"#;
-        let plugin_path = create_test_plugin(plugin_content, "sh");
-
-        let config = BodoConfig {
-            tasks: None,
-            env_files: None,
-            executable_map: None,
-            max_concurrency: None,
-            plugins: Some(vec![plugin_path.to_string_lossy().to_string()]),
-        };
-
-        let plugin_manager = PluginManager::new(&config);
-        plugin_manager.run_plugins_for_task("test_task");
-
-        cleanup_temp_file(plugin_path);
-    }
-
-    #[test]
-    fn test_run_js_plugin() {
-        let plugin_content = r#"
-console.log('Running plugin for task:', process.argv[2]);
-process.exit(0);
-"#;
-        let plugin_path = create_test_plugin(plugin_content, "js");
-
-        let config = BodoConfig {
-            tasks: None,
-            env_files: None,
-            executable_map: None,
-            max_concurrency: None,
-            plugins: Some(vec![plugin_path.to_string_lossy().to_string()]),
-        };
-
-        let plugin_manager = PluginManager::new(&config);
-        plugin_manager.run_plugins_for_task("test_task");
-
-        cleanup_temp_file(plugin_path);
-    }
-
-    #[test]
-    fn test_no_plugins() {
-        let config = BodoConfig {
-            tasks: None,
-            env_files: None,
-            executable_map: None,
-            max_concurrency: None,
-            plugins: None,
-        };
-
-        let plugin_manager = PluginManager::new(&config);
-        // Should not panic when no plugins are configured
-        plugin_manager.run_plugins_for_task("test_task");
+    fn test_plugin_registration() {
+        let config = BodoConfig::default();
+        let mut plugin_manager = PluginManager::new(config);
+        plugin_manager.register_plugin(Box::new(TestPlugin));
+        assert_eq!(plugin_manager.plugins.len(), 1);
     }
 }

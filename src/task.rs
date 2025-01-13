@@ -7,20 +7,20 @@ use std::error::Error;
 use std::process::Command;
 
 #[allow(dead_code)]
-pub struct TaskManager<'a> {
-    config: &'a BodoConfig,
+pub struct TaskManager {
+    config: BodoConfig,
     env_manager: EnvManager,
     task_graph: TaskGraph,
-    plugin_manager: PluginManager<'a>,
+    plugin_manager: PluginManager,
     prompt_manager: PromptManager,
 }
 
-impl<'a> TaskManager<'a> {
+impl TaskManager {
     pub fn new(
-        config: &'a BodoConfig,
+        config: BodoConfig,
         env_manager: EnvManager,
         task_graph: TaskGraph,
-        plugin_manager: PluginManager<'a>,
+        plugin_manager: PluginManager,
         prompt_manager: PromptManager,
     ) -> Self {
         Self {
@@ -49,16 +49,34 @@ impl<'a> TaskManager<'a> {
         }
 
         // Run plugins before task
-        self.plugin_manager.run_plugins_for_task(task_name);
+        self.plugin_manager.on_before_run(task_name);
 
         // Run the default task
-        self.execute_task(&script_config.default_task)?;
+        let result = self.execute_task(&script_config.default_task, task_name);
 
-        Ok(())
+        match &result {
+            Ok(_) => {
+                self.plugin_manager.on_after_run(task_name, 0);
+            }
+            Err(e) => {
+                self.plugin_manager.on_error(task_name, e.as_ref());
+                self.plugin_manager.on_after_run(task_name, -1);
+            }
+        }
+
+        result
     }
 
-    fn execute_task(&self, task: &TaskConfig) -> Result<(), Box<dyn Error>> {
+    pub fn cleanup(&mut self, exit_code: i32) {
+        self.plugin_manager.on_bodo_exit(exit_code);
+    }
+
+    fn execute_task(&mut self, task: &TaskConfig, task_name: &str) -> Result<(), Box<dyn Error>> {
+        let mut task = task.clone();
+        self.plugin_manager.on_resolve_command(&mut task);
+
         let command = task.command.clone();
+        self.plugin_manager.on_command_ready(&command, task_name);
 
         let mut cmd_parts = command.split_whitespace();
         let program = cmd_parts.next().ok_or("Empty command")?;
@@ -93,12 +111,22 @@ impl<'a> TaskManager<'a> {
 mod tests {
     use super::*;
 
-    fn setup_test_config() -> BodoConfig {
-        BodoConfig {
-            env_files: None,
-            executable_map: None,
-            max_concurrency: None,
-            plugins: None,
-        }
+    #[test]
+    fn test_task_manager_creation() {
+        let config = BodoConfig::default();
+        let env_manager = EnvManager::new();
+        let task_graph = TaskGraph::new();
+        let plugin_manager = PluginManager::new(config.clone());
+        let prompt_manager = PromptManager::new();
+
+        let task_manager = TaskManager::new(
+            config,
+            env_manager,
+            task_graph,
+            plugin_manager,
+            prompt_manager,
+        );
+
+        assert!(task_manager.config.plugins.is_none());
     }
 }

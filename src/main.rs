@@ -12,19 +12,29 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Initialize components
     let env_manager = EnvManager::new();
     let task_graph = TaskGraph::new();
-    let plugin_manager = PluginManager::new(&config);
     let prompt_manager = PromptManager::new();
+
+    // Initialize plugins
+    let mut plugin_manager = PluginManager::new(config.clone());
+    plugin_manager.on_bodo_init();
 
     // Create task manager
     let mut task_manager = TaskManager::new(
-        &config,
+        config,
         env_manager,
         task_graph,
         plugin_manager,
         prompt_manager,
     );
 
-    task_manager.run_task(&cli.task)?;
+    // Run the task
+    let result = task_manager.run_task(&cli.task);
 
-    Ok(())
+    // Clean up plugins
+    match &result {
+        Ok(_) => task_manager.cleanup(0),
+        Err(_) => task_manager.cleanup(1),
+    }
+
+    result
 }

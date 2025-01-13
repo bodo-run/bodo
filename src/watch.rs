@@ -2,12 +2,12 @@ use crate::task::TaskManager;
 use std::error::Error;
 
 #[allow(dead_code)]
-pub struct WatchManager<'a> {
-    task_manager: TaskManager<'a>,
+pub struct WatchManager {
+    task_manager: TaskManager,
 }
 
-impl<'a> WatchManager<'a> {
-    pub fn new(task_manager: TaskManager<'a>) -> Self {
+impl WatchManager {
+    pub fn new(task_manager: TaskManager) -> Self {
         Self { task_manager }
     }
 
