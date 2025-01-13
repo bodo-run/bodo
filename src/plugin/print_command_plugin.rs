@@ -32,9 +32,9 @@ impl PrintCommandPlugin {
             };
             max_len = max_len.max(label.len());
         }
-        let padding = max_len + 6;
-        MAX_LABEL_WIDTH.store(padding, Ordering::SeqCst);
-        padding
+        let final_padding = max_len + 3; // Add 3 spaces for consistent alignment
+        MAX_LABEL_WIDTH.store(final_padding, Ordering::SeqCst);
+        final_padding
     }
 
     pub fn get_stored_padding_width() -> usize {
@@ -44,21 +44,18 @@ impl PrintCommandPlugin {
     fn truncate_str(s: &str, max_width: usize) -> String {
         let mut lines = s.lines();
         let first_line = lines.next().unwrap_or(s).trim_end_matches('\\').trim();
+        let has_more_lines = lines.next().is_some();
 
-        // Check if there are more lines
-        let has_more = lines.next().is_some();
-
-        if first_line.len() < max_width && has_more {
+        if first_line.len() < max_width && has_more_lines {
             format!("{}…", first_line)
-        } else if first_line.len() <= max_width && !has_more {
+        } else if first_line.len() <= max_width && !has_more_lines {
             first_line.to_string()
         } else {
-            format!("{}…", &first_line[..max_width - 1])
+            format!("{}…", &first_line[..max_width.saturating_sub(1)])
         }
     }
 
-    fn get_colored_label(label: String) -> (String, usize) {
-        // Get a deterministic color based on the label content
+    fn get_colored_label(label: &str) -> (String, usize) {
         let colors = ["blue", "green", "yellow", "red", "magenta", "cyan"];
         let color_index = label
             .chars()
@@ -76,7 +73,7 @@ impl PrintCommandPlugin {
         (colored_label, color_index)
     }
 
-    fn get_colored_output(output: String, color_index: usize) -> String {
+    fn get_colored_output(output: &str, color_index: usize) -> String {
         let colors = ["blue", "green", "yellow", "red", "magenta", "cyan"];
         match colors[color_index] {
             "blue" => output.blue().to_string(),
@@ -111,24 +108,27 @@ impl BodoPlugin for PrintCommandPlugin {
 
                 // Check if this task is part of a concurrent group
                 if let Some(concurrent_items) = &script_config.default_task.concurrently {
-                    let concurrent_count = concurrent_items.len();
                     let max_width = Self::get_max_width();
 
                     // Print the header only for the first task
-                    if task_name == format!("{}:{}", group, concurrent_items[0]) {
+                    if task == concurrent_items[0].to_string() {
                         println!(
                             "{}",
-                            format!("Running {} concurrent tasks:", concurrent_count).bold()
+                            format!("Running {} concurrent tasks:", concurrent_items.len()).bold()
                         );
-                        let padding_width = Self::get_padding_width(concurrent_items, group);
+                        // Store the padding width for all subsequent uses
+                        Self::get_padding_width(concurrent_items, group);
+
                         for item in concurrent_items {
                             match item {
                                 crate::config::ConcurrentItem::Task { task, .. } => {
                                     if let Some(tasks) = &script_config.tasks {
                                         if let Some(task_config) = tasks.get(task) {
-                                            let (colored_label, _) = Self::get_colored_label(
-                                                format!("[{}:{}]", group, task),
-                                            );
+                                            let label = format!("[{}:{}]", group, task);
+                                            let (colored_label, _) =
+                                                Self::get_colored_label(&label);
+                                            let padded_width =
+                                                PrintCommandPlugin::get_stored_padding_width();
                                             println!(
                                                 "{:<width$}{}",
                                                 colored_label,
@@ -137,19 +137,21 @@ impl BodoPlugin for PrintCommandPlugin {
                                                     max_width
                                                 )
                                                 .dimmed(),
-                                                width = padding_width
+                                                width = padded_width
                                             );
                                         }
                                     }
                                 }
                                 crate::config::ConcurrentItem::Command { command, .. } => {
-                                    let (colored_label, _) =
-                                        Self::get_colored_label(format!("[{}:command]", group));
+                                    let label = format!("[{}:command]", group);
+                                    let (colored_label, _) = Self::get_colored_label(&label);
+                                    let padded_width =
+                                        PrintCommandPlugin::get_stored_padding_width();
                                     println!(
                                         "{:<width$}{}",
                                         colored_label,
                                         Self::truncate_str(command, max_width).dimmed(),
-                                        width = padding_width
+                                        width = padded_width
                                     );
                                 }
                             }
@@ -162,12 +164,13 @@ impl BodoPlugin for PrintCommandPlugin {
         }
 
         let max_width = Self::get_max_width();
-        let (colored_label, color_index) = Self::get_colored_label(task_name.to_string());
+        let (colored_label, color_index) = Self::get_colored_label(task_name);
+        let truncated = Self::truncate_str(command, max_width);
         println!(
             "{} {}: {}",
             ">".bold(),
             colored_label,
-            Self::get_colored_output(Self::truncate_str(command, max_width), color_index)
+            Self::get_colored_output(&truncated, color_index)
         );
     }
 }
