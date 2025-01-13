@@ -1,3 +1,11 @@
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/logo/logo-black-bg.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./docs/logo/logo-white-bg.svg">
+    <img alt="bodo logo" src="./docs/logo/logo-white-bg.svg" width="200">
+  </picture>
+</div>
+
 # `bodo`
 
 A task runner with intuitive organization and powerful features.
