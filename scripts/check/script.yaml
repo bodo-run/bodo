@@ -10,7 +10,7 @@ default_task:
     - check
     - clippy
     - test
-    - fmt
+    - fmt-check
   env:
     RUST_BACKTRACE: "1"
 
@@ -27,5 +27,6 @@ subtasks:
   test:
     command: cargo test
 
-  fmt:
+  fmt-check:
+    description: Check code formatting
     command: cargo fmt --check
