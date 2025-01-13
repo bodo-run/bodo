@@ -44,7 +44,7 @@ mod tests {
 
     #[test]
     fn test_prompt_manager_creation() {
-        let prompt_manager = PromptManager::new();
+        let _prompt_manager = PromptManager::new();
         // Just verify it can be created
         assert!(true);
     }

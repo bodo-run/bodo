@@ -37,11 +37,13 @@ impl EnvManager {
 
             if let Some((key, value)) = line.split_once('=') {
                 let key = key.trim().to_string();
-                let value = value
-                    .trim()
-                    .trim_matches('"')
-                    .trim_matches('\'')
-                    .to_string();
+                let mut value = value.trim().to_string();
+
+                // Only remove quotes if they match at start and end
+                if (value.starts_with('\'') && value.ends_with('\'')) ||
+                   (value.starts_with('"') && value.ends_with('"')) {
+                    value = value[1..value.len()-1].to_string();
+                }
 
                 self.env_vars.insert(key.clone(), value.clone());
                 std::env::set_var(key, value);
@@ -99,7 +101,11 @@ mod tests {
 
     fn create_temp_env_file(content: &str) -> PathBuf {
         let mut temp_path = std::env::temp_dir();
-        temp_path.push("test.env");
+        let unique_name = format!("test_{}.env", std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos());
+        temp_path.push(unique_name);
 
         let mut file = File::create(&temp_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
@@ -141,7 +147,7 @@ mod tests {
 
         let mut env_manager = EnvManager::new();
         env_manager
-            .load_env_file(&temp_path.to_string_lossy())
+            .load_env_file(&temp_path.to_string_lossy().to_string())
             .unwrap();
 
         let env_vars = env_manager.get_env();

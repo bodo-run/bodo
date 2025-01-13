@@ -1,6 +1,8 @@
+output_dir = "./repo-serialized"
 
 # Add patterns to ignore (in addition to .gitignore)
-ignore_patterns = [
+[ignore_patterns]
+patterns = [
     "target/",
     "Cargo.lock",
     ".cargo/",
@@ -20,6 +22,4 @@ binary_extensions = [
     ".dll",    # Dynamic libraries
     ".so",     # Shared objects
     ".dylib"   # Dynamic libraries (macOS)
-]
-
-output_dir = "./repo-serialized"
+] 
