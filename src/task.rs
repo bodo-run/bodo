@@ -8,23 +8,19 @@ use std::process::{Child, Command};
 
 pub struct TaskManager {
     pub config: TaskConfig,
-    pub(crate) env_manager: EnvManager,
     pub(crate) plugin_manager: PluginManager,
-    pub(crate) prompt_manager: PromptManager,
 }
 
 impl TaskManager {
     pub fn new(
         config: TaskConfig,
-        env_manager: EnvManager,
+        _env_manager: EnvManager,
         plugin_manager: PluginManager,
-        prompt_manager: PromptManager,
+        _prompt_manager: PromptManager,
     ) -> Self {
         Self {
             config,
-            env_manager,
             plugin_manager,
-            prompt_manager,
         }
     }
 
@@ -118,12 +114,6 @@ impl TaskManager {
         Ok(())
     }
 
-    fn spawn_task(&self, task_name: &str) -> Result<Child, Box<dyn Error>> {
-        let script_config = load_script_config(task_name)?;
-        let task_config = script_config.default_task;
-        self.spawn_task_with_config(&task_config)
-    }
-
     fn spawn_task_with_config(&self, task_config: &TaskConfig) -> Result<Child, Box<dyn Error>> {
         // Build command
         let mut cmd = Command::new("sh");
@@ -151,6 +141,8 @@ impl TaskManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::env::EnvManager;
+    use crate::prompt::PromptManager;
 
     #[test]
     fn test_task_manager_creation() {
