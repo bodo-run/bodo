@@ -20,13 +20,13 @@ impl BodoPlugin for PrintCommandPlugin {
         // Don't print if the task is marked as silent
         if let Some(task_config) = task_name.split_once(':').and_then(|(group, task)| {
             let script_config = crate::config::load_script_config(group).ok()?;
-            script_config.subtasks?.get(task).cloned()
+            script_config.tasks?.get(task).cloned()
         }) {
             if task_config.silent.unwrap_or(false) {
                 return;
             }
         }
         use colored::Colorize;
-        println!("> {}", command.green());
+        println!("> {}: {}", task_name, command.green());
     }
 }

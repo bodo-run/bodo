@@ -116,8 +116,8 @@ env:
 default_task:
   command: "tsc -p tsconfig.json"
 
-# Subtasks
-subtasks:
+# tasks
+tasks:
   clean:
     command: "rm -rf dist"
 
@@ -146,7 +146,7 @@ default_task:
     # bring tasks from other scripts
     - task: code-quality/spellcheck
 
-subtasks:
+tasks:
   test:
     command: "cargo test"
 

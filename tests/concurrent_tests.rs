@@ -13,7 +13,7 @@ description: Test concurrent tasks
 default_task:
   command: echo "default task"
   description: Default task
-subtasks:
+tasks:
   task1:
     command: echo "task1"
     description: Task 1

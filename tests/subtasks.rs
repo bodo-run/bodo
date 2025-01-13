@@ -13,7 +13,7 @@ description: Build tasks for the project
 default_task:
   command: echo "Default build task"
   description: Default build task
-subtasks:
+tasks:
   compile:
     command: echo "Compiling project"
     description: Compile the project

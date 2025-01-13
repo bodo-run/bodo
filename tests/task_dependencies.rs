@@ -14,9 +14,9 @@ default_task:
   command: echo "Default task"
   description: Default task
   pre_deps:
-    - test-deps:setup
-    - test-deps:build
-subtasks:
+    - task: setup
+    - task: build
+tasks:
   setup:
     command: echo "Setting up..."
     description: Setup task
@@ -24,7 +24,7 @@ subtasks:
     command: echo "Building..."
     description: Build task
     pre_deps:
-      - test-deps:setup
+      - task: setup
 "#;
 
     let script_path = script_dir.join("script.yaml");
@@ -65,18 +65,18 @@ default_task:
   command: echo "Default task"
   description: Default task
   pre_deps:
-    - circular-deps:task1
-subtasks:
+    - task: task1
+tasks:
   task1:
     command: echo "Task 1"
     description: Task 1
     pre_deps:
-      - circular-deps:task2
+      - task: task2
   task2:
     command: echo "Task 2"
     description: Task 2
     pre_deps:
-      - circular-deps:task1
+      - task: task1
 "#;
 
     let script_path = script_dir.join("script.yaml");

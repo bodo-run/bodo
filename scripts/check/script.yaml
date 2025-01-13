@@ -4,17 +4,20 @@ description: Run all checks for the project, including clippy
 default_task:
   command: echo "All checks completed"
   pre_deps:
-    - clean
-    - build
-    - release
-    - check
-    - clippy
-    - test
-    - fmt-check
+    - command: echo "Running checks..."
+    - task: clean
+    - task: check
+    - task: clippy
+    - task: test
+    - task: fmt-check
+  concurrently:
+    - command: cargo clippy
+    - task: test
+    - task: fmt-check
   env:
     RUST_BACKTRACE: "1"
 
-subtasks:
+tasks:
   check:
     command: cargo check
 

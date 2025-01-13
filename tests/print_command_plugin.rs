@@ -16,7 +16,7 @@ fn test_print_command_plugin() {
 name: Print Test
 default_task:
   command: "echo 'Hello, BODO!'"
-subtasks:
+tasks:
   silent_task:
     command: "echo 'This should be silent'"
     silent: true

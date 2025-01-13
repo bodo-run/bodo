@@ -1,5 +1,5 @@
 use bodo::cli::BodoCli;
-use bodo::config::{load_bodo_config, load_script_config, TaskConfig};
+use bodo::config::{load_bodo_config, load_script_config, ConcurrentItem, TaskConfig};
 use bodo::debug;
 use bodo::env::EnvManager;
 use bodo::plugin::PluginManager;
@@ -17,15 +17,15 @@ fn get_task_config(
     subtask: Option<&str>,
 ) -> Result<TaskConfig, Box<dyn Error>> {
     if let Some(subtask_name) = subtask {
-        if let Some(subtasks) = &script_config.subtasks {
-            subtasks
+        if let Some(tasks) = &script_config.tasks {
+            tasks
                 .get(subtask_name)
                 .ok_or_else(|| {
                     Box::<dyn Error>::from(format!("Subtask '{}' not found", subtask_name))
                 })
                 .cloned()
         } else {
-            Err("No subtasks defined".into())
+            Err("No tasks defined".into())
         }
     } else {
         Ok(script_config.default_task.clone())
@@ -68,9 +68,9 @@ fn list_tasks(script_name: Option<&str>) -> Result<(), Box<dyn Error>> {
             }
             println!();
 
-            // Print subtasks
-            if let Some(subtasks) = script_config.subtasks {
-                for (name, task) in subtasks {
+            // Print tasks
+            if let Some(tasks) = script_config.tasks {
+                for (name, task) in tasks {
                     if let Some(desc) = task.description {
                         println!("{}:", name);
                         println!("  {}", desc);
@@ -111,9 +111,9 @@ fn list_tasks(script_name: Option<&str>) -> Result<(), Box<dyn Error>> {
                     println!("    {}", format!("$ {}", cmd).dimmed());
                 }
 
-                // Print subtasks
-                if let Some(subtasks) = script_config.subtasks {
-                    for (name, task) in subtasks {
+                // Print tasks
+                if let Some(tasks) = script_config.tasks {
+                    for (name, task) in tasks {
                         println!("\n  {}:", name.bold());
                         if let Some(desc) = task.description {
                             println!("    {}", desc);
@@ -152,32 +152,44 @@ fn run_task_with_deps(
     // Resolve dependencies
     if let Some(deps) = &task_config.dependencies {
         for dep in deps {
-            let parts: Vec<&str> = dep.split(':').collect();
-            match parts.as_slice() {
-                [task, subtask] => {
-                    let dep_script_config = load_script_config(task)?;
-                    run_task_with_deps(
-                        task,
-                        Some(subtask),
-                        env_manager.clone(),
-                        plugin_manager.clone(),
-                        prompt_manager.clone(),
-                        &dep_script_config,
-                        visited,
-                    )?;
+            match dep {
+                ConcurrentItem::Task { task } => {
+                    let parts: Vec<&str> = task.split(':').collect();
+                    match parts.as_slice() {
+                        [task, subtask] => {
+                            let dep_script_config = load_script_config(task)?;
+                            run_task_with_deps(
+                                task,
+                                Some(subtask),
+                                env_manager.clone(),
+                                plugin_manager.clone(),
+                                prompt_manager.clone(),
+                                &dep_script_config,
+                                visited,
+                            )?;
+                        }
+                        [task] => {
+                            run_task_with_deps(
+                                task_name,
+                                Some(task),
+                                env_manager.clone(),
+                                plugin_manager.clone(),
+                                prompt_manager.clone(),
+                                script_config,
+                                visited,
+                            )?;
+                        }
+                        _ => return Err(format!("Invalid dependency format: {}", task).into()),
+                    }
                 }
-                [task] => {
-                    run_task_with_deps(
-                        task_name,
-                        Some(task),
-                        env_manager.clone(),
-                        plugin_manager.clone(),
-                        prompt_manager.clone(),
-                        script_config,
-                        visited,
-                    )?;
+                ConcurrentItem::Command { command } => {
+                    let mut cmd = std::process::Command::new("sh");
+                    cmd.arg("-c").arg(command);
+                    let status = cmd.status()?;
+                    if !status.success() {
+                        return Err(format!("Command failed with status: {}", status).into());
+                    }
                 }
-                _ => return Err(format!("Invalid dependency format: {}", dep).into()),
             }
         }
     }

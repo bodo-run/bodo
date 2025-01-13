@@ -67,11 +67,45 @@ impl TaskManager {
         if let Some(concurrent_items) = &self.config.concurrently {
             let mut children = Vec::new();
 
+            let current_script_config = load_script_config(task_name)?;
+
             for item in concurrent_items {
                 match item {
                     ConcurrentItem::Task { task } => {
-                        let script_config = load_script_config(task)?;
-                        let task_config = script_config.default_task;
+                        let task_config = if task.contains(':') {
+                            let parts: Vec<&str> = task.split(':').collect();
+                            if parts.len() != 2 {
+                                return Err(
+                                    format!("Invalid task reference format: {}", task).into()
+                                );
+                            }
+                            let script_config = load_script_config(parts[0])?;
+                            if let Some(tasks) = &script_config.tasks {
+                                tasks.get(parts[1]).cloned().ok_or_else(|| {
+                                    format!(
+                                        "Task '{}' not found in script '{}'",
+                                        parts[1], parts[0]
+                                    )
+                                })?
+                            } else {
+                                return Err(
+                                    format!("No tasks defined in script '{}'", parts[0]).into()
+                                );
+                            }
+                        } else {
+                            if let Some(tasks) = &current_script_config.tasks {
+                                if let Some(task_config) = tasks.get(task) {
+                                    task_config.clone()
+                                } else {
+                                    let script_config = load_script_config(task)?;
+                                    script_config.default_task
+                                }
+                            } else {
+                                let script_config = load_script_config(task)?;
+                                script_config.default_task
+                            }
+                        };
+
                         if let Some(command) = task_config.command {
                             let child = self.spawn_command(&command)?;
                             children.push(child);

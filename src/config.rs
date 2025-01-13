@@ -27,7 +27,7 @@ pub struct TaskConfig {
     pub cwd: Option<String>,
     pub env: Option<HashMap<String, String>>,
     #[serde(rename = "pre_deps")]
-    pub dependencies: Option<Vec<String>>,
+    pub dependencies: Option<Vec<ConcurrentItem>>,
     pub plugins: Option<Vec<String>>,
     pub concurrently: Option<Vec<ConcurrentItem>>,
     pub description: Option<String>,
@@ -47,7 +47,7 @@ pub struct ScriptConfig {
     pub exec_paths: Option<Vec<String>>,
     pub env: Option<HashMap<String, String>>,
     pub default_task: TaskConfig,
-    pub subtasks: Option<HashMap<String, TaskConfig>>,
+    pub tasks: Option<HashMap<String, TaskConfig>>,
 }
 
 pub fn load_bodo_config() -> Result<BodoConfig, Box<dyn Error>> {

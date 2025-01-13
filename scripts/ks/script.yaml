@@ -1,0 +1,24 @@
+name: Kitchen Sink
+
+default_task:
+  description: "Run all tasks in parallel"
+
+  concurrently:
+    - command: 'echo "A command"'
+    - task: hello
+    - task: world
+    - task: slow
+    - task: fast
+
+tasks:
+  hello:
+    command: 'echo "Hello task"'
+
+  world:
+    command: 'echo "World task"'
+
+  slow:
+    command: 'sleep 5 && echo "Slow task"'
+
+  fast:
+    command: 'sleep 1 && echo "Fast task"'
