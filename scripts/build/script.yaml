@@ -17,14 +17,18 @@ default_task:
 # Subtasks
 subtasks:
   release:
+    description: Build the project in release mode
     command: cargo build --release
 
   check:
+    description: Check the project
     command: cargo check
 
   clippy:
+    description: Run clippy
     command: cargo clippy
     silent: true
 
   fmt:
+    description: Format the project
     command: cargo fmt
