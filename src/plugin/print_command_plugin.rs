@@ -34,7 +34,7 @@ impl PrintCommandPlugin {
         }
         let padding = max_len + 6;
         MAX_LABEL_WIDTH.store(padding, Ordering::SeqCst);
-        max_len + 2
+        padding
     }
 
     pub fn get_stored_padding_width() -> usize {
