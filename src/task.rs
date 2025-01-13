@@ -366,7 +366,7 @@ impl TaskManager {
     ) -> Result<(), Box<dyn Error>> {
         // Gather concurrency options
         let concurrently_options = self.config.concurrently_options.clone();
-        let fail_fast = concurrently_options.as_ref().map_or(false, |c| c.fail_fast);
+        let fail_fast = concurrently_options.as_ref().is_some_and(|c| c.fail_fast);
         let timeout_secs = concurrently_options
             .as_ref()
             .and_then(|c| c.timeout)

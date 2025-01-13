@@ -1,10 +1,11 @@
-use crate::config::{load_bodo_config, load_script_config, ColorSpec, ConcurrentItem};
+use crate::config::ColorSpec;
 use crate::plugin::BodoPlugin;
 use colored::Colorize;
 use dialoguer::console::Term;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 /// Helper function to determine if color should be enabled based on config hierarchy
+#[allow(dead_code)]
 fn is_color_enabled(
     global_config: &Option<bool>,
     script_config: &Option<bool>,
@@ -35,6 +36,7 @@ impl PrintCommandPlugin {
         Self
     }
 
+    #[allow(dead_code)]
     fn get_max_width() -> usize {
         let term = Term::stdout();
         ((term.size().1 as f64) * 0.6) as usize
@@ -99,6 +101,7 @@ impl PrintCommandPlugin {
         MAX_LABEL_WIDTH.load(Ordering::SeqCst)
     }
 
+    #[allow(dead_code)]
     fn truncate_str(s: &str, max_width: usize) -> String {
         let mut lines = s.lines();
         let first_line = lines.next().unwrap_or(s).trim_end_matches('\\').trim();
@@ -113,6 +116,7 @@ impl PrintCommandPlugin {
         }
     }
 
+    #[allow(dead_code)]
     fn get_colored_label(
         label: &str,
         color_spec: Option<&ColorSpec>,
@@ -143,6 +147,7 @@ impl PrintCommandPlugin {
         }
     }
 
+    #[allow(dead_code)]
     fn get_colored_output(output: &str, color_index: usize) -> String {
         let colors = ["blue", "green", "yellow", "red", "magenta", "cyan"];
         match colors[color_index] {
@@ -168,18 +173,10 @@ impl BodoPlugin for PrintCommandPlugin {
         if !command.is_empty() {
             let prefix = if task_name.starts_with(".:") {
                 format!("[{}]", task_name)
-            } else if task_name.contains(':') {
+            } else {
                 format!("> {}", task_name)
-            } else {
-                format!("> {}: ", task_name)
             };
-            if task_name.starts_with(".:") {
-                println!("{} {}", prefix, command);
-            } else if task_name.contains(':') {
-                println!("{}{}", prefix, command);
-            } else {
-                println!("{}{}", prefix, command);
-            }
+            println!("{} {}", prefix, command);
         }
     }
 
