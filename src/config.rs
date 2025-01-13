@@ -29,6 +29,7 @@ pub struct TaskConfig {
     pub dependencies: Option<Vec<String>>,
     pub plugins: Option<Vec<String>>,
     pub concurrently: Option<Vec<ConcurrentItem>>,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -39,11 +40,10 @@ pub struct ExecutableMap {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ScriptConfig {
-    pub name: String,
+    pub name: Option<String>,
     pub description: Option<String>,
     pub exec_paths: Option<Vec<String>>,
     pub env: Option<HashMap<String, String>>,
-    #[serde(rename = "defaultTask")]
     pub default_task: TaskConfig,
     pub subtasks: Option<HashMap<String, TaskConfig>>,
 }

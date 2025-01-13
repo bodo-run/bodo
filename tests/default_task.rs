@@ -1,73 +1,76 @@
-use assert_cmd::Command;
-use predicates::str::contains;
 use std::fs;
 use tempfile::tempdir;
 
-/// Tests whether running `bodo <subdirectory>` executes the default task
-#[test]
-fn test_default_task_on_subdirectory() {
-    let temp = tempdir().unwrap();
-    let project_root = temp.path();
-
-    // Create a script dir following the README's structure
-    let dir = project_root.join("scripts").join("my-task-group");
-    std::fs::create_dir_all(&dir).unwrap();
-
-    // Write a minimal script.yaml with a defaultTask
-    fs::write(
-        dir.join("script.yaml"),
-        r#"
-name: My Task
-description: Just a test
-exec_paths:
-  - node_modules/.bin
-env:
-  MY_VAR: "Hello from default task"
-defaultTask:
-  command: echo "Executing the default task"
-"#,
-    )
-    .unwrap();
-
-    // Run `bodo my-task-group`
-    Command::cargo_bin("bodo")
-        .unwrap()
-        .current_dir(&project_root)
-        .arg("my-task-group")
-        .assert()
-        .success()
-        .stdout(contains("Executing the default task"));
-}
-
-/// Tests whether environment variables from a script.yaml are recognized
 #[test]
 fn test_env_variables_in_default_task() {
-    let temp = tempdir().unwrap();
-    let project_root = temp.path();
+    let temp_dir = tempdir().unwrap();
+    let script_dir = temp_dir.path().join("scripts").join("env-test");
+    fs::create_dir_all(&script_dir).unwrap();
 
-    let dir = project_root.join("scripts").join("env-test");
-    std::fs::create_dir_all(&dir).unwrap();
-
-    fs::write(
-        dir.join("script.yaml"),
-        r#"
-name: Env Test
-description: Checking env
-exec_paths:
-  - my_fake_bin
+    let script_content = r#"
+name: Test Script
+description: Test environment variables
+default_task:
+  command: echo $TEST_VAR
+  description: Default task
 env:
-  TEST_GREETING: "Hello from BODO"
-defaultTask:
-  command: printenv TEST_GREETING
-"#,
-    )
-    .unwrap();
+  TEST_VAR: "Hello from env"
+"#;
 
-    Command::cargo_bin("bodo")
-        .unwrap()
-        .current_dir(&project_root)
+    let script_path = script_dir.join("script.yaml");
+    fs::write(&script_path, script_content).unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_bodo"))
         .arg("env-test")
-        .assert()
-        .success()
-        .stdout(contains("Hello from BODO"));
+        .current_dir(&temp_dir)
+        .output()
+        .unwrap_or_else(|e| panic!("Failed to execute command: {}", e));
+
+    assert!(
+        output.status.success(),
+        "Unexpected failure.\ncode={:?}\nstdout=```{}```\nstderr=```{}```\ncommand=`cd {:?} && {:?} \"env-test\"`",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+        temp_dir.path(),
+        env!("CARGO_BIN_EXE_bodo"),
+    );
+
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Hello from env"));
+}
+
+#[test]
+fn test_default_task_on_subdirectory() {
+    let temp_dir = tempdir().unwrap();
+    let script_dir = temp_dir.path().join("scripts").join("my-task-group");
+    fs::create_dir_all(&script_dir).unwrap();
+
+    let script_content = r#"
+name: Test Script
+description: Test default task in subdirectory
+default_task:
+  command: echo "Hello from subdirectory"
+  description: Default task
+"#;
+
+    let script_path = script_dir.join("script.yaml");
+    fs::write(&script_path, script_content).unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_bodo"))
+        .arg("my-task-group")
+        .current_dir(&temp_dir)
+        .output()
+        .unwrap_or_else(|e| panic!("Failed to execute command: {}", e));
+
+    assert!(
+        output.status.success(),
+        "Unexpected failure.\ncode={:?}\nstdout=```{}```\nstderr=```{}```\ncommand=`cd {:?} && {:?} \"my-task-group\"`",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+        temp_dir.path(),
+        env!("CARGO_BIN_EXE_bodo"),
+    );
+
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Hello from subdirectory"));
 }

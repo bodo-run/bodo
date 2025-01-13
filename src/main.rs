@@ -1,10 +1,12 @@
+use bodo::cli::BodoCli;
 use bodo::config::{load_bodo_config, load_script_config, TaskConfig};
 use bodo::env::EnvManager;
 use bodo::plugin::PluginManager;
 use bodo::prompt::PromptManager;
 use bodo::task::TaskManager;
+use clap::Parser;
+use colored::*;
 use std::collections::HashSet;
-use std::env;
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -26,6 +28,67 @@ fn get_task_config(
     } else {
         Ok(script_config.default_task.clone())
     }
+}
+
+fn list_tasks() -> Result<(), Box<dyn Error>> {
+    // Find all script directories
+    let current_dir = std::env::current_dir()?;
+    let scripts_dir = current_dir.join("scripts");
+    if !scripts_dir.exists() {
+        println!(
+            "\n{}",
+            "No tasks found. Create a script.yaml file in:".yellow()
+        );
+        println!(
+            "  {}/scripts/<task-name>/script.yaml",
+            current_dir.display()
+        );
+        return Ok(());
+    }
+
+    println!("\n{}", "Available Tasks:".bold().green());
+
+    // List all task directories
+    for entry in std::fs::read_dir(&scripts_dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            let task_name = entry.file_name();
+            let script_path = entry.path().join("script.yaml");
+            if script_path.exists() {
+                let script_config = load_script_config(&task_name.to_string_lossy())?;
+
+                // Print task name and description
+                println!("\n{}", task_name.to_string_lossy().yellow());
+                if let Some(desc) = script_config.description {
+                    println!("  {}", desc);
+                }
+
+                // Print default task
+                println!("  {}", "default:".bold());
+                if let Some(desc) = script_config.default_task.description {
+                    println!("    {}", desc);
+                }
+                if let Some(cmd) = script_config.default_task.command {
+                    println!("    {}", format!("$ {}", cmd).dimmed());
+                }
+
+                // Print subtasks
+                if let Some(subtasks) = script_config.subtasks {
+                    for (name, task) in subtasks {
+                        println!("\n  {}:", name.bold());
+                        if let Some(desc) = task.description {
+                            println!("    {}", desc);
+                        }
+                        if let Some(cmd) = task.command {
+                            println!("    {}", format!("$ {}", cmd).dimmed());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    println!();
+    Ok(())
 }
 
 fn run_task_with_deps(
@@ -115,20 +178,19 @@ fn run_task(
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Get command-line arguments
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        return Err("Usage: bodo <task_name> [subtask] or bodo watch <task_name> [subtask]".into());
+    let cli = BodoCli::parse();
+
+    if cli.list {
+        return list_tasks();
     }
 
-    // Parse arguments based on command type
-    let (task_name, subtask) = if args[1] == "watch" {
-        if args.len() < 3 {
-            return Err("Usage: bodo watch <task_name> [subtask]".into());
-        }
-        (&args[2], args.get(3).map(|s| s.as_str()))
+    let task_name = cli
+        .task
+        .ok_or("No task specified. Use --list to see available tasks.")?;
+    let subtask = if !cli.args.is_empty() {
+        Some(cli.args[0].as_str())
     } else {
-        (&args[1], args.get(2).map(|s| s.as_str()))
+        None
     };
 
     // Initialize managers
@@ -147,7 +209,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Load script config for environment setup
-    let script_config = load_script_config(task_name)?;
+    let script_config = load_script_config(&task_name)?;
 
     // Load environment variables from script config
     if let Some(env_vars) = &script_config.env {
@@ -163,7 +225,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Run the task and handle exit
     match run_task(
-        task_name,
+        &task_name,
         subtask,
         env_manager,
         plugin_manager,

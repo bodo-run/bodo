@@ -7,8 +7,8 @@ use clap::Parser;
 #[command(about = "Task runner in Rust", long_about = None)]
 pub struct BodoCli {
     /// Task to run
-    #[arg(index = 1)]
-    pub task: String,
+    #[arg(index = 1, required = false)]
+    pub task: Option<String>,
 
     /// Watch for changes
     #[arg(short, long)]
@@ -17,6 +17,10 @@ pub struct BodoCli {
     /// Target environment
     #[arg(short, long)]
     pub target: Option<String>,
+
+    /// List all available tasks with descriptions
+    #[arg(short, long)]
+    pub list: bool,
 
     /// Subtask arguments
     #[arg(index = 2, num_args = 0..)]

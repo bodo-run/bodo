@@ -1,84 +1,98 @@
-use assert_cmd::Command;
-use predicates::str::contains;
 use std::fs;
 use tempfile::tempdir;
 
-/// Tests task dependencies as described in the README
 #[test]
 fn test_task_dependencies() {
-    let temp = tempdir().unwrap();
-    let project_root = temp.path();
-    let dir = project_root.join("scripts").join("test-deps");
-    std::fs::create_dir_all(&dir).unwrap();
+    let temp_dir = tempdir().unwrap();
+    let script_dir = temp_dir.path().join("scripts").join("test-deps");
+    fs::create_dir_all(&script_dir).unwrap();
 
-    // This script has a defaultTask with dependencies on subtasks
-    fs::write(
-        dir.join("script.yaml"),
-        r#"
-name: Dependencies Test
-defaultTask:
-  command: echo "Final task"
+    let script_content = r#"
+name: Test Dependencies Script
+description: Test task dependencies
+default_task:
+  command: echo "Default task"
+  description: Default task
   pre_deps:
-    - build
-    - test
+    - test-deps:setup
+    - test-deps:build
 subtasks:
+  setup:
+    command: echo "Setting up..."
+    description: Setup task
   build:
-    command: echo "Building first..."
-  test:
-    command: echo "Testing second..."
+    command: echo "Building..."
+    description: Build task
     pre_deps:
-      - build
-"#,
-    )
-    .unwrap();
+      - test-deps:setup
+"#;
 
-    // Running `bodo test-deps` should execute tasks in correct order
-    Command::cargo_bin("bodo")
-        .unwrap()
-        .current_dir(&project_root)
+    let script_path = script_dir.join("script.yaml");
+    fs::write(&script_path, script_content).unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_bodo"))
         .arg("test-deps")
-        .assert()
-        .success()
-        .stdout(contains("Building first..."))
-        .stdout(contains("Testing second..."))
-        .stdout(contains("Final task"));
+        .current_dir(&temp_dir)
+        .output()
+        .unwrap_or_else(|e| panic!("Failed to execute command: {}", e));
+
+    assert!(
+        output.status.success(),
+        "Unexpected failure.\ncode={:?}\nstdout=```{}```\nstderr=```{}```\ncommand=`cd {:?} && {:?} \"test-deps\"`",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+        temp_dir.path(),
+        env!("CARGO_BIN_EXE_bodo"),
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Setting up..."));
+    assert!(stdout.contains("Building..."));
+    assert!(stdout.contains("Default task"));
 }
 
-/// Tests circular dependency detection
 #[test]
 fn test_circular_dependencies() {
-    let temp = tempdir().unwrap();
-    let project_root = temp.path();
-    let dir = project_root.join("scripts").join("circular-deps");
-    std::fs::create_dir_all(&dir).unwrap();
+    let temp_dir = tempdir().unwrap();
+    let script_dir = temp_dir.path().join("scripts").join("circular-deps");
+    fs::create_dir_all(&script_dir).unwrap();
 
-    fs::write(
-        dir.join("script.yaml"),
-        r#"
-name: Circular Dependencies Test
-defaultTask:
-  command: echo "Main task"
+    let script_content = r#"
+name: Circular Dependencies Script
+description: Test circular dependencies
+default_task:
+  command: echo "Default task"
+  description: Default task
   pre_deps:
-    - task-a
+    - circular-deps:task1
 subtasks:
-  task-a:
-    command: echo "Task A"
+  task1:
+    command: echo "Task 1"
+    description: Task 1
     pre_deps:
-      - task-b
-  task-b:
-    command: echo "Task B"
+      - circular-deps:task2
+  task2:
+    command: echo "Task 2"
+    description: Task 2
     pre_deps:
-      - task-a
-"#,
-    )
-    .unwrap();
+      - circular-deps:task1
+"#;
 
-    // Should fail with circular dependency error
-    Command::cargo_bin("bodo")
-        .unwrap()
-        .current_dir(&project_root)
+    let script_path = script_dir.join("script.yaml");
+    fs::write(&script_path, script_content).unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_bodo"))
         .arg("circular-deps")
-        .assert()
-        .failure()
-        .stderr(contains("circular"));
+        .current_dir(&temp_dir)
+        .output()
+        .unwrap_or_else(|e| panic!("Failed to execute command: {}", e));
+
+    assert!(
+        !output.status.success(),
+        "Expected failure due to circular dependencies"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Circular dependency detected"));
 }

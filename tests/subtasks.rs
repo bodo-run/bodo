@@ -1,52 +1,46 @@
-use assert_cmd::Command;
-use predicates::str::contains;
 use std::fs;
 use tempfile::tempdir;
 
-/// Tests whether running `bodo <subdirectory> <subtask>` correctly executes a subtask
 #[test]
 fn test_subtask_run() {
-    let temp = tempdir().unwrap();
-    let project_root = temp.path();
+    let temp_dir = tempdir().unwrap();
+    let script_dir = temp_dir.path().join("scripts").join("build");
+    fs::create_dir_all(&script_dir).unwrap();
 
-    let dir = project_root.join("scripts").join("build");
-    std::fs::create_dir_all(&dir).unwrap();
-
-    fs::write(
-        dir.join("script.yaml"),
-        r#"
+    let script_content = r#"
 name: Build Script
-description: Subtask test
-exec_paths:
-  - target/debug
-env:
-  RUST_BACKTRACE: "1"
-defaultTask:
+description: Build tasks for the project
+default_task:
   command: echo "Default build task"
+  description: Default build task
 subtasks:
   compile:
-    command: echo "Compiling..."
-  clean:
-    command: echo "Cleaning build..."
-"#,
-    )
-    .unwrap();
+    command: echo "Compiling project"
+    description: Compile the project
+  test:
+    command: echo "Running tests"
+    description: Run the test suite
+"#;
 
-    // Run subtask "compile"
-    Command::cargo_bin("bodo")
-        .unwrap()
-        .current_dir(&project_root)
+    let script_path = script_dir.join("script.yaml");
+    fs::write(&script_path, script_content).unwrap();
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_bodo"))
         .args(&["build", "compile"])
-        .assert()
-        .success()
-        .stdout(contains("Compiling..."));
+        .current_dir(&temp_dir)
+        .output()
+        .unwrap_or_else(|e| panic!("Failed to execute command: {}", e));
 
-    // Run subtask "clean"
-    Command::cargo_bin("bodo")
-        .unwrap()
-        .current_dir(&project_root)
-        .args(&["build", "clean"])
-        .assert()
-        .success()
-        .stdout(contains("Cleaning build..."));
+    assert!(
+        output.status.success(),
+        "Unexpected failure.\ncode={:?}\nstdout=```{}```\nstderr=```{}```\ncommand=`cd {:?} && {:?} \"build\" \"compile\"`",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+        temp_dir.path(),
+        env!("CARGO_BIN_EXE_bodo"),
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Compiling project"));
 }

@@ -153,6 +153,7 @@ mod tests {
             dependencies: Some(Vec::new()),
             plugins: None,
             concurrently: None,
+            description: None,
         };
         let env_manager = EnvManager::new();
         let plugin_manager = PluginManager::new();

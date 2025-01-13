@@ -49,6 +49,15 @@ defaultTask:
 bodo
 ```
 
+## Design Principles
+
+- **Fast**: bodo is designed to be fast and efficient.
+- **Plugins architecture**: Most things are implemented as a Rust plugin if possible.
+- **User friendly**: bodo is designed to be user friendly and easy to understand.
+- **Forgiving**: bodo is designed to be forgiving and not strict.
+- **Helpful errors**: bodo provides helpful errors and suggestions.
+- **Highly customizable**: bodo is designed to be highly customizable and flexible.
+
 ## Usage
 
 Create a `scripts/` directory in your project root. Each subdirectory in `scripts/` represents a task group. Inside each subdirectory, add a `script.yaml` defining commands, arguments, environment variables, dependencies, and more.
