@@ -208,7 +208,11 @@ impl TaskManager {
         if !status.success() {
             let err: Box<dyn Error> = Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("Command failed with status: {}", status),
+                format!(
+                    "Task '{}' failed with exit code {}",
+                    task_key,
+                    status.code().unwrap_or(1)
+                ),
             ));
             self.plugin_manager.on_error(task_key, err.as_ref())?;
             return Err(err);
@@ -292,7 +296,10 @@ impl TaskManager {
                 if !status.success() {
                     let error: Box<dyn Error> = Box::new(std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        format!("Concurrent task failed with status: {}", status),
+                        format!(
+                            "Task '{}' failed. All concurrent tasks have been stopped.",
+                            subtask_name
+                        ),
                     ));
                     self.plugin_manager
                         .on_error(&subtask_name, error.as_ref())?;
