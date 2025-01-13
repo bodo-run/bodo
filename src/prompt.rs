@@ -30,4 +30,23 @@ impl PromptManager {
             .interact()
             .ok()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_prompt_manager_creation() {
+        let prompt_manager = PromptManager::new();
+        // Just verify it can be created
+        assert!(true);
+    }
+
+    // Note: We can't easily test the interactive methods (confirm, input, select)
+    // in automated tests because they require user interaction.
+    // In a real-world scenario, we might want to:
+    // 1. Mock the dialoguer crate
+    // 2. Create a trait for the prompt interface and use a test double
+    // 3. Add integration tests for the interactive features
 } 

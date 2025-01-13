@@ -1,0 +1,25 @@
+
+# Add patterns to ignore (in addition to .gitignore)
+ignore_patterns = [
+    "target/",
+    "Cargo.lock",
+    ".cargo/",
+    ".rustup/"
+]
+
+# Define priority rules for processing order
+# Higher scores are processed first
+[[priority_rules]]
+score = 100
+patterns = ["^src/"]
+
+# Add additional binary file extensions to ignore
+binary_extensions = [
+    ".rlib",   # Rust static libraries
+    ".rmeta",  # Rust metadata files
+    ".dll",    # Dynamic libraries
+    ".so",     # Shared objects
+    ".dylib"   # Dynamic libraries (macOS)
+]
+
+output_dir = "./repo-serialized"

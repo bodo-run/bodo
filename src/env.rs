@@ -82,4 +82,78 @@ impl EnvManager {
     pub fn get_env(&self) -> &HashMap<String, String> {
         &self.env_vars
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::PathBuf;
+
+    fn create_temp_env_file(content: &str) -> PathBuf {
+        let mut temp_path = std::env::temp_dir();
+        temp_path.push("test.env");
+        
+        let mut file = File::create(&temp_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+        
+        temp_path
+    }
+
+    fn cleanup_temp_file(path: PathBuf) {
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn test_new_env_manager() {
+        let env_manager = EnvManager::new();
+        assert!(env_manager.env_vars.is_empty());
+    }
+
+    #[test]
+    fn test_load_env_file() {
+        let content = "TEST_KEY=test_value\n# comment\nTEST_KEY2='quoted value'\n";
+        let temp_path = create_temp_env_file(content);
+        
+        let mut env_manager = EnvManager::new();
+        env_manager.merge_env_files(&[temp_path.to_string_lossy().to_string()]);
+        
+        let env_vars = env_manager.get_env();
+        assert_eq!(env_vars.get("TEST_KEY").unwrap(), "test_value");
+        assert_eq!(env_vars.get("TEST_KEY2").unwrap(), "quoted value");
+        
+        cleanup_temp_file(temp_path);
+    }
+
+    #[test]
+    fn test_load_env_file_with_empty_lines() {
+        let content = "\nTEST_KEY=test_value\n\n";
+        let temp_path = create_temp_env_file(content);
+        
+        let mut env_manager = EnvManager::new();
+        env_manager.merge_env_files(&[temp_path.to_string_lossy().to_string()]);
+        
+        let env_vars = env_manager.get_env();
+        assert_eq!(env_vars.get("TEST_KEY").unwrap(), "test_value");
+        
+        cleanup_temp_file(temp_path);
+    }
+
+    #[test]
+    fn test_inject_exec_paths() {
+        let mut env_manager = EnvManager::new();
+        let original_path = std::env::var("PATH").unwrap();
+        
+        env_manager.inject_exec_paths(&["./bin".to_string()]);
+        
+        let new_path = std::env::var("PATH").unwrap();
+        let separator = if cfg!(windows) { ";" } else { ":" };
+        
+        assert!(new_path.starts_with(&format!("./bin{}", separator)));
+        assert!(new_path.contains(&original_path));
+        
+        // Restore original PATH
+        std::env::set_var("PATH", original_path);
+    }
 } 

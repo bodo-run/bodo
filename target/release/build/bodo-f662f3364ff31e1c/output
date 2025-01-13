@@ -1,0 +1,5 @@
+cargo:rerun-if-changed=build.rs
+cargo:rustc-cfg=feature="tokio"
+cargo:rustc-cfg=feature="petgraph"
+cargo:rustc-cfg=feature="dialoguer"
+cargo:rustc-cfg=feature="serde_json"

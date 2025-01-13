@@ -65,4 +65,124 @@ pub fn load_bodo_config() -> BodoConfig {
     }
 
     BodoConfig::default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::PathBuf;
+
+    fn create_temp_config_file(content: &str, extension: &str) -> PathBuf {
+        let mut temp_path = std::env::temp_dir();
+        temp_path.push(format!("test_config.{}", extension));
+        
+        let mut file = File::create(&temp_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+        
+        temp_path
+    }
+
+    fn cleanup_temp_file(path: PathBuf) {
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn test_default_config() {
+        let config = BodoConfig::default();
+        assert!(config.tasks.is_none());
+        assert!(config.env_files.is_none());
+        assert!(config.executable_map.is_none());
+        assert!(config.max_concurrency.is_none());
+        assert!(config.plugins.is_none());
+    }
+
+    #[test]
+    fn test_load_json_config() {
+        let content = r#"{
+            "tasks": [
+                {
+                    "name": "test",
+                    "command": "echo hello",
+                    "cwd": ".",
+                    "env": ["TEST=true"],
+                    "dependencies": ["prep"],
+                    "plugins": ["test-plugin"]
+                }
+            ],
+            "env_files": [".env"],
+            "executable_map": [
+                {
+                    "executable": "node",
+                    "path": "/usr/local/bin/node"
+                }
+            ],
+            "max_concurrency": 4,
+            "plugins": ["plugin1"]
+        }"#;
+        
+        let temp_path = create_temp_config_file(content, "json");
+        std::env::set_current_dir(temp_path.parent().unwrap()).unwrap();
+        
+        let config: BodoConfig = serde_json::from_str(content).unwrap();
+        assert!(config.tasks.is_some());
+        assert_eq!(config.tasks.as_ref().unwrap().len(), 1);
+        
+        let task = &config.tasks.as_ref().unwrap()[0];
+        assert_eq!(task.name, "test");
+        assert_eq!(task.command, "echo hello");
+        assert_eq!(task.cwd, Some(".".to_string()));
+        
+        cleanup_temp_file(temp_path);
+    }
+
+    #[test]
+    fn test_load_yaml_config() {
+        let content = r#"
+tasks:
+  - name: test
+    command: echo hello
+    cwd: .
+    env: 
+      - TEST=true
+    dependencies:
+      - prep
+    plugins:
+      - test-plugin
+env_files:
+  - .env
+executable_map:
+  - executable: node
+    path: /usr/local/bin/node
+max_concurrency: 4
+plugins:
+  - plugin1
+"#;
+        
+        let temp_path = create_temp_config_file(content, "yaml");
+        std::env::set_current_dir(temp_path.parent().unwrap()).unwrap();
+        
+        let config: BodoConfig = serde_yaml::from_str(content).unwrap();
+        assert!(config.tasks.is_some());
+        assert_eq!(config.tasks.as_ref().unwrap().len(), 1);
+        
+        let task = &config.tasks.as_ref().unwrap()[0];
+        assert_eq!(task.name, "test");
+        assert_eq!(task.command, "echo hello");
+        assert_eq!(task.cwd, Some(".".to_string()));
+        
+        cleanup_temp_file(temp_path);
+    }
+
+    #[test]
+    fn test_executable_map() {
+        let map = ExecutableMap {
+            executable: Some("node".to_string()),
+            path: Some("/usr/local/bin/node".to_string()),
+        };
+        
+        assert_eq!(map.executable.as_ref().unwrap(), "node");
+        assert_eq!(map.path.as_ref().unwrap(), "/usr/local/bin/node");
+    }
 } 

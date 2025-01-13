@@ -54,4 +54,97 @@ impl<'a> PluginManager<'a> {
             eprintln!("[BODO] Plugin process failed with code: {:?}", status.code());
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::PathBuf;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+
+    fn create_test_plugin(content: &str, extension: &str) -> PathBuf {
+        let mut temp_path = std::env::temp_dir();
+        temp_path.push(format!("test_plugin.{}", extension));
+        
+        let mut file = File::create(&temp_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+        
+        #[cfg(unix)]
+        std::fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        
+        temp_path
+    }
+
+    fn cleanup_temp_file(path: PathBuf) {
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn test_plugin_manager_creation() {
+        let config = BodoConfig::default();
+        let plugin_manager = PluginManager::new(&config);
+        assert!(plugin_manager.config.plugins.is_none());
+    }
+
+    #[test]
+    fn test_run_shell_plugin() {
+        let plugin_content = r#"#!/bin/sh
+echo "Running plugin for task: $1"
+exit 0
+"#;
+        let plugin_path = create_test_plugin(plugin_content, "sh");
+        
+        let config = BodoConfig {
+            tasks: None,
+            env_files: None,
+            executable_map: None,
+            max_concurrency: None,
+            plugins: Some(vec![plugin_path.to_string_lossy().to_string()]),
+        };
+        
+        let plugin_manager = PluginManager::new(&config);
+        plugin_manager.run_plugins_for_task("test_task");
+        
+        cleanup_temp_file(plugin_path);
+    }
+
+    #[test]
+    fn test_run_js_plugin() {
+        let plugin_content = r#"
+console.log('Running plugin for task:', process.argv[2]);
+process.exit(0);
+"#;
+        let plugin_path = create_test_plugin(plugin_content, "js");
+        
+        let config = BodoConfig {
+            tasks: None,
+            env_files: None,
+            executable_map: None,
+            max_concurrency: None,
+            plugins: Some(vec![plugin_path.to_string_lossy().to_string()]),
+        };
+        
+        let plugin_manager = PluginManager::new(&config);
+        plugin_manager.run_plugins_for_task("test_task");
+        
+        cleanup_temp_file(plugin_path);
+    }
+
+    #[test]
+    fn test_no_plugins() {
+        let config = BodoConfig {
+            tasks: None,
+            env_files: None,
+            executable_map: None,
+            max_concurrency: None,
+            plugins: None,
+        };
+        
+        let plugin_manager = PluginManager::new(&config);
+        // Should not panic when no plugins are configured
+        plugin_manager.run_plugins_for_task("test_task");
+    }
 } 

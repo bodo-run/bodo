@@ -47,4 +47,72 @@ impl TaskGraph {
     pub fn validate(&self) -> Result<(), String> {
         self.get_execution_order().map(|_| ())
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_graph() {
+        let graph = TaskGraph::new();
+        assert!(graph.node_map.is_empty());
+        assert_eq!(graph.graph.node_count(), 0);
+        assert_eq!(graph.graph.edge_count(), 0);
+    }
+
+    #[test]
+    fn test_add_task_without_dependencies() {
+        let mut graph = TaskGraph::new();
+        graph.add_task("task1", &[]);
+        
+        assert_eq!(graph.node_map.len(), 1);
+        assert_eq!(graph.graph.node_count(), 1);
+        assert_eq!(graph.graph.edge_count(), 0);
+    }
+
+    #[test]
+    fn test_add_task_with_dependencies() {
+        let mut graph = TaskGraph::new();
+        graph.add_task("task1", &[]);
+        graph.add_task("task2", &[String::from("task1")]);
+        
+        assert_eq!(graph.node_map.len(), 2);
+        assert_eq!(graph.graph.node_count(), 2);
+        assert_eq!(graph.graph.edge_count(), 1);
+    }
+
+    #[test]
+    fn test_execution_order_simple() {
+        let mut graph = TaskGraph::new();
+        graph.add_task("task1", &[]);
+        graph.add_task("task2", &[String::from("task1")]);
+        
+        let order = graph.get_execution_order().unwrap();
+        assert_eq!(order, vec!["task1", "task2"]);
+    }
+
+    #[test]
+    fn test_execution_order_complex() {
+        let mut graph = TaskGraph::new();
+        graph.add_task("task1", &[]);
+        graph.add_task("task2", &[String::from("task1")]);
+        graph.add_task("task3", &[String::from("task1")]);
+        graph.add_task("task4", &[String::from("task2"), String::from("task3")]);
+        
+        let order = graph.get_execution_order().unwrap();
+        assert_eq!(order[0], "task1");
+        assert!(order.contains(&"task2"));
+        assert!(order.contains(&"task3"));
+        assert_eq!(order[3], "task4");
+    }
+
+    #[test]
+    fn test_cyclic_dependency_detection() {
+        let mut graph = TaskGraph::new();
+        graph.add_task("task1", &[String::from("task2")]);
+        graph.add_task("task2", &[String::from("task1")]);
+        
+        assert!(graph.get_execution_order().is_err());
+    }
 } 
