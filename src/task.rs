@@ -6,6 +6,7 @@ use crate::prompt::PromptManager;
 use std::error::Error;
 use std::process::Command;
 
+#[allow(dead_code)]
 pub struct TaskManager<'a> {
     config: &'a BodoConfig,
     env_manager: EnvManager,

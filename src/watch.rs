@@ -1,10 +1,7 @@
 use std::error::Error;
-use std::path::Path;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use std::time::Duration;
-
 use crate::task::TaskManager;
 
+#[allow(dead_code)]
 pub struct WatchManager<'a> {
     task_manager: TaskManager<'a>,
 }
@@ -14,7 +11,7 @@ impl<'a> WatchManager<'a> {
         Self { task_manager }
     }
 
-    pub fn watch_and_run(&self, task_group: &str, subtask: Option<&str>) -> Result<(), Box<dyn Error>> {
+    pub fn watch_and_run(&self, _task_group: &str, _subtask: Option<&str>) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
 } 
