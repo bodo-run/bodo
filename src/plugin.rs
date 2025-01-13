@@ -1,5 +1,5 @@
-use std::process::Command;
 use crate::config::BodoConfig;
+use std::process::Command;
 
 pub trait BodoPlugin {
     fn on_before_run(&self, task_name: &str);
@@ -24,7 +24,10 @@ impl<'a> PluginManager<'a> {
     }
 
     fn run_plugin(&self, plugin_path: &str, task_name: &str) {
-        println!("[BODO] Running plugin: {} for task: {}", plugin_path, task_name);
+        println!(
+            "[BODO] Running plugin: {} for task: {}",
+            plugin_path, task_name
+        );
         let mut cmd_vec = vec![];
 
         if plugin_path.ends_with(".ts") {
@@ -51,7 +54,10 @@ impl<'a> PluginManager<'a> {
             .expect("[BODO] Failed to spawn plugin");
 
         if !status.success() {
-            eprintln!("[BODO] Plugin process failed with code: {:?}", status.code());
+            eprintln!(
+                "[BODO] Plugin process failed with code: {:?}",
+                status.code()
+            );
         }
     }
 }
@@ -61,20 +67,20 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write;
-    use std::path::PathBuf;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
+    use std::path::PathBuf;
 
     fn create_test_plugin(content: &str, extension: &str) -> PathBuf {
         let mut temp_path = std::env::temp_dir();
         temp_path.push(format!("test_plugin.{}", extension));
-        
+
         let mut file = File::create(&temp_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
-        
+
         #[cfg(unix)]
         std::fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o755)).unwrap();
-        
+
         temp_path
     }
 
@@ -96,7 +102,7 @@ echo "Running plugin for task: $1"
 exit 0
 "#;
         let plugin_path = create_test_plugin(plugin_content, "sh");
-        
+
         let config = BodoConfig {
             tasks: None,
             env_files: None,
@@ -104,10 +110,10 @@ exit 0
             max_concurrency: None,
             plugins: Some(vec![plugin_path.to_string_lossy().to_string()]),
         };
-        
+
         let plugin_manager = PluginManager::new(&config);
         plugin_manager.run_plugins_for_task("test_task");
-        
+
         cleanup_temp_file(plugin_path);
     }
 
@@ -118,7 +124,7 @@ console.log('Running plugin for task:', process.argv[2]);
 process.exit(0);
 "#;
         let plugin_path = create_test_plugin(plugin_content, "js");
-        
+
         let config = BodoConfig {
             tasks: None,
             env_files: None,
@@ -126,10 +132,10 @@ process.exit(0);
             max_concurrency: None,
             plugins: Some(vec![plugin_path.to_string_lossy().to_string()]),
         };
-        
+
         let plugin_manager = PluginManager::new(&config);
         plugin_manager.run_plugins_for_task("test_task");
-        
+
         cleanup_temp_file(plugin_path);
     }
 
@@ -142,9 +148,9 @@ process.exit(0);
             max_concurrency: None,
             plugins: None,
         };
-        
+
         let plugin_manager = PluginManager::new(&config);
         // Should not panic when no plugins are configured
         plugin_manager.run_plugins_for_task("test_task");
     }
-} 
+}

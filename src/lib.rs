@@ -19,4 +19,4 @@ pub use watch::WatchManager;
 // Re-export external crates
 pub use serde;
 pub use serde_json;
-pub use serde_yaml; 
+pub use serde_yaml;

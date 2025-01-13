@@ -1,0 +1,31 @@
+name: check
+description: Run all checks for the project, including clippy
+
+defaultTask:
+  command: echo "All checks completed"
+  pre_deps:
+    - clean
+    - task: build # from scripts/build/script.yaml
+    - release
+    - check
+    - clippy
+    - test
+    - fmt
+  env:
+    RUST_BACKTRACE: "1"
+
+subtasks:
+  check:
+    command: cargo check
+    
+  clean:
+    command: cargo clean 
+  
+  clippy:
+    command: cargo clippy
+  
+  test:
+    command: cargo test
+
+  fmt:
+    command: cargo fmt --check

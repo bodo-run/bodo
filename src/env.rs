@@ -30,18 +30,19 @@ impl EnvManager {
         for line in reader.lines() {
             let line = line?;
             let line = line.trim();
-            
+
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
 
             if let Some((key, value)) = line.split_once('=') {
                 let key = key.trim().to_string();
-                let value = value.trim()
+                let value = value
+                    .trim()
                     .trim_matches('"')
                     .trim_matches('\'')
                     .to_string();
-                
+
                 self.env_vars.insert(key.clone(), value.clone());
                 std::env::set_var(key, value);
             }
@@ -51,7 +52,8 @@ impl EnvManager {
 
     pub fn inject_exec_paths(&mut self, exec_paths: &[String]) {
         if let Ok(current_path) = std::env::var("PATH") {
-            let new_paths: Vec<String> = exec_paths.iter()
+            let new_paths: Vec<String> = exec_paths
+                .iter()
                 .map(|p| {
                     if p.starts_with("./") {
                         std::env::current_dir()
@@ -66,12 +68,13 @@ impl EnvManager {
                 .collect();
 
             let path_separator = if cfg!(windows) { ";" } else { ":" };
-            let new_path = format!("{}{}{}", 
+            let new_path = format!(
+                "{}{}{}",
                 new_paths.join(path_separator),
                 path_separator,
                 current_path
             );
-            
+
             std::env::set_var("PATH", new_path);
         }
     }
@@ -91,10 +94,10 @@ mod tests {
     fn create_temp_env_file(content: &str) -> PathBuf {
         let mut temp_path = std::env::temp_dir();
         temp_path.push("test.env");
-        
+
         let mut file = File::create(&temp_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
-        
+
         temp_path
     }
 
@@ -112,16 +115,16 @@ mod tests {
     fn test_load_env_file() {
         let content = "TEST_KEY=test_value\n# comment\nTEST_KEY2='quoted value'\n";
         let temp_path = create_temp_env_file(content);
-        
+
         let mut env_manager = EnvManager::new();
         env_manager.merge_env_files(&[temp_path.to_string_lossy().to_string()]);
-        
+
         let env_vars = env_manager.get_env();
         assert!(env_vars.contains_key("TEST_KEY"));
         assert!(env_vars.contains_key("TEST_KEY2"));
         assert_eq!(env_vars.get("TEST_KEY").unwrap(), "test_value");
         assert_eq!(env_vars.get("TEST_KEY2").unwrap(), "quoted value");
-        
+
         cleanup_temp_file(temp_path);
     }
 
@@ -129,13 +132,15 @@ mod tests {
     fn test_load_env_file_with_empty_lines() {
         let content = "\nTEST_KEY=test_value\n\n";
         let temp_path = create_temp_env_file(content);
-        
+
         let mut env_manager = EnvManager::new();
-        env_manager.merge_env_files(&[temp_path.to_string_lossy().to_string()]);
-        
+        env_manager
+            .load_env_file(&temp_path.to_string_lossy())
+            .unwrap();
+
         let env_vars = env_manager.get_env();
         assert_eq!(env_vars.get("TEST_KEY").unwrap(), "test_value");
-        
+
         cleanup_temp_file(temp_path);
     }
 
@@ -143,16 +148,16 @@ mod tests {
     fn test_inject_exec_paths() {
         let mut env_manager = EnvManager::new();
         let original_path = std::env::var("PATH").unwrap();
-        
+
         env_manager.inject_exec_paths(&["./bin".to_string()]);
-        
+
         let new_path = std::env::var("PATH").unwrap();
         let separator = if cfg!(windows) { ";" } else { ":" };
-        
+
         assert!(new_path.starts_with(&format!("./bin{}", separator)));
         assert!(new_path.contains(&original_path));
-        
+
         // Restore original PATH
         std::env::set_var("PATH", original_path);
     }
-} 
+}

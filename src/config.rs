@@ -1,11 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_yaml;
+use std::error::Error;
 use std::fs;
+use std::path::Path;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct BodoConfig {
-    pub tasks: Option<Vec<TaskConfig>>,
     pub env_files: Option<Vec<String>>,
     pub executable_map: Option<Vec<ExecutableMap>>,
     pub max_concurrency: Option<usize>,
@@ -14,7 +16,6 @@ pub struct BodoConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TaskConfig {
-    pub name: String,
     pub command: String,
     pub cwd: Option<String>,
     pub env: Option<Vec<String>>,
@@ -28,10 +29,20 @@ pub struct ExecutableMap {
     pub path: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ScriptConfig {
+    pub name: String,
+    pub description: Option<String>,
+    pub exec_paths: Option<Vec<String>>,
+    pub env: Option<HashMap<String, String>>,
+    #[serde(rename = "defaultTask")]
+    pub default_task: TaskConfig,
+    pub subtasks: Option<HashMap<String, TaskConfig>>,
+}
+
 impl Default for BodoConfig {
     fn default() -> Self {
         Self {
-            tasks: None,
             env_files: None,
             executable_map: None,
             max_concurrency: None,
@@ -40,7 +51,7 @@ impl Default for BodoConfig {
     }
 }
 
-pub fn load_bodo_config() -> BodoConfig {
+pub fn load_bodo_config() -> Result<BodoConfig, Box<dyn Error>> {
     let config_paths = [
         "bodo.json",
         "bodo.yaml",
@@ -59,12 +70,25 @@ pub fn load_bodo_config() -> BodoConfig {
             };
 
             if let Some(config) = config {
-                return config;
+                return Ok(config);
             }
         }
     }
 
-    BodoConfig::default()
+    Ok(BodoConfig::default())
+}
+
+pub fn load_script_config(task_name: &str) -> Result<ScriptConfig, Box<dyn Error>> {
+    let script_path = format!("scripts/{}/script.yaml", task_name);
+    let path = Path::new(&script_path);
+    
+    if !path.exists() {
+        return Err(format!("Script file not found: {}", script_path).into());
+    }
+
+    let contents = fs::read_to_string(path)?;
+    let config: ScriptConfig = serde_yaml::from_str(&contents)?;
+    Ok(config)
 }
 
 #[cfg(test)]
@@ -77,10 +101,10 @@ mod tests {
     fn create_temp_config_file(content: &str, extension: &str) -> PathBuf {
         let mut temp_path = std::env::temp_dir();
         temp_path.push(format!("test_config.{}", extension));
-        
+
         let mut file = File::create(&temp_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
-        
+
         temp_path
     }
 
@@ -91,7 +115,6 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = BodoConfig::default();
-        assert!(config.tasks.is_none());
         assert!(config.env_files.is_none());
         assert!(config.executable_map.is_none());
         assert!(config.max_concurrency.is_none());
@@ -101,16 +124,6 @@ mod tests {
     #[test]
     fn test_load_json_config() {
         let content = r#"{
-            "tasks": [
-                {
-                    "name": "test",
-                    "command": "echo hello",
-                    "cwd": ".",
-                    "env": ["TEST=true"],
-                    "dependencies": ["prep"],
-                    "plugins": ["test-plugin"]
-                }
-            ],
             "env_files": [".env"],
             "executable_map": [
                 {
@@ -121,35 +134,21 @@ mod tests {
             "max_concurrency": 4,
             "plugins": ["plugin1"]
         }"#;
-        
+
         let temp_path = create_temp_config_file(content, "json");
         std::env::set_current_dir(temp_path.parent().unwrap()).unwrap();
-        
+
         let config: BodoConfig = serde_json::from_str(content).unwrap();
-        assert!(config.tasks.is_some());
-        assert_eq!(config.tasks.as_ref().unwrap().len(), 1);
-        
-        let task = &config.tasks.as_ref().unwrap()[0];
-        assert_eq!(task.name, "test");
-        assert_eq!(task.command, "echo hello");
-        assert_eq!(task.cwd, Some(".".to_string()));
-        
+        assert!(config.env_files.is_some());
+        assert!(config.executable_map.is_some());
+        assert_eq!(config.max_concurrency, Some(4));
+
         cleanup_temp_file(temp_path);
     }
 
     #[test]
     fn test_load_yaml_config() {
         let content = r#"
-tasks:
-  - name: test
-    command: echo hello
-    cwd: .
-    env: 
-      - TEST=true
-    dependencies:
-      - prep
-    plugins:
-      - test-plugin
 env_files:
   - .env
 executable_map:
@@ -159,19 +158,15 @@ max_concurrency: 4
 plugins:
   - plugin1
 "#;
-        
+
         let temp_path = create_temp_config_file(content, "yaml");
         std::env::set_current_dir(temp_path.parent().unwrap()).unwrap();
-        
+
         let config: BodoConfig = serde_yaml::from_str(content).unwrap();
-        assert!(config.tasks.is_some());
-        assert_eq!(config.tasks.as_ref().unwrap().len(), 1);
-        
-        let task = &config.tasks.as_ref().unwrap()[0];
-        assert_eq!(task.name, "test");
-        assert_eq!(task.command, "echo hello");
-        assert_eq!(task.cwd, Some(".".to_string()));
-        
+        assert!(config.env_files.is_some());
+        assert!(config.executable_map.is_some());
+        assert_eq!(config.max_concurrency, Some(4));
+
         cleanup_temp_file(temp_path);
     }
 
@@ -181,8 +176,8 @@ plugins:
             executable: Some("node".to_string()),
             path: Some("/usr/local/bin/node".to_string()),
         };
-        
+
         assert_eq!(map.executable.as_ref().unwrap(), "node");
         assert_eq!(map.path.as_ref().unwrap(), "/usr/local/bin/node");
     }
-} 
+}

@@ -1,4 +1,4 @@
-use dialoguer::{Input, Select, Confirm};
+use dialoguer::{Confirm, Input, Select};
 
 pub struct PromptManager;
 
@@ -49,4 +49,4 @@ mod tests {
     // 1. Mock the dialoguer crate
     // 2. Create a trait for the prompt interface and use a test double
     // 3. Add integration tests for the interactive features
-} 
+}

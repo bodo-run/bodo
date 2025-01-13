@@ -1,19 +1,29 @@
-name: build
+name: Build Script
 description: Build tasks for the project
 
+# Add paths to the script's execution context
+exec_paths:
+  - target/debug
+  - target/release
+
+# Set environment variables for this script
+env:
+  RUST_BACKTRACE: "1"
+
+# The default task is invoked by simply running `bodo build`
 defaultTask:
   command: cargo build
-  env:
-    RUST_BACKTRACE: "1"
 
+# Subtasks
 subtasks:
   release:
     command: cargo build --release
-    env:
-      RUST_BACKTRACE: "1"
   
   check:
     command: cargo check
     
-  clean:
-    command: cargo clean 
+  clippy:
+    command: cargo clippy
+  
+  fmt:
+    command: cargo fmt

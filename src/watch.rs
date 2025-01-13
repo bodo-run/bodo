@@ -1,5 +1,5 @@
-use std::error::Error;
 use crate::task::TaskManager;
+use std::error::Error;
 
 #[allow(dead_code)]
 pub struct WatchManager<'a> {
@@ -11,7 +11,11 @@ impl<'a> WatchManager<'a> {
         Self { task_manager }
     }
 
-    pub fn watch_and_run(&self, _task_group: &str, _subtask: Option<&str>) -> Result<(), Box<dyn Error>> {
+    pub fn watch_and_run(
+        &self,
+        _task_group: &str,
+        _subtask: Option<&str>,
+    ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-} 
+}

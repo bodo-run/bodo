@@ -1,23 +1,14 @@
 use clap::Parser;
-use std::process::exit;
+use std::error::Error;
 
 use bodo::{
-    BodoCli,
-    EnvManager,
-    TaskGraph,
-    PluginManager,
-    PromptManager,
+    config::load_bodo_config, BodoCli, EnvManager, PluginManager, PromptManager, TaskGraph,
     TaskManager,
-    WatchManager,
-    config::load_bodo_config,
 };
 
-fn main() {
-    // Parse command line arguments
-    let cli = BodoCli::parse();
-
-    // Load configuration from file
-    let config = load_bodo_config();
+fn main() -> Result<(), Box<dyn Error>> {
+    let cli = BodoCli::new();
+    let config = load_bodo_config()?;
 
     // Initialize components
     let env_manager = EnvManager::new();
@@ -26,7 +17,7 @@ fn main() {
     let prompt_manager = PromptManager::new();
 
     // Create task manager
-    let task_manager = TaskManager::new(
+    let mut task_manager = TaskManager::new(
         &config,
         env_manager,
         task_graph,
@@ -34,18 +25,7 @@ fn main() {
         prompt_manager,
     );
 
-    // Handle watch mode
-    if cli.watch {
-        let watch_manager = WatchManager::new(task_manager);
-        if let Err(e) = watch_manager.watch_and_run(&cli.task, None) {
-            eprintln!("Watch error: {}", e);
-            exit(1);
-        }
-    } else {
-        // Run task directly
-        if let Err(e) = task_manager.run_task(&cli.task, None) {
-            eprintln!("Task error: {}", e);
-            exit(1);
-        }
-    }
-} 
+    task_manager.run_task(&cli.task)?;
+
+    Ok(())
+}

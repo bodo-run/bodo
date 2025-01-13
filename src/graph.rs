@@ -54,7 +54,10 @@ impl TaskGraph {
     ) {
         visited.insert(node, true);
 
-        for neighbor in self.graph.neighbors_directed(node, petgraph::Direction::Incoming) {
+        for neighbor in self
+            .graph
+            .neighbors_directed(node, petgraph::Direction::Incoming)
+        {
             if !visited.contains_key(&neighbor) {
                 self.visit_node(neighbor, visited, order);
             }
@@ -89,4 +92,4 @@ mod tests {
         assert!(order.contains(&"task2".to_string()));
         assert!(order.contains(&"task3".to_string()));
     }
-} 
+}

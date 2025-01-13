@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[command(name = "bodo")]
@@ -19,7 +19,7 @@ pub struct BodoCli {
     pub target: Option<String>,
 
     /// Subtask arguments
-    #[arg(last = true)]
+    #[arg(index = 2, num_args = 0..)]
     pub args: Vec<String>,
 }
 
@@ -27,4 +27,4 @@ impl BodoCli {
     pub fn new() -> Self {
         Self::parse()
     }
-} 
+}
