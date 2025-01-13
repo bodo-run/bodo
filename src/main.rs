@@ -1,4 +1,3 @@
-use clap::Parser;
 use std::error::Error;
 
 use bodo::{

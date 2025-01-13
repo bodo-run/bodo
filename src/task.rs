@@ -1,4 +1,4 @@
-use crate::config::{BodoConfig, TaskConfig, load_script_config};
+use crate::config::{load_script_config, BodoConfig, TaskConfig};
 use crate::env::EnvManager;
 use crate::graph::TaskGraph;
 use crate::plugin::PluginManager;
@@ -35,7 +35,7 @@ impl<'a> TaskManager<'a> {
     pub fn run_task(&mut self, task_name: &str) -> Result<(), Box<dyn Error>> {
         // Load script config
         let script_config = load_script_config(task_name)?;
-        
+
         // Set environment variables from script config
         if let Some(env_vars) = script_config.env {
             for (key, value) in env_vars {
@@ -47,7 +47,7 @@ impl<'a> TaskManager<'a> {
         if let Some(exec_paths) = script_config.exec_paths {
             self.env_manager.inject_exec_paths(&exec_paths);
         }
-        
+
         // Run plugins before task
         self.plugin_manager.run_plugins_for_task(task_name);
 

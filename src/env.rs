@@ -84,6 +84,12 @@ impl EnvManager {
     }
 }
 
+impl Default for EnvManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

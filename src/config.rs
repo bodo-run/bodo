@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_yaml;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
-use std::collections::HashMap;
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct BodoConfig {
     pub env_files: Option<Vec<String>>,
     pub executable_map: Option<Vec<ExecutableMap>>,
@@ -40,17 +40,6 @@ pub struct ScriptConfig {
     pub subtasks: Option<HashMap<String, TaskConfig>>,
 }
 
-impl Default for BodoConfig {
-    fn default() -> Self {
-        Self {
-            env_files: None,
-            executable_map: None,
-            max_concurrency: None,
-            plugins: None,
-        }
-    }
-}
-
 pub fn load_bodo_config() -> Result<BodoConfig, Box<dyn Error>> {
     let config_paths = [
         "bodo.json",
@@ -81,7 +70,7 @@ pub fn load_bodo_config() -> Result<BodoConfig, Box<dyn Error>> {
 pub fn load_script_config(task_name: &str) -> Result<ScriptConfig, Box<dyn Error>> {
     let script_path = format!("scripts/{}/script.yaml", task_name);
     let path = Path::new(&script_path);
-    
+
     if !path.exists() {
         return Err(format!("Script file not found: {}", script_path).into());
     }

@@ -15,9 +15,9 @@ impl TaskGraph {
     }
 
     pub fn add_task(&mut self, task: String) {
-        if !self.node_map.contains_key(&task) {
-            let node_idx = self.graph.add_node(task.clone());
-            self.node_map.insert(task, node_idx);
+        if let std::collections::hash_map::Entry::Vacant(e) = self.node_map.entry(task.clone()) {
+            let node_idx = self.graph.add_node(task);
+            e.insert(node_idx);
         }
     }
 
@@ -38,32 +38,40 @@ impl TaskGraph {
         let mut visited = HashMap::new();
 
         for node in self.graph.node_indices() {
-            if !visited.contains_key(&node) {
-                self.visit_node(node, &mut visited, &mut order);
-            }
+            self.visit_node(node, &mut visited, &mut order);
         }
 
-        order.iter().map(|&node| self.graph[node].clone()).collect()
+        order
     }
 
     fn visit_node(
         &self,
         node: petgraph::graph::NodeIndex,
         visited: &mut HashMap<petgraph::graph::NodeIndex, bool>,
-        order: &mut Vec<petgraph::graph::NodeIndex>,
+        order: &mut Vec<String>,
     ) {
+        if visited.contains_key(&node) {
+            return;
+        }
+
         visited.insert(node, true);
 
         for neighbor in self
             .graph
             .neighbors_directed(node, petgraph::Direction::Incoming)
         {
-            if !visited.contains_key(&neighbor) {
-                self.visit_node(neighbor, visited, order);
-            }
+            self.visit_node(neighbor, visited, order);
         }
 
-        order.push(node);
+        if let Some(task) = self.graph.node_weight(node) {
+            order.push(task.clone());
+        }
+    }
+}
+
+impl Default for TaskGraph {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

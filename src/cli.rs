@@ -28,3 +28,9 @@ impl BodoCli {
         Self::parse()
     }
 }
+
+impl Default for BodoCli {
+    fn default() -> Self {
+        Self::new()
+    }
+}

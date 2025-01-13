@@ -32,6 +32,12 @@ impl PromptManager {
     }
 }
 
+impl Default for PromptManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
