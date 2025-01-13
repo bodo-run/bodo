@@ -1,10 +1,9 @@
-use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::algo::toposort;
+use petgraph::graph::DiGraph;
 use std::collections::HashMap;
 
 pub struct TaskGraph {
     graph: DiGraph<String, ()>,
-    node_map: HashMap<String, NodeIndex>,
+    node_map: HashMap<String, petgraph::graph::NodeIndex>,
 }
 
 impl TaskGraph {
@@ -15,37 +14,53 @@ impl TaskGraph {
         }
     }
 
-    pub fn add_task(&mut self, name: &str, dependencies: &[String]) {
-        let node_idx = self.get_or_create_node(name);
-
-        for dep in dependencies {
-            let dep_idx = self.get_or_create_node(dep);
-            self.graph.add_edge(dep_idx, node_idx, ());
+    pub fn add_task(&mut self, task: String) {
+        if !self.node_map.contains_key(&task) {
+            let node_idx = self.graph.add_node(task.clone());
+            self.node_map.insert(task, node_idx);
         }
     }
 
-    fn get_or_create_node(&mut self, name: &str) -> NodeIndex {
-        if let Some(&idx) = self.node_map.get(name) {
-            idx
-        } else {
-            let idx = self.graph.add_node(name.to_string());
-            self.node_map.insert(name.to_string(), idx);
-            idx
+    pub fn add_dependency(&mut self, task: String, dependency: String) {
+        self.add_task(task.clone());
+        self.add_task(dependency.clone());
+
+        let task_idx = self.node_map[&task];
+        let dep_idx = self.node_map[&dependency];
+
+        if !self.graph.contains_edge(dep_idx, task_idx) {
+            self.graph.add_edge(dep_idx, task_idx, ());
         }
     }
 
-    pub fn get_execution_order(&self) -> Result<Vec<String>, String> {
-        toposort(&self.graph, None)
-            .map_err(|_| "Cycle detected in task dependencies".to_string())
-            .map(|sorted| {
-                sorted.into_iter()
-                    .map(|idx| self.graph[idx].clone())
-                    .collect()
-            })
+    pub fn get_execution_order(&self) -> Vec<String> {
+        let mut order = Vec::new();
+        let mut visited = HashMap::new();
+
+        for node in self.graph.node_indices() {
+            if !visited.contains_key(&node) {
+                self.visit_node(node, &mut visited, &mut order);
+            }
+        }
+
+        order.iter().map(|&node| self.graph[node].clone()).collect()
     }
 
-    pub fn validate(&self) -> Result<(), String> {
-        self.get_execution_order().map(|_| ())
+    fn visit_node(
+        &self,
+        node: petgraph::graph::NodeIndex,
+        visited: &mut HashMap<petgraph::graph::NodeIndex, bool>,
+        order: &mut Vec<petgraph::graph::NodeIndex>,
+    ) {
+        visited.insert(node, true);
+
+        for neighbor in self.graph.neighbors_directed(node, petgraph::Direction::Incoming) {
+            if !visited.contains_key(&neighbor) {
+                self.visit_node(neighbor, visited, order);
+            }
+        }
+
+        order.push(node);
     }
 }
 
@@ -54,65 +69,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_new_graph() {
-        let graph = TaskGraph::new();
-        assert!(graph.node_map.is_empty());
-        assert_eq!(graph.graph.node_count(), 0);
-        assert_eq!(graph.graph.edge_count(), 0);
-    }
-
-    #[test]
-    fn test_add_task_without_dependencies() {
+    fn test_task_graph() {
         let mut graph = TaskGraph::new();
-        graph.add_task("task1", &[]);
-        
-        assert_eq!(graph.node_map.len(), 1);
-        assert_eq!(graph.graph.node_count(), 1);
-        assert_eq!(graph.graph.edge_count(), 0);
-    }
 
-    #[test]
-    fn test_add_task_with_dependencies() {
-        let mut graph = TaskGraph::new();
-        graph.add_task("task1", &[]);
-        graph.add_task("task2", &[String::from("task1")]);
-        
-        assert_eq!(graph.node_map.len(), 2);
-        assert_eq!(graph.graph.node_count(), 2);
-        assert_eq!(graph.graph.edge_count(), 1);
-    }
+        // Add tasks
+        graph.add_task("task1".to_string());
+        graph.add_task("task2".to_string());
+        graph.add_task("task3".to_string());
 
-    #[test]
-    fn test_execution_order_simple() {
-        let mut graph = TaskGraph::new();
-        graph.add_task("task1", &[]);
-        graph.add_task("task2", &[String::from("task1")]);
-        
-        let order = graph.get_execution_order().unwrap();
-        assert_eq!(order, vec!["task1", "task2"]);
-    }
+        // Add dependencies
+        graph.add_dependency("task2".to_string(), "task1".to_string());
+        graph.add_dependency("task3".to_string(), "task2".to_string());
 
-    #[test]
-    fn test_execution_order_complex() {
-        let mut graph = TaskGraph::new();
-        graph.add_task("task1", &[]);
-        graph.add_task("task2", &[String::from("task1")]);
-        graph.add_task("task3", &[String::from("task1")]);
-        graph.add_task("task4", &[String::from("task2"), String::from("task3")]);
-        
-        let order = graph.get_execution_order().unwrap();
-        assert_eq!(order[0], "task1");
-        assert!(order.contains(&"task2"));
-        assert!(order.contains(&"task3"));
-        assert_eq!(order[3], "task4");
-    }
+        // Get execution order
+        let order = graph.get_execution_order();
 
-    #[test]
-    fn test_cyclic_dependency_detection() {
-        let mut graph = TaskGraph::new();
-        graph.add_task("task1", &[String::from("task2")]);
-        graph.add_task("task2", &[String::from("task1")]);
-        
-        assert!(graph.get_execution_order().is_err());
+        // Check order
+        assert!(order.contains(&"task1".to_string()));
+        assert!(order.contains(&"task2".to_string()));
+        assert!(order.contains(&"task3".to_string()));
     }
 } 

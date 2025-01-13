@@ -7,8 +7,8 @@ pub mod prompt;
 pub mod task;
 pub mod watch;
 
-pub use cli::{BodoCli, Commands};
-pub use config::BodoConfig;
+pub use cli::BodoCli;
+pub use config::{BodoConfig, TaskConfig};
 pub use env::EnvManager;
 pub use graph::TaskGraph;
 pub use plugin::PluginManager;

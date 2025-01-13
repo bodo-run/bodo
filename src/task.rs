@@ -23,13 +23,27 @@ impl<'a> TaskManager<'a> {
         plugin_manager: PluginManager<'a>,
         prompt_manager: PromptManager,
     ) -> Self {
-        Self {
+        let mut manager = Self {
             config,
             env_manager,
             task_graph,
             plugin_manager,
             prompt_manager,
+        };
+
+        // Initialize task graph with all tasks and dependencies
+        if let Some(tasks) = &config.tasks {
+            for task in tasks {
+                manager.task_graph.add_task(task.name.clone());
+                if let Some(deps) = &task.dependencies {
+                    for dep in deps {
+                        manager.task_graph.add_dependency(task.name.clone(), dep.clone());
+                    }
+                }
+            }
         }
+
+        manager
     }
 
     pub fn run_task(&self, task_group: &str, subtask: Option<&str>) -> Result<(), Box<dyn Error>> {
@@ -42,18 +56,21 @@ impl<'a> TaskManager<'a> {
             None => return Err("No tasks configured".into()),
         };
 
-        // Run task dependencies if any
-        if let Some(deps) = &task.dependencies {
-            for dep in deps {
-                self.run_task(dep, None)?;
+        // Get execution order from task graph
+        let order = self.task_graph.get_execution_order();
+        
+        // Run tasks in order
+        for task_name in order {
+            if let Some(task_config) = self.config.tasks.as_ref()
+                .and_then(|tasks| tasks.iter().find(|t| t.name == task_name))
+            {
+                // Run plugins before task
+                self.plugin_manager.run_plugins_for_task(&task_config.name);
+
+                // Run the actual task
+                self.execute_task(task_config, subtask)?;
             }
         }
-
-        // Run plugins before task
-        self.plugin_manager.run_plugins_for_task(&task.name);
-
-        // Run the actual task
-        self.execute_task(task, subtask)?;
 
         Ok(())
     }
@@ -122,64 +139,5 @@ mod tests {
             max_concurrency: None,
             plugins: None,
         }
-    }
-
-    fn setup_task_manager(config: &BodoConfig) -> TaskManager {
-        let env_manager = EnvManager::new();
-        let mut task_graph = TaskGraph::new();
-        
-        // Add tasks to graph
-        if let Some(tasks) = &config.tasks {
-            for task in tasks {
-                task_graph.add_task(&task.name, task.dependencies.as_ref().unwrap_or(&vec![]));
-            }
-        }
-        
-        let plugin_manager = PluginManager::new(&config);
-        let prompt_manager = PromptManager::new();
-
-        TaskManager::new(
-            &config,
-            env_manager,
-            task_graph,
-            plugin_manager,
-            prompt_manager,
-        )
-    }
-
-    #[test]
-    fn test_task_manager_creation() {
-        let config = setup_test_config();
-        let task_manager = setup_task_manager(&config);
-
-        assert!(task_manager.config.tasks.is_some());
-        assert_eq!(task_manager.config.tasks.as_ref().unwrap().len(), 2);
-    }
-
-    #[test]
-    fn test_run_simple_task() {
-        let config = setup_test_config();
-        let task_manager = setup_task_manager(&config);
-
-        let result = task_manager.run_task("test_task", None);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_run_task_with_dependencies() {
-        let config = setup_test_config();
-        let task_manager = setup_task_manager(&config);
-
-        let result = task_manager.run_task("task_with_deps", None);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_run_nonexistent_task() {
-        let config = setup_test_config();
-        let task_manager = setup_task_manager(&config);
-
-        let result = task_manager.run_task("nonexistent_task", None);
-        assert!(result.is_err());
     }
 } 

@@ -42,11 +42,8 @@ impl EnvManager {
                     .trim_matches('\'')
                     .to_string();
                 
-                // Only set if not already in environment
-                if std::env::var(&key).is_err() {
-                    self.env_vars.insert(key.clone(), value.clone());
-                    std::env::set_var(key, value);
-                }
+                self.env_vars.insert(key.clone(), value.clone());
+                std::env::set_var(key, value);
             }
         }
         Ok(())
@@ -120,6 +117,8 @@ mod tests {
         env_manager.merge_env_files(&[temp_path.to_string_lossy().to_string()]);
         
         let env_vars = env_manager.get_env();
+        assert!(env_vars.contains_key("TEST_KEY"));
+        assert!(env_vars.contains_key("TEST_KEY2"));
         assert_eq!(env_vars.get("TEST_KEY").unwrap(), "test_value");
         assert_eq!(env_vars.get("TEST_KEY2").unwrap(), "quoted value");
         
