@@ -1,29 +1,32 @@
-use std::fmt;
+use std::{error::Error, fmt, io};
 
 #[derive(Debug)]
-pub enum PluginError {
-    // Expand with I/O, parsing, or more specialized errors as needed
-    GenericError(String),
-    IoError(std::io::Error),
-    NotifyError(notify::Error),
+pub enum BodoError {
+    IoError(io::Error),
+    WatcherError(String),
 }
 
-impl fmt::Display for PluginError {
+impl fmt::Display for BodoError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PluginError::GenericError(msg) => write!(f, "Plugin error: {}", msg),
-            PluginError::IoError(e) => write!(f, "I/O error: {}", e),
-            PluginError::NotifyError(e) => write!(f, "File watch error: {}", e),
+            BodoError::IoError(err) => write!(f, "IO error: {}", err),
+            BodoError::WatcherError(err) => write!(f, "Watcher error: {}", err),
         }
     }
 }
 
-impl std::error::Error for PluginError {}
+impl Error for BodoError {}
 
-impl From<notify::Error> for PluginError {
-    fn from(err: notify::Error) -> Self {
-        PluginError::NotifyError(err)
+impl From<io::Error> for BodoError {
+    fn from(err: io::Error) -> Self {
+        BodoError::IoError(err)
     }
 }
 
-pub type Result<T> = std::result::Result<T, PluginError>;
+impl From<notify::Error> for BodoError {
+    fn from(err: notify::Error) -> Self {
+        BodoError::WatcherError(err.to_string())
+    }
+}
+
+pub type Result<T> = std::result::Result<T, BodoError>;

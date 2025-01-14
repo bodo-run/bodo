@@ -32,6 +32,7 @@ fn test_add_command_node() {
         raw_command: "echo hello".to_string(),
         description: Some("test description".to_string()),
         working_dir: None,
+        watch: None,
     };
     let node_id = graph.add_node(NodeKind::Command(command.clone()));
     assert_eq!(node_id, 0);
@@ -55,6 +56,7 @@ fn test_add_multiple_nodes() {
         raw_command: "echo hello".to_string(),
         description: Some("test description".to_string()),
         working_dir: None,
+        watch: None,
     };
     let task_id = graph.add_node(NodeKind::Task(task.clone()));
     let command_id = graph.add_node(NodeKind::Command(command.clone()));
@@ -84,6 +86,7 @@ fn test_add_edge() {
         raw_command: "echo hello".to_string(),
         description: Some("test description".to_string()),
         working_dir: None,
+        watch: None,
     };
     let task_id = graph.add_node(NodeKind::Task(task));
     let command_id = graph.add_node(NodeKind::Command(command));
@@ -122,6 +125,7 @@ fn test_print_debug_no_panic() {
         raw_command: "echo Testing".to_string(),
         description: None,
         working_dir: None,
+        watch: None,
     }));
     graph.print_debug();
 }

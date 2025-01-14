@@ -5,6 +5,7 @@ use std::any::Any;
 
 use crate::{errors::Result, graph::Graph};
 
+#[derive(Default)]
 pub struct PluginConfig {
     pub options: Option<Map<String, Value>>,
 }
@@ -33,15 +34,17 @@ impl PluginManager {
         self.plugins.push(plugin);
     }
 
-    pub fn get_watch_run_count(&self) -> u32 {
-        if let Some(plugin) = self.plugins.iter().find(|p| p.name() == "watch") {
-            if let Some(watch_plugin) = plugin
-                .as_any()
-                .downcast_ref::<crate::plugins::watch_plugin::WatchPlugin>()
-            {
-                return watch_plugin.get_run_count();
-            }
+    pub async fn init_plugins(&mut self, config: &PluginConfig) -> Result<()> {
+        for plugin in &mut self.plugins {
+            plugin.on_init(config).await?;
         }
-        0
+        Ok(())
+    }
+
+    pub async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
+        for plugin in &mut self.plugins {
+            plugin.on_graph_build(graph).await?;
+        }
+        Ok(())
     }
 }

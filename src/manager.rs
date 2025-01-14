@@ -1,10 +1,10 @@
 use crate::{
-    errors::PluginError,
+    errors::Result,
     graph::Graph,
-    script_loader::{self, BodoConfig},
+    script_loader::{load_bodo_config, load_scripts, BodoConfig},
 };
+use std::path::PathBuf;
 
-/// The manager orchestrates reading script configs, building the graph.
 pub struct GraphManager {
     pub graph: Graph,
     pub config: BodoConfig,
@@ -18,27 +18,17 @@ impl GraphManager {
         }
     }
 
-    /// Load bodo.toml if present, or keep defaults.
-    pub fn load_bodo_config(&mut self, config_path: Option<&str>) -> Result<(), PluginError> {
-        self.config = script_loader::load_bodo_config(config_path)?;
+    pub async fn load_bodo_config(&mut self) -> Result<BodoConfig> {
+        self.config = load_bodo_config(None)?;
+        Ok(self.config.clone())
+    }
+
+    pub async fn build_graph(&mut self, paths: &[PathBuf]) -> Result<()> {
+        load_scripts(paths, &mut self.graph)?;
         Ok(())
     }
 
-    /// Build the graph from files in the filesystem.
-    /// This is effectively "script_loader::load_scripts_from_fs" plus any post-processing.
-    pub fn build_graph(&mut self) -> Result<(), PluginError> {
-        script_loader::load_scripts_from_fs(&self.config, &mut self.graph)?;
-        // Potentially do validations or detect cycles, etc.
-        Ok(())
-    }
-
-    pub fn debug_graph(&self) {
-        self.graph.print_debug();
-    }
-}
-
-impl Default for GraphManager {
-    fn default() -> Self {
-        Self::new()
+    pub fn get_graph(&self) -> &Graph {
+        &self.graph
     }
 }

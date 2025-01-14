@@ -5,9 +5,9 @@ pub mod plugin;
 pub mod plugins;
 pub mod script_loader;
 
-// Re-export commonly used items
-pub use errors::PluginError;
-pub use graph::{Graph, Node, NodeId, NodeKind};
+pub use errors::BodoError;
+pub use errors::Result;
+pub use graph::{CommandData, Graph, NodeKind, TaskData};
 pub use manager::GraphManager;
-pub use plugin::{Plugin, PluginConfig};
-pub use script_loader::{BodoConfig, ScriptFile, TaskOrCommand};
+pub use plugin::{Plugin, PluginConfig, PluginManager};
+pub use script_loader::{load_bodo_config, load_scripts, BodoConfig};

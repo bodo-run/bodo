@@ -25,6 +25,7 @@ pub struct CommandData {
     pub raw_command: String,
     pub description: Option<String>,
     pub working_dir: Option<String>,
+    pub watch: Option<Vec<String>>,
 }
 
 /// A node in the graph

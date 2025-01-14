@@ -52,6 +52,7 @@ async fn test_path_plugin_on_graph_build() {
         raw_command: "echo Hello".to_string(),
         description: Some("Echo command".to_string()),
         working_dir: None,
+        watch: None,
     }));
 
     // Insert some metadata that the plugin will interpret

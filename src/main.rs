@@ -1,17 +1,28 @@
-use bodo::GraphManager;
-use std::error::Error;
+use bodo::manager::GraphManager;
+use clap::{Parser, Subcommand};
+use std::{error::Error, path::PathBuf};
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let mut manager = GraphManager::new();
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
 
-    // Load config if "bodo.toml" exists
-    manager.load_bodo_config(None)?;
+#[derive(Subcommand)]
+enum Commands {
+    // Add other commands here as needed
+}
 
-    // Build graph from scripts/
-    manager.build_graph()?;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let cli = Cli::parse();
 
-    // Print final graph
-    manager.debug_graph();
+    match cli.command {
+        None => {
+            println!("No command specified");
+        }
+    }
 
     Ok(())
 }

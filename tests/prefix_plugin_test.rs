@@ -50,6 +50,7 @@ async fn test_prefix_plugin_on_graph_build() {
         raw_command: "echo Test".to_string(),
         description: Some("Test command".to_string()),
         working_dir: None,
+        watch: None,
     }));
 
     // Run the plugin
