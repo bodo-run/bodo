@@ -6,7 +6,7 @@ use std::any::Any;
 
 use crate::{
     errors::Result,
-    graph::{Graph, NodeKind, TaskData},
+    graph::{CommandData, Graph, NodeKind, TaskData},
     plugin::{Plugin, PluginConfig},
 };
 
@@ -44,31 +44,33 @@ impl Plugin for PathPlugin {
 
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
         for node in graph.nodes.iter_mut() {
-            if let NodeKind::Task(TaskData {
-                working_dir: Some(dir),
-                ..
-            }) = &node.kind
-            {
-                let mut paths = self.default_paths.clone();
-                if let Some(exec_paths) = node.metadata.get("exec_paths") {
-                    if let Ok(Value::Array(exec_paths)) = serde_json::from_str(exec_paths) {
-                        paths.extend(
-                            exec_paths
-                                .iter()
-                                .filter_map(|p| p.as_str().map(PathBuf::from)),
-                        );
-                    }
+            let working_dir = match &node.kind {
+                NodeKind::Task(TaskData { working_dir, .. }) => working_dir,
+                NodeKind::Command(CommandData { working_dir, .. }) => working_dir,
+            };
+
+            let mut paths = self.default_paths.clone();
+            if let Some(exec_paths) = node.metadata.get("exec_paths") {
+                if let Ok(Value::Array(exec_paths)) = serde_json::from_str(exec_paths) {
+                    paths.extend(
+                        exec_paths
+                            .iter()
+                            .filter_map(|p| p.as_str().map(PathBuf::from)),
+                    );
                 }
-                paths.push(PathBuf::from(dir));
-
-                let path_str = paths
-                    .iter()
-                    .filter_map(|p| p.to_str())
-                    .collect::<Vec<_>>()
-                    .join(":");
-
-                node.metadata.insert("env.PATH".to_string(), path_str);
             }
+
+            if let Some(dir) = working_dir {
+                paths.push(PathBuf::from(dir));
+            }
+
+            let path_str = paths
+                .iter()
+                .filter_map(|p| p.to_str())
+                .collect::<Vec<_>>()
+                .join(":");
+
+            node.metadata.insert("env.PATH".to_string(), path_str);
         }
         Ok(())
     }

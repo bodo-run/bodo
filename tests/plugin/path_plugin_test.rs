@@ -3,7 +3,6 @@ use bodo::{
     plugin::{Plugin, PluginConfig},
     plugins::path_plugin::PathPlugin,
 };
-use std::path::PathBuf;
 
 #[tokio::test]
 async fn test_path_plugin_on_init_no_paths() {
@@ -11,8 +10,19 @@ async fn test_path_plugin_on_init_no_paths() {
     let config = PluginConfig { options: None };
     let result = plugin.on_init(&config).await;
     assert!(result.is_ok());
-    // Should remain empty
-    assert!(plugin.default_paths.is_empty());
+
+    // Test through graph build instead of direct field access
+    let mut graph = Graph::new();
+    let task_id = graph.add_node(NodeKind::Task(TaskData {
+        name: "test".to_string(),
+        description: None,
+        command: Some("echo test".to_string()),
+        working_dir: Some("/tmp".to_string()),
+    }));
+
+    plugin.on_graph_build(&mut graph).await.unwrap();
+    let path = &graph.nodes[task_id as usize].metadata["env.PATH"];
+    assert!(path.contains("/tmp")); // Only working_dir should be in path
 }
 
 #[tokio::test]
@@ -27,19 +37,34 @@ async fn test_path_plugin_on_init_with_paths() {
     };
     let result = plugin.on_init(&config).await;
     assert!(result.is_ok());
-    assert_eq!(
-        plugin.default_paths,
-        vec![
-            PathBuf::from("/usr/local/bin"),
-            PathBuf::from("/custom/bin")
-        ]
-    );
+
+    // Test through graph build instead of direct field access
+    let mut graph = Graph::new();
+    let task_id = graph.add_node(NodeKind::Task(TaskData {
+        name: "test".to_string(),
+        description: None,
+        command: Some("echo test".to_string()),
+        working_dir: Some("/tmp".to_string()),
+    }));
+
+    plugin.on_graph_build(&mut graph).await.unwrap();
+    let path = &graph.nodes[task_id as usize].metadata["env.PATH"];
+    assert!(path.contains("/usr/local/bin"));
+    assert!(path.contains("/custom/bin"));
+    assert!(path.contains("/tmp")); // working_dir should also be included
 }
 
 #[tokio::test]
 async fn test_path_plugin_on_graph_build() {
     let mut plugin = PathPlugin::new();
-    plugin.default_paths = vec![PathBuf::from("/usr/local/bin")];
+    let config = PluginConfig {
+        options: serde_json::json!({
+            "default_paths": ["/usr/local/bin"]
+        })
+        .as_object()
+        .cloned(),
+    };
+    plugin.on_init(&config).await.unwrap();
 
     let mut graph = Graph::new();
     let task_id = graph.add_node(NodeKind::Task(TaskData {

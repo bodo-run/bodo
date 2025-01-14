@@ -1,5 +1,5 @@
 use bodo::{
-    graph::{Graph, NodeKind},
+    graph::Graph,
     script_loader::{load_bodo_config, load_scripts},
 };
 use std::error::Error;
