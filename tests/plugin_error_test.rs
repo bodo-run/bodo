@@ -1,7 +1,12 @@
 use bodo::{
+    errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
-    plugin::{Plugin, PluginConfig},
-    plugins::{path_plugin::PathPlugin, prefix_plugin::PrefixPlugin},
+    plugin::{Plugin, PluginConfig, PluginManager},
+    plugins::{
+        failing_plugin::{FailingPlugin, SucceedingPlugin},
+        path_plugin::PathPlugin,
+        prefix_plugin::PrefixPlugin,
+    },
 };
 
 /// Test plugin initialization errors
@@ -134,4 +139,71 @@ async fn test_error_propagation_chain() {
     let metadata = &graph.nodes[task_id as usize].metadata;
     assert!(metadata.contains_key("prefix"));
     assert!(metadata.contains_key("env.PATH"));
+}
+
+#[tokio::test]
+async fn test_failing_plugin_on_init() {
+    let mut plugin = FailingPlugin::new(true, false); // Fails on init, not on graph build
+    let config = PluginConfig { options: None };
+
+    let result = plugin.on_init(&config).await;
+    assert!(result.is_err(), "Expected plugin to fail on init");
+    if let Err(BodoError::PluginError(msg)) = result {
+        assert!(
+            msg.contains("forced fail on init"),
+            "Error message should mention forced fail on init"
+        );
+    } else {
+        panic!("Expected BodoError::PluginError");
+    }
+}
+
+#[tokio::test]
+async fn test_failing_plugin_on_graph_build() {
+    let mut plugin = FailingPlugin::new(false, true); // Succeeds init, fails on graph build
+    let config = PluginConfig { options: None };
+    let mut graph = Graph::new();
+
+    // init should pass
+    assert!(plugin.on_init(&config).await.is_ok());
+
+    // graph build should fail
+    let result = plugin.on_graph_build(&mut graph).await;
+    assert!(result.is_err(), "Expected plugin to fail on graph build");
+    if let Err(BodoError::PluginError(msg)) = result {
+        assert!(
+            msg.contains("forced fail on graph build"),
+            "Error message should mention forced fail on graph build"
+        );
+    } else {
+        panic!("Expected BodoError::PluginError");
+    }
+}
+
+#[tokio::test]
+async fn test_multiple_plugins_one_fails_graceful_handling() {
+    let mut manager = PluginManager::new();
+
+    // One plugin will fail on init, the other always succeeds
+    let failing_plugin = FailingPlugin::new(true, false);
+    let succeeding_plugin = SucceedingPlugin::new();
+
+    manager.register(Box::new(failing_plugin));
+    manager.register(Box::new(succeeding_plugin));
+
+    // Initialize plugins
+    let config = PluginConfig { options: None };
+    let init_result = manager.init_plugins(&config).await;
+    assert!(
+        init_result.is_err(),
+        "Expected init to fail due to failing plugin"
+    );
+
+    // Build graph
+    let mut graph = Graph::new();
+    let build_result = manager.on_graph_build(&mut graph).await;
+    assert!(
+        build_result.is_ok(),
+        "Graph build should succeed with failing plugin already errored"
+    );
 }

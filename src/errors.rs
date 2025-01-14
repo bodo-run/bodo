@@ -4,6 +4,7 @@ use std::{error::Error, fmt, io};
 pub enum BodoError {
     IoError(io::Error),
     WatcherError(String),
+    PluginError(String),
 }
 
 impl fmt::Display for BodoError {
@@ -11,6 +12,7 @@ impl fmt::Display for BodoError {
         match self {
             BodoError::IoError(err) => write!(f, "IO error: {}", err),
             BodoError::WatcherError(err) => write!(f, "Watcher error: {}", err),
+            BodoError::PluginError(err) => write!(f, "Plugin error: {}", err),
         }
     }
 }
