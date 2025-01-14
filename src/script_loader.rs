@@ -5,25 +5,19 @@ use std::{
 
 use glob::glob;
 use serde::Deserialize;
-use toml;
 use walkdir::WalkDir;
 
 use crate::{
     errors::PluginError,
-    graph::{Graph, NodeKind},
+    graph::{CommandData, Graph, NodeKind, TaskData},
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct BodoConfig {
     pub script_paths: Option<Vec<String>>,
 }
 
-impl Default for BodoConfig {
-    fn default() -> Self {
-        BodoConfig { script_paths: None }
-    }
-}
-
+/// ScriptFile holds the YAML definition of tasks/commands.
 #[derive(Debug, Deserialize)]
 pub struct ScriptFile {
     pub name: Option<String>,
@@ -32,6 +26,7 @@ pub struct ScriptFile {
     pub tasks: Option<std::collections::HashMap<String, TaskOrCommand>>,
 }
 
+/// A simplified union of "SimpleCommand" or a more advanced "ComplexTask"
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum TaskOrCommand {
@@ -41,82 +36,67 @@ pub enum TaskOrCommand {
         description: Option<String>,
     },
     ComplexTask {
-        concurrently: Option<Vec<TaskOrCommand>>,
-        #[serde(default)]
-        description: Option<String>,
         #[serde(default)]
         command: Option<String>,
+        #[serde(default)]
+        description: Option<String>,
     },
 }
 
+/// Convert ScriptFile to Graph nodes.
 impl ScriptFile {
     pub fn to_graph(&self, graph: &mut Graph) -> Result<(), PluginError> {
+        // If default_task is present, interpret as a command node
         if let Some(def_task) = &self.default_task {
             match def_task {
                 TaskOrCommand::SimpleCommand {
                     command,
                     description,
                 } => {
-                    let nodekind = NodeKind::Command(crate::graph::CommandData {
+                    let node_kind = NodeKind::Command(CommandData {
                         raw_command: command.to_owned(),
                         description: description.clone(),
                     });
-                    graph.add_node(nodekind);
+                    graph.add_node(node_kind);
                 }
                 TaskOrCommand::ComplexTask {
                     command,
                     description,
-                    ..
                 } => {
-                    if let Some(raw_cmd) = command {
-                        let nodekind = NodeKind::Command(crate::graph::CommandData {
-                            raw_command: raw_cmd.to_owned(),
+                    if let Some(cmd_str) = command {
+                        let node_kind = NodeKind::Command(CommandData {
+                            raw_command: cmd_str.to_owned(),
                             description: description.clone(),
                         });
-                        graph.add_node(nodekind);
+                        graph.add_node(node_kind);
                     }
                 }
             }
         }
 
+        // Then handle named tasks
         if let Some(tasks_map) = &self.tasks {
-            for (name, task_data) in tasks_map {
-                match task_data {
+            for (name, entry) in tasks_map {
+                match entry {
                     TaskOrCommand::SimpleCommand {
-                        command,
+                        command: _,
                         description,
                     } => {
-                        let nodekind = NodeKind::Task(crate::graph::TaskData {
-                            name: name.to_string(),
+                        let node_kind = NodeKind::Task(TaskData {
+                            name: name.clone(),
                             description: description.clone(),
                         });
-                        let node_id = graph.add_node(nodekind);
-                        let node = graph
-                            .nodes
-                            .iter_mut()
-                            .find(|n| n.id == node_id)
-                            .expect("Node we just added must exist");
-                        node.metadata.insert("command".to_string(), command.clone());
+                        graph.add_node(node_kind);
                     }
                     TaskOrCommand::ComplexTask {
-                        command,
+                        command: _,
                         description,
-                        concurrently: _,
-                        ..
                     } => {
-                        let nodekind = NodeKind::Task(crate::graph::TaskData {
-                            name: name.to_string(),
+                        let node_kind = NodeKind::Task(TaskData {
+                            name: name.clone(),
                             description: description.clone(),
                         });
-                        let node_id = graph.add_node(nodekind);
-                        if let Some(cmd) = command {
-                            let node = graph
-                                .nodes
-                                .iter_mut()
-                                .find(|n| n.id == node_id)
-                                .expect("Node we just added must exist");
-                            node.metadata.insert("command".to_string(), cmd.clone());
-                        }
+                        graph.add_node(node_kind);
                     }
                 }
             }
@@ -126,10 +106,12 @@ impl ScriptFile {
     }
 }
 
-pub fn is_glob(s: &str) -> bool {
-    s.contains('*') || s.contains('?') || (s.contains('[') && s.contains(']'))
+/// Utility to detect if the path is a glob
+pub fn is_glob(p: &str) -> bool {
+    p.contains('*') || p.contains('?') || (p.contains('[') && p.contains(']'))
 }
 
+/// Load bodo.toml or defaults
 pub fn load_bodo_config<P: AsRef<Path>>(config_path: Option<P>) -> Result<BodoConfig, PluginError> {
     let path = config_path
         .as_ref()
@@ -138,28 +120,28 @@ pub fn load_bodo_config<P: AsRef<Path>>(config_path: Option<P>) -> Result<BodoCo
     if path.exists() {
         let content = fs::read_to_string(&path)
             .map_err(|e| PluginError::GenericError(format!("Cannot read bodo.toml: {}", e)))?;
-        let parsed_config: BodoConfig = toml::from_str(&content)
+        let parsed: BodoConfig = toml::from_str(&content)
             .map_err(|e| PluginError::GenericError(format!("bodo.toml parse error: {}", e)))?;
-        Ok(parsed_config)
+        Ok(parsed)
     } else {
         Ok(BodoConfig::default())
     }
 }
 
+/// Load scripts from the fs based on config
 pub fn load_scripts_from_fs(config: &BodoConfig, graph: &mut Graph) -> Result<(), PluginError> {
     let paths_or_globs = config
         .script_paths
         .clone()
-        .unwrap_or_else(|| vec![String::from("scripts/")]);
+        .unwrap_or_else(|| vec!["scripts/".to_string()]);
 
     for pat in paths_or_globs {
         if is_glob(&pat) {
             for entry in glob(&pat)
                 .map_err(|e| PluginError::GenericError(format!("Bad glob pattern: {}", e)))?
             {
-                let path = entry.map_err(|e| {
-                    PluginError::GenericError(format!("Failed to process glob entry: {}", e))
-                })?;
+                let path = entry
+                    .map_err(|e| PluginError::GenericError(format!("Failed glob entry: {}", e)))?;
                 if path.is_dir() {
                     load_yaml_files_in_dir(&path, graph)?;
                 } else {
@@ -178,29 +160,21 @@ pub fn load_scripts_from_fs(config: &BodoConfig, graph: &mut Graph) -> Result<()
     Ok(())
 }
 
-fn load_single_yaml_file(path: &Path, graph: &mut Graph) -> Result<(), PluginError> {
-    if path.extension().map_or(false, |ext| ext == "yaml") {
-        let script_def = parse_script_file(path)?;
-        script_def.to_graph(graph)?;
-    }
-    Ok(())
-}
-
 fn load_yaml_files_in_dir(dir_path: &Path, graph: &mut Graph) -> Result<(), PluginError> {
     for entry in WalkDir::new(dir_path).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
-        if path.is_file() && path.extension().map_or(false, |ext| ext == "yaml") {
-            let script_def = parse_script_file(path)?;
-            script_def.to_graph(graph)?;
+        if path.is_file() && path.extension().is_some_and(|ext| ext == "yaml") {
+            load_single_yaml_file(path, graph)?;
         }
     }
     Ok(())
 }
 
-fn parse_script_file(path: &Path) -> Result<ScriptFile, PluginError> {
+fn load_single_yaml_file(path: &Path, graph: &mut Graph) -> Result<(), PluginError> {
     let content = fs::read_to_string(path)
         .map_err(|e| PluginError::GenericError(format!("File read error: {}", e)))?;
     let parsed: ScriptFile = serde_yaml::from_str(&content)
         .map_err(|e| PluginError::GenericError(format!("YAML parse error: {}", e)))?;
-    Ok(parsed)
+    parsed.to_graph(graph)?;
+    Ok(())
 }
