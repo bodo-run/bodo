@@ -50,7 +50,7 @@ testFailures = testFailures.split('\n')
 debug('Asking deepseek...');
 
 // Truncate and escape content if too large
-const maxContentLength = 50000; // Adjust this value as needed
+const maxContentLength = 30000; // Adjust this value as needed
 const truncateAndEscape = (str) => {
     if (str.length > maxContentLength) {
         str = str.slice(0, maxContentLength) + '... (truncated)';

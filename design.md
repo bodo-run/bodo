@@ -63,7 +63,9 @@ Everything beyond core graph management is implemented as plugins:
 - Initialization phase
 - Graph transformation phase
 - Execution preparation phase
+- Before run phase
 - Execution phase
+- After run phase
 
 ### 3.3 Data and Metadata
 
@@ -113,6 +115,88 @@ Everything beyond core graph management is implemented as plugins:
 - Integration tests
 - Graph validation tests
 - Execution tests
+
+### 3.11 Plugin-Specific Tests
+
+#### 3.11.1 Plugin Lifecycle Tests
+
+- Test `on_init` phase:
+
+  - Verify plugin configuration loading
+  - Test initialization error handling
+  - Confirm plugin state after initialization
+
+- Test `on_graph_build` phase:
+
+  - Verify node metadata modifications
+  - Test graph transformation operations
+  - Validate error handling during graph building
+
+- Test `on_execution_prepare` phase:
+
+  - Verify environment variable setup
+  - Test command prefix configuration
+  - Validate path modifications
+
+- Test `before_run` phase:
+
+  - Verify pre-execution setup
+  - Test resource allocation
+  - Validate state preparation
+  - Test cancellation handling
+
+- Test `on_execution` phase:
+
+  - Verify process management
+  - Test output handling
+  - Validate error propagation
+
+- Test `after_run` phase:
+
+  - Verify resource cleanup
+  - Test state restoration
+  - Validate post-execution tasks
+  - Test error handling during cleanup
+
+#### 3.11.2 Plugin Metadata Tests
+
+- Test metadata conflict resolution:
+
+  - Multiple plugins modifying same metadata
+  - Priority handling between plugins
+  - Metadata inheritance rules
+
+- Test metadata validation:
+  - Type checking for metadata values
+  - Required vs optional metadata fields
+  - Invalid metadata handling
+
+#### 3.11.3 Plugin Error Tests
+
+- Test error types:
+
+  - Plugin initialization errors
+  - Graph transformation errors
+  - Execution preparation errors
+  - Runtime execution errors
+
+- Test error handling:
+  - Error propagation through plugin chain
+  - Graceful plugin disabling on errors
+  - Error recovery mechanisms
+
+#### 3.11.4 Plugin Integration Tests
+
+- Test plugin interactions:
+
+  - Environment + Path plugin cooperation
+  - Watch + Execution plugin integration
+  - Command Prefix + List plugin coordination
+
+- Test plugin ordering:
+  - Verify correct execution order
+  - Test dependency resolution between plugins
+  - Validate plugin priority system
 
 ## 4. Task File Format and Structure
 
@@ -565,6 +649,10 @@ Next Steps 1. Unit Tests: Place them in the same file under a #[cfg(test)] mod t
 This covers a broad range of scenarios so that once you add plugins or advanced features later, you’ll have confidence the base graph-loading logic remains solid.
 
 ## Development Plan
+
+Note:
+We use tokio for all processes management.
+Watch is a form of concurrency.
 
     1.	Add plugin-specific tests. Include tests for each plugin lifecycle method (on_init, on_graph_build, etc.). Verify that plugins correctly modify node metadata and respond to errors.
     2.	Expand concurrency tests:

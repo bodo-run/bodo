@@ -17,3 +17,5 @@ impl fmt::Display for PluginError {
 }
 
 impl std::error::Error for PluginError {}
+
+pub type Result<T> = std::result::Result<T, PluginError>;

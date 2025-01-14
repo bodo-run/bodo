@@ -16,6 +16,7 @@ pub struct TaskData {
     pub name: String,
     pub description: Option<String>,
     pub command: Option<String>,
+    pub working_dir: Option<String>,
 }
 
 /// Represents data for a Command node.
@@ -23,6 +24,7 @@ pub struct TaskData {
 pub struct CommandData {
     pub raw_command: String,
     pub description: Option<String>,
+    pub working_dir: Option<String>,
 }
 
 /// A node in the graph

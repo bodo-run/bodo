@@ -12,6 +12,7 @@ fn test_graph_large_insertion() {
             name: format!("task_{i}"),
             description: None,
             command: Some(format!("echo task_{i}")),
+            working_dir: None,
         }));
     }
 
@@ -37,6 +38,7 @@ fn test_graph_large_edge_creation() {
             name: format!("task_{i}"),
             description: None,
             command: Some(format!("echo task_{i}")),
+            working_dir: None,
         }));
         node_ids.push(node);
     }
@@ -68,6 +70,7 @@ fn test_large_graph_manager() {
             name: format!("task_{i}"),
             description: None,
             command: Some(format!("echo task_{i}")),
+            working_dir: None,
         }));
     }
     manager.graph = g;

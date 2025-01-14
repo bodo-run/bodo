@@ -33,12 +33,16 @@ pub enum TaskOrCommand {
         command: String,
         #[serde(default)]
         description: Option<String>,
+        #[serde(default)]
+        working_dir: Option<String>,
     },
     ComplexTask {
         #[serde(default)]
         command: Option<String>,
         #[serde(default)]
         description: Option<String>,
+        #[serde(default)]
+        working_dir: Option<String>,
     },
 }
 
@@ -105,21 +109,25 @@ impl ScriptFile {
                 TaskOrCommand::SimpleCommand {
                     command,
                     description,
+                    working_dir,
                 } => {
                     let command_node = NodeKind::Command(CommandData {
                         raw_command: command.to_owned(),
                         description: description.clone(),
+                        working_dir: working_dir.clone(),
                     });
                     graph.add_node(command_node);
                 }
                 TaskOrCommand::ComplexTask {
                     command,
                     description,
+                    working_dir,
                 } => {
                     if let Some(cmd) = command {
                         let command_node = NodeKind::Command(CommandData {
                             raw_command: cmd.to_owned(),
                             description: description.clone(),
+                            working_dir: working_dir.clone(),
                         });
                         graph.add_node(command_node);
                     }
@@ -134,24 +142,28 @@ impl ScriptFile {
                     TaskOrCommand::SimpleCommand {
                         command,
                         description,
+                        working_dir,
                     } => {
                         // Create only a task node for each named task
                         let task_node = NodeKind::Task(TaskData {
                             name: name.clone(),
                             description: description.clone(),
                             command: Some(command.clone()),
+                            working_dir: working_dir.clone(),
                         });
                         graph.add_node(task_node);
                     }
                     TaskOrCommand::ComplexTask {
                         command,
                         description,
+                        working_dir,
                     } => {
                         // Create only a task node for each named task
                         let task_node = NodeKind::Task(TaskData {
                             name: name.clone(),
                             description: description.clone(),
                             command: command.clone(),
+                            working_dir: working_dir.clone(),
                         });
                         graph.add_node(task_node);
                     }

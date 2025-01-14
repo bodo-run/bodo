@@ -14,6 +14,7 @@ fn test_add_task_node() {
         name: "test".to_string(),
         description: Some("test description".to_string()),
         command: None,
+        working_dir: None,
     };
     let node_id = graph.add_node(NodeKind::Task(task.clone()));
     assert_eq!(node_id, 0);
@@ -30,6 +31,7 @@ fn test_add_command_node() {
     let command = CommandData {
         raw_command: "echo hello".to_string(),
         description: Some("test description".to_string()),
+        working_dir: None,
     };
     let node_id = graph.add_node(NodeKind::Command(command.clone()));
     assert_eq!(node_id, 0);
@@ -47,10 +49,12 @@ fn test_add_multiple_nodes() {
         name: "test".to_string(),
         description: Some("test description".to_string()),
         command: None,
+        working_dir: None,
     };
     let command = CommandData {
         raw_command: "echo hello".to_string(),
         description: Some("test description".to_string()),
+        working_dir: None,
     };
     let task_id = graph.add_node(NodeKind::Task(task.clone()));
     let command_id = graph.add_node(NodeKind::Command(command.clone()));
@@ -74,10 +78,12 @@ fn test_add_edge() {
         name: "test".to_string(),
         description: Some("test description".to_string()),
         command: None,
+        working_dir: None,
     };
     let command = CommandData {
         raw_command: "echo hello".to_string(),
         description: Some("test description".to_string()),
+        working_dir: None,
     };
     let task_id = graph.add_node(NodeKind::Task(task));
     let command_id = graph.add_node(NodeKind::Command(command));
@@ -94,6 +100,7 @@ fn test_add_edge_invalid_nodes() {
         name: "test".to_string(),
         description: Some("test description".to_string()),
         command: None,
+        working_dir: None,
     }));
     assert!(graph.add_edge(0, 1).is_err());
     assert!(graph.add_edge(1, 0).is_err());
@@ -109,10 +116,12 @@ fn test_print_debug_no_panic() {
         name: "something".to_string(),
         description: None,
         command: None,
+        working_dir: None,
     }));
     let _ = graph.add_node(NodeKind::Command(CommandData {
         raw_command: "echo Testing".to_string(),
         description: None,
+        working_dir: None,
     }));
     graph.print_debug();
 }
