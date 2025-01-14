@@ -27,6 +27,9 @@ tokio = { version = "1.35.1", features = ["full"] }
 colored = "2.1.0"
 libc = "0.2.151"
 nix = "0.27.1"
+walkdir = "2.5"
+glob = "0.3"
+toml = "0.8"
 
 [dev-dependencies]
 assert_cmd = "2.0"

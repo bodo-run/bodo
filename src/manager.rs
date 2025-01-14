@@ -1,7 +1,10 @@
+use std::path::Path;
+
 use crate::{
     errors::PluginError,
     graph::Graph,
     plugin::{Plugin, PluginConfig},
+    script_loader::{self, BodoConfig},
 };
 
 /// The core manager orchestrates reading script configs, building the graph,
@@ -9,6 +12,7 @@ use crate::{
 pub struct GraphManager {
     pub graph: Graph,
     pub plugins: Vec<Box<dyn Plugin>>,
+    pub config: BodoConfig,
 }
 
 impl GraphManager {
@@ -16,12 +20,23 @@ impl GraphManager {
         Self {
             graph: Graph::new(),
             plugins: Vec::new(),
+            config: BodoConfig::default(),
         }
     }
 
     /// Add a plugin to this manager's pipeline.
     pub fn register_plugin(&mut self, plugin: Box<dyn Plugin>) {
         self.plugins.push(plugin);
+    }
+
+    /// Try to load the optional `bodo.toml` from the repo root or anywhere else.
+    /// If not found, keeps defaults.
+    pub fn load_bodo_config<P: AsRef<Path>>(
+        &mut self,
+        config_path: Option<P>,
+    ) -> Result<(), PluginError> {
+        self.config = script_loader::load_bodo_config(config_path)?;
+        Ok(())
     }
 
     /// Initialize all plugins with their configs.
@@ -45,6 +60,9 @@ impl GraphManager {
     /// Build the graph from script files or other sources.
     /// After building the graph, inform all plugins so they can modify or validate it.
     pub fn build_graph(&mut self) -> Result<(), PluginError> {
+        // Load scripts from filesystem based on config
+        script_loader::load_scripts_from_fs(&self.config, &mut self.graph)?;
+
         // Let each plugin transform the graph as needed
         for plugin in self.plugins.iter_mut() {
             plugin.on_graph_build(&mut self.graph)?;

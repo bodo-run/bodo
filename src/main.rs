@@ -12,6 +12,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     manager.register_plugin(Box::new(CommandExecPlugin::new()));
     manager.register_plugin(Box::new(ListPlugin::new()));
 
+    // Load bodo.toml if it exists
+    manager.load_bodo_config::<&str>(None)?;
+
     // Initialize plugins
     let plugin_configs = vec![]; // load from YAML or other sources
     manager.init_plugins(&plugin_configs)?;
