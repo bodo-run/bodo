@@ -463,3 +463,103 @@ prefix_color: "red"
 Plugins are the core of Bodo. They are responsible for the core functionality of Bodo.
 
 Plugins are implemented as traits.
+
+## Testing plan for core functionality
+
+Below is a categorized list of tests that would be valuable for ensuring the correctness of the core Bodo code (graph construction, config loading, script loading) in its stripped-down, no-plugin state. Many of these can be unit tests (testing small pieces in isolation) or integration tests (verifying multiple parts in tandem).
+
+1. Graph Tests
+
+1.1 Node Creation
+• Test: Create an empty Graph. Confirm nodes and edges are both empty.
+• Test: Add a single Task node. Confirm the node’s ID is 0, nodes.len() is 1, and the node has correct data (TaskData).
+• Test: Add multiple Command nodes. Confirm each node ID increments, and nodes.len() matches the count.
+• Test: Confirm that node metadata is empty by default when you add new nodes.
+
+1.2 Edge Creation
+• Test: Add an edge between two valid node IDs (0 -> 1). Confirm edges.len() is 1 and that the stored edge is correct.
+• Test: Add multiple edges. Confirm the final edges.len() is as expected and edges are stored in the order they were added.
+• (Optional): Attempt to add an edge with an invalid node ID (e.g., from 999 to 1000). Confirm it either panics or that your system has a safe check for invalid IDs (depending on your design choice).
+
+1.3 Graph Debug Print
+• Test: With a small number of nodes/edges, call print_debug() and capture its stdout output. Confirm it contains the correct node count and edge references.
+
+2. Script Loader Tests
+
+2.1 Loading a Single YAML File
+• Test: Minimal YAML with only a default_task (simple command). Confirm the graph has exactly 1 node, which is a Command node, and the raw_command is as expected.
+• Test: YAML with tasks map containing multiple tasks. Confirm the graph node count matches the number of tasks + (optional) default task. Verify the correct TaskData details are stored.
+• Test: YAML in which default_task is a “complex task” (with command, description, maybe a concurrently placeholder). Confirm the resulting node is still recognized as a Command, and the right fields appear in metadata if you store them.
+
+2.2 Loading Multiple YAML Files in One Directory
+• Test: Directory with scriptA.yaml and scriptB.yaml. Confirm both files load into the graph (e.g., 2 default tasks from each file, multiple named tasks).
+• Test: Nested directories: place .yaml in subfolders. Ensure WalkDir picks them up if your config says "scripts/".
+
+2.3 Using a Glob
+• Test: Provide a glob pattern in bodo.toml like "scripts/**/\*.yaml" or "**/script.yaml". Confirm it recursively loads all matching .yaml files.
+• Test: Provide a broken glob or an empty matching set. Confirm no panic occurs, either zero files loaded or an error is returned (depending on design).
+
+2.4 Invalid Files
+• Test: File not found or no .yaml in scripts/. Confirm the graph ends up with zero nodes, or the loader returns an error if that’s desired.
+• Test: Malformed YAML syntax. Confirm it returns a PluginError::GenericError with a “YAML parse error:” message.
+• Test: Unexpected data structure (like top-level keys that don’t match ScriptFile definitions). Confirm it returns a parse error or gracefully ignores unknown fields if you’ve set #[serde(default)] on those fields.
+
+2.5 Edge Cases in ScriptFile.to_graph()
+• Test: default_task and tasks both empty. Confirm no nodes are created, but no panic occurs.
+• Test: default_task is present but has an empty command string. Ensure the node still becomes a Command node (with possibly an empty command) or that you handle it as a no-op.
+• Test: Named tasks that have an empty command. Confirm a Task node is created with some default or empty metadata.
+
+3. BodoConfig Loading Tests
+
+3.1 Default Config
+• Test: No bodo.toml file in the current directory. Confirm BodoConfig::default() is used, and script_paths is None.
+
+3.2 Valid bodo.toml
+• Test: A minimal TOML specifying script_paths = ["custom-scripts/"]. Confirm the config is loaded and script_paths is Some(vec!["custom-scripts/"]).
+• Test: A more complex TOML with extra fields (which your struct might ignore if not declared). Confirm no parse error if the extra fields are harmless.
+
+3.3 Invalid bodo.toml
+• Test: Malformed TOML content. Confirm you get PluginError::GenericError("bodo.toml parse error: ...").
+• Test: Missing read permissions on bodo.toml. Confirm you get an IoError or GenericError referencing the inability to read the file.
+
+4. GraphManager Tests
+
+4.1 GraphManager::new()
+• Test: Confirm manager starts with an empty graph and a default BodoConfig.
+
+4.2 load_bodo_config()
+• Test: Provide a path to a valid bodo.toml. After calling load_bodo_config(Some("my-config.toml")), confirm the manager’s self.config matches what’s in the file.
+• Test: Provide None. Confirm it tries bodo.toml in the current directory. If none found, confirm it remains default.
+
+4.3 build_graph()
+(Integration with script_loader::load_scripts_from_fs)
+• Test: With a known scripts directory containing 2 YAML files. After build_graph(), confirm the graph has the correct nodes.
+• Test: If no scripts exist, confirm you either get 0 nodes or an error (depending on design).
+• Test: If one of the YAML files is invalid. Confirm build_graph() returns an error.
+• Test: If you want to do some extra validation (like cycle detection or name checking), add a test that ensures invalid references are caught.
+
+5. Integration / End-to-End Tests
+
+5.1 Minimal Project Directory Setup 1. Create a temp directory. 2. Write a minimal bodo.toml specifying script_paths = ["scripts/"]. 3. Make a scripts/ folder with a script.yaml containing a default task. 4. Run a small “main” function or a test harness that calls GraphManager::new(), load_bodo_config(...), build_graph(). 5. Assert the manager’s graph.nodes.len() == 1.
+
+5.2 Multiple YAML + Overlapping Paths
+• If bodo.toml sets script_paths = ["scripts/", "other-scripts/"], place valid YAML in both. Confirm nodes from both directories appear in the final graph.
+
+5.3 Edge Cases
+• Scripts folder is huge but only has one .yaml. Confirm performance is reasonable or the code doesn’t blow up.
+• A script references advanced fields you haven’t implemented yet (e.g. pre_deps:, post_deps:). Confirm they’re just ignored or stored as raw data if you do so.
+
+6. Suggested Additional Structural or Sanity Tests
+
+6.1 Task Name Validation
+If in the future you want to enforce name constraints (no slashes, no .., etc.), write tests verifying that attempts to parse invalid task names produce an error or are sanitized.
+
+6.2 Graph Consistency
+If you implement a method that verifies no circular references or duplicated node IDs, write tests that feed in a contrived script with a cycle. Confirm the code flags it.
+
+6.3 Performance or Memory
+Not typically a big issue at early stage, but you could do basic tests loading 100+ scripts or tasks to confirm it doesn’t degrade badly.
+
+Next Steps 1. Unit Tests: Place them in the same file under a #[cfg(test)] mod tests or in a separate tests/ folder. 2. Integration Tests: Typically live in the tests/ directory, pulling in your library as a normal crate. 3. Mock File Structures: For file-based tests (like bodo.toml, script.yaml), you can use tempfile or assert_fs crates to create ephemeral directories.
+
+This covers a broad range of scenarios so that once you add plugins or advanced features later, you’ll have confidence the base graph-loading logic remains solid.
