@@ -6,6 +6,8 @@ use std::{
 };
 use tempfile::tempdir;
 
+use bodo::script_loader::BodoConfig;
+
 /// Helper function: creates a minimal script file
 fn write_minimal_script_file(
     dir: &Path,
@@ -183,14 +185,20 @@ fn test_end_to_end_no_scripts_found_is_okay() -> Result<(), Box<dyn Error>> {
     let temp = tempdir()?;
     let root_path = temp.path();
 
-    // Create an empty scripts directory
-    let scripts_dir = root_path.join("scripts");
+    // Create an empty scripts directory with a different name
+    let scripts_dir = root_path.join("test-scripts");
     create_dir_all(&scripts_dir)?;
 
     std::env::set_current_dir(root_path)?;
 
+    // Create a custom config to use the test-scripts directory
+    let config = BodoConfig {
+        script_paths: Some(vec!["test-scripts".to_string()]),
+    };
+
     let mut manager = GraphManager::new();
     manager.load_bodo_config(None)?;
+    manager.config = config;
 
     let result = manager.build_graph();
     assert!(result.is_ok());

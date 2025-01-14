@@ -269,6 +269,7 @@ fn process_glob_pattern(pattern: &str, graph: &mut Graph) -> Result<(), PluginEr
             load_single_yaml_file(&path, graph)?;
         }
     }
+
     Ok(())
 }
 
