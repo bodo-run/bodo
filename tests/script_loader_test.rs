@@ -249,9 +249,9 @@ default_task: {
     };
     let mut graph = Graph::new();
 
-    let result = load_scripts_from_fs(&config, &mut graph);
+    let _result = load_scripts_from_fs(&config, &mut graph);
 
-    match result {
+    match _result {
         Err(PluginError::GenericError(msg)) => {
             assert!(
                 msg.contains("YAML parse error"),
@@ -269,9 +269,9 @@ fn test_non_existent_path() {
     };
     let mut graph = Graph::new();
 
-    let result = load_scripts_from_fs(&config, &mut graph);
+    let _result = load_scripts_from_fs(&config, &mut graph);
     assert!(
-        result.is_ok(),
+        _result.is_ok(),
         "We skip non-existent directories by default"
     );
     assert_eq!(graph.nodes.len(), 0);
@@ -357,9 +357,9 @@ tasks:
     };
 
     let mut graph = Graph::new();
-    let result = load_scripts_from_fs(&config, &mut graph);
+    let _result = load_scripts_from_fs(&config, &mut graph);
 
-    match result {
+    match _result {
         Err(PluginError::GenericError(msg)) => {
             assert!(
                 msg.contains("duplicate"),
@@ -389,9 +389,9 @@ default_task:
     };
 
     let mut graph = Graph::new();
-    let result = load_scripts_from_fs(&config, &mut graph);
+    let _result = load_scripts_from_fs(&config, &mut graph);
 
-    match result {
+    match _result {
         Err(PluginError::GenericError(msg)) => {
             assert!(
                 msg.contains("multiple default_task"),
@@ -428,7 +428,7 @@ tasks:
     };
 
     let mut graph = Graph::new();
-    let result = load_scripts_from_fs(&config, &mut graph).unwrap();
+    let _result = load_scripts_from_fs(&config, &mut graph).unwrap();
 
     assert_eq!(graph.nodes.len(), 3);
 
@@ -473,7 +473,7 @@ tasks:
     };
 
     let mut graph = Graph::new();
-    let result = load_scripts_from_fs(&config, &mut graph).unwrap();
+    let _result = load_scripts_from_fs(&config, &mut graph).unwrap();
 
     assert_eq!(graph.nodes.len(), 2);
 }
@@ -506,8 +506,8 @@ tasks:
         script_paths: Some(vec![scripts_dir.to_string_lossy().into_owned()]),
     };
     let mut graph = Graph::new();
-    let result = load_scripts_from_fs(&config, &mut graph);
-    assert!(result.is_ok());
+    let _result = load_scripts_from_fs(&config, &mut graph);
+    assert!(_result.is_ok());
 
     assert_eq!(graph.nodes.len(), 300);
 }
@@ -528,9 +528,9 @@ tasks:
         script_paths: Some(vec![script_path.to_string_lossy().into_owned()]),
     };
     let mut graph = Graph::new();
-    let result = load_scripts_from_fs(&config, &mut graph);
+    let _result = load_scripts_from_fs(&config, &mut graph);
 
-    assert!(result.is_ok());
+    assert!(_result.is_ok());
     assert_eq!(graph.nodes.len(), 1);
     match &graph.nodes[0].kind {
         NodeKind::Task(td) => {
@@ -550,7 +550,7 @@ fn test_minimal_empty_yaml() {
         script_paths: Some(vec![script_path.to_string_lossy().into_owned()]),
     };
     let mut graph = Graph::new();
-    let result = load_scripts_from_fs(&config, &mut graph);
-    assert!(result.is_ok());
+    let _result = load_scripts_from_fs(&config, &mut graph);
+    assert!(_result.is_ok());
     assert_eq!(graph.nodes.len(), 0);
 }
