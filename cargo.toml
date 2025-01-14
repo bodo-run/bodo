@@ -2,40 +2,31 @@
 name = "bodo"
 version = "0.1.0"
 edition = "2021"
-authors = ["Mohsen"]
-description = "Task runner in Rust"
-
-[lib]
-path = "src/lib.rs"
-
-[[bin]]
-name = "bodo"
-path = "src/main.rs"
+description = "A modern task runner and build tool"
+authors = ["Mohsen Alizadeh <mohsen@alizadeh.us>"]
+license = "MIT"
+repository = "https://github.com/mohsen-alizadeh/bodo"
 
 [dependencies]
-anyhow = "1.0"
-chrono = "0.4"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 serde_yaml = "0.9"
-rayon = "1.7"
-notify = "6.1"
-dialoguer = "0.11"
-petgraph = "0.6"
-clap = { version = "4.4.11", features = ["derive"] }
+serde_json = "1.0"
 tokio = { version = "1.35.1", features = ["full"] }
 colored = "2.1.0"
-libc = "0.2.151"
-nix = "0.27.1"
+notify = "6.1"
 walkdir = "2.5"
 glob = "0.3"
 toml = "0.8"
+thiserror = "1.0"
+anyhow = "1.0"
+async-trait = "0.1"
+futures = "0.3"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+clap = { version = "4.4", features = ["derive"] }
 
 [dev-dependencies]
-assert_cmd = "2.0"
-predicates = { version = "3.0", features = ["regex"] }
 tempfile = "3.8"
-cargo-llvm-cov = "0.5"
-
-[package.metadata]
-llvm-cov = { no-default-features = true }
+tokio-test = "0.4"
+assert_cmd = "2.0"
+predicates = "3.0"

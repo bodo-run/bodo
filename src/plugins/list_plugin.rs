@@ -30,10 +30,6 @@ impl Plugin for ListPlugin {
         }
         Ok(())
     }
-}
-
-impl Default for ListPlugin {
+}impl Default for ListPlugin {
     fn default() -> Self {
         Self::new()
-    }
-}
