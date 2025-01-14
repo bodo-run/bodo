@@ -4,21 +4,21 @@ use std::collections::HashMap;
 pub type NodeId = u64;
 
 /// Represents the type of a node in the graph.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum NodeKind {
     Task(TaskData),
     Command(CommandData),
 }
 
 /// Represents data for a Task node.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct TaskData {
     pub name: String,
     pub description: Option<String>,
 }
 
 /// Represents data for a Command node.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CommandData {
     pub raw_command: String,
     pub description: Option<String>,
@@ -33,7 +33,7 @@ pub struct Node {
 }
 
 /// A directed edge in the graph (dependency or order).
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Edge {
     pub from: NodeId,
     pub to: NodeId,
