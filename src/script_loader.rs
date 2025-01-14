@@ -185,6 +185,105 @@ mod tests {
     use std::fs::{create_dir_all, write};
     use tempfile::tempdir;
 
+    // BodoConfig Tests
+    #[test]
+    fn test_default_config_when_no_bodo_toml() {
+        let config = load_bodo_config::<&str>(None).unwrap();
+        assert!(
+            config.script_paths.is_none(),
+            "Expected None for script_paths by default"
+        );
+    }
+
+    #[test]
+    fn test_load_valid_toml_config() {
+        let temp = tempdir().unwrap();
+        let config_path = temp.path().join("bodo.toml");
+
+        let toml_content = r#"
+script_paths = ["my-scripts/", "others/*.yaml"]
+        "#;
+
+        write(&config_path, toml_content).unwrap();
+
+        let loaded = load_bodo_config(Some(config_path)).unwrap();
+
+        assert_eq!(
+            loaded.script_paths,
+            Some(vec!["my-scripts/".to_string(), "others/*.yaml".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_load_invalid_toml_config() {
+        let temp = tempdir().unwrap();
+        let config_path = temp.path().join("bodo.toml");
+
+        let bad_toml = r#"
+script_paths = ["scripts/]
+"#;
+
+        write(&config_path, bad_toml).unwrap();
+
+        let result = load_bodo_config(Some(&config_path));
+        match result {
+            Err(PluginError::GenericError(msg)) => {
+                assert!(
+                    msg.contains("bodo.toml parse error"),
+                    "Should mention a TOML parse error"
+                );
+            }
+            _ => panic!("Expected GenericError for invalid TOML"),
+        }
+    }
+
+    #[test]
+    fn test_file_missing_read_permission() {
+        let temp = tempdir().unwrap();
+        let config_path = temp.path().join("bodo.toml");
+
+        write(&config_path, "script_paths = [\"scripts/\"]").unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&config_path).unwrap().permissions();
+            perms.set_mode(0o200); // Write-only
+            fs::set_permissions(&config_path, perms).unwrap();
+
+            let result = load_bodo_config(Some(&config_path));
+            match result {
+                Err(PluginError::GenericError(msg)) => {
+                    assert!(msg.contains("Cannot read bodo.toml"), "Expected read error");
+                }
+                _ => panic!("Expected error for unreadable file"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_unknown_fields_in_toml_are_ignored() {
+        let temp = tempdir().unwrap();
+        let config_path = temp.path().join("bodo.toml");
+
+        let extended_toml = r#"
+script_paths = ["scripts/"]
+some_extra_field = "Whatever"
+another_one = 123
+"#;
+        write(&config_path, extended_toml).unwrap();
+
+        let loaded = load_bodo_config(Some(&config_path)).unwrap();
+        assert_eq!(loaded.script_paths, Some(vec!["scripts/".to_string()]));
+    }
+
+    #[test]
+    fn test_specify_config_path_non_existent() {
+        let result = load_bodo_config(Some("nonexistent/bodo.toml"));
+        let config = result.unwrap();
+        assert!(config.script_paths.is_none());
+    }
+
     #[test]
     fn test_load_single_yaml_file() {
         let temp = tempdir().unwrap();
