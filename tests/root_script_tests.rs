@@ -229,7 +229,6 @@ default_task:
 }
 
 #[test]
-#[ignore]
 fn test_fail_fast_logic() {
     let temp = tempdir().unwrap();
     let project_root = temp.path();
@@ -243,8 +242,8 @@ default_task:
   concurrently_options:
     fail_fast: true
   concurrently:
-    - command: "echo Start1 && sleep 0.01 && exit 1"
-    - command: "echo Start2 && sleep 0.02 && echo 'You should never see me'"
+    - command: "mkfifo /tmp/test_pipe; echo Start1 && sleep 0.1 && exit 1"
+    - command: "echo Start2 && cat /tmp/test_pipe && echo 'You should never see me' && rm /tmp/test_pipe"
 "#,
     )
     .unwrap();
@@ -257,6 +256,7 @@ default_task:
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Start1"));
     assert!(!stdout.contains("You should never see me"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("failed"));
 }
 
 #[test]

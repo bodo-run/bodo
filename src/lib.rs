@@ -4,6 +4,7 @@ pub mod debug;
 pub mod env;
 pub mod graph;
 pub mod plugin;
+pub mod process;
 pub mod prompt;
 pub mod task;
 pub mod watch;
