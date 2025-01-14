@@ -3,9 +3,8 @@ use std::error::Error;
 use std::fmt;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
 
 use crate::config::{
     load_bodo_config, load_script_config, ColorSpec, ConcurrentItem, OutputConfig, TaskConfig,
@@ -13,6 +12,7 @@ use crate::config::{
 use crate::env::EnvManager;
 use crate::plugin::print_command_plugin::PrintCommandPlugin;
 use crate::plugin::PluginManager;
+use crate::process::ProcessManager;
 use crate::prompt::PromptManager;
 use colored::{ColoredString, Colorize};
 
@@ -367,15 +367,9 @@ impl TaskManager {
         // Gather concurrency options
         let concurrently_options = self.config.concurrently_options.clone();
         let fail_fast = concurrently_options.as_ref().is_some_and(|c| c.fail_fast);
-        let timeout_secs = concurrently_options
-            .as_ref()
-            .and_then(|c| c.timeout)
-            .unwrap_or(0);
 
-        // This will hold all children across threads
-        let children = Arc::new(Mutex::new(Vec::<(String, ConcurrentChild)>::new()));
-        // We'll store success/failure in a shared RwLock so any thread can set failure.
-        let any_failure = Arc::new(RwLock::new(None::<String>)); // store error message if any
+        // Create a new process manager with the fail_fast setting
+        let mut process_manager = ProcessManager::new(fail_fast);
 
         // Spawn each item
         for (index, item) in items.into_iter().enumerate() {
@@ -423,126 +417,19 @@ impl TaskManager {
             // Let the plugin manager know
             self.plugin_manager.on_command_ready(&command, &task_key)?;
 
-            // Spawn the process and store in the shared list
-            let child = self.spawn_and_wait_concurrent(&command, &task_key, output_conf)?;
-            let mut locked_children = children.lock().unwrap();
-            locked_children.push((task_key.clone(), child));
+            // Prepare the prefix and color settings
+            let prefix_settings = self.compute_prefix_settings(&task_key, &command, output_conf);
+
+            // Spawn the process using the process manager
+            process_manager.spawn_command(
+                &prefix_settings.prefix,
+                &command,
+                prefix_settings.color,
+            )?;
         }
 
-        // If we have a timeout, start a watchdog that kills everything on expiry
-        let children_clone_for_watchdog = Arc::clone(&children);
-        let any_failure_watchdog = Arc::clone(&any_failure);
-        let watchdog_handle = if timeout_secs > 0 {
-            let deadline = Instant::now() + Duration::from_secs(timeout_secs);
-            Some(thread::spawn(move || {
-                while Instant::now() < deadline {
-                    // if something already failed, no need to check further
-                    if any_failure_watchdog.read().unwrap().is_some() {
-                        return;
-                    }
-                    thread::sleep(Duration::from_millis(200));
-                }
-                // If we got here, time is up
-                let mut locked = children_clone_for_watchdog.lock().unwrap();
-                for (_, ch) in locked.iter_mut() {
-                    let _ = ch.kill(); // kill them all
-                }
-                // Mark any_failure so everyone knows we timed out
-                *any_failure_watchdog.write().unwrap() = Some(format!(
-                    "Concurrent tasks timed out after {}s",
-                    timeout_secs
-                ));
-            }))
-        } else {
-            None
-        };
-
-        // Wait for processes in a loop until they're done or we have a failure
-        // We track how many are still alive
-        loop {
-            let mut still_alive = 0;
-            {
-                let mut locked = children.lock().unwrap();
-                for (task_key, ch) in locked.iter_mut() {
-                    // If there's already a failure, kill everything
-                    if any_failure.read().unwrap().is_some() {
-                        let _ = ch.kill();
-                        continue;
-                    }
-                    // Poll the status
-                    match ch.child.try_wait() {
-                        Ok(Some(status)) => {
-                            // Process exited
-                            if !status.success() {
-                                let code = status.code().unwrap_or(1);
-                                // Mark failure
-                                *any_failure.write().unwrap() = Some(format!(
-                                    "Task '{}' failed (exit code: {})",
-                                    task_key, code
-                                ));
-
-                                if fail_fast {
-                                    // Kill the rest immediately
-                                    for (_, other_child) in locked.iter_mut() {
-                                        let _ = other_child.kill();
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                        Ok(None) => {
-                            // Still running
-                            still_alive += 1;
-                        }
-                        Err(e) => {
-                            // Some error
-                            *any_failure.write().unwrap() =
-                                Some(format!("Error checking status of '{}': {}", task_key, e));
-                            if fail_fast {
-                                // kill everyone
-                                for (_, other_child) in locked.iter_mut() {
-                                    let _ = other_child.kill();
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if any_failure.read().unwrap().is_some() {
-                break; // already have an error, we're done
-            }
-            if still_alive == 0 {
-                // All are finished successfully
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
-
-        // Wait for all threads (stdout/stderr) to complete
-        {
-            let mut locked = children.lock().unwrap();
-            for (_, child) in locked.iter_mut() {
-                let _ = child.wait(); // to ensure output threads join
-            }
-        }
-
-        // If we had a watchdog thread, wait on it too
-        if let Some(handle) = watchdog_handle {
-            let _ = handle.join();
-        }
-
-        // Check final error
-        if let Some(ref err) = *any_failure.read().unwrap() {
-            // Create a TaskError from the error string
-            let task_error = TaskError(err.clone());
-            // Let the plugin manager know
-            self.plugin_manager
-                .on_error(parent_task_name, &task_error)?;
-            // Return error
-            return Err(Box::new(task_error));
-        }
+        // Run all processes concurrently and wait for completion
+        process_manager.run_concurrently()?;
 
         Ok(())
     }
