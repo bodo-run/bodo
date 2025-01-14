@@ -174,9 +174,9 @@ impl BodoPlugin for PrintCommandPlugin {
             let prefix = if task_name.starts_with(".:") {
                 format!("[{}]", task_name)
             } else {
-                format!("> {}", task_name)
+                format!("> {}: ", task_name)
             };
-            println!("{} {}", prefix, command);
+            println!("{}{}", prefix, command);
         }
     }
 
