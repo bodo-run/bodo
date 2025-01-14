@@ -66,7 +66,7 @@ You are given a Rust project and some test failures.
 Your task is to help the user debug the test failures.
 You should provide a detailed explanation of the test failures and how to fix them.
 Keep your response concise and to the point.
-Write **exciting** and **clean** code.
+Write **high-quality** and **clean** code.
 `;
 
 const data = JSON.stringify({

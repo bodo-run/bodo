@@ -563,3 +563,57 @@ Not typically a big issue at early stage, but you could do basic tests loading 1
 Next Steps 1. Unit Tests: Place them in the same file under a #[cfg(test)] mod tests or in a separate tests/ folder. 2. Integration Tests: Typically live in the tests/ directory, pulling in your library as a normal crate. 3. Mock File Structures: For file-based tests (like bodo.toml, script.yaml), you can use tempfile or assert_fs crates to create ephemeral directories.
 
 This covers a broad range of scenarios so that once you add plugins or advanced features later, you’ll have confidence the base graph-loading logic remains solid.
+
+## Development Plan
+
+    1.	Add plugin-specific tests. Include tests for each plugin lifecycle method (on_init, on_graph_build, etc.). Verify that plugins correctly modify node metadata and respond to errors.
+    2.	Expand concurrency tests:
+    •	Confirm fail_fast behavior kills remaining tasks if one fails.
+    •	Validate timeouts by forcibly causing tasks to sleep beyond the deadline.
+    •	Check output prefixing in concurrent tasks and make sure logs are readable.
+    3.	Implement watch mode tests:
+    •	Use a temporary directory and a mocked file watch to trigger task reruns on file changes.
+    •	Ensure that only relevant tasks rerun and that concurrency logic still holds.
+    4.	Introduce environment and path plugin validations:
+    •	Confirm PATH merges correctly (especially with multiple exec_paths).
+    •	Test environment variable conflicts and overrides.
+    5.	Improve error handling tests:
+    •	Raise and catch custom plugin errors.
+    •	Confirm graceful shutdown or fallback when one plugin fails.
+    6.	Provide a CLI integration test:
+    •	Build a small binary that runs Bodo commands.
+    •	Validate arguments, flags, and subcommands (if any).
+    •	Capture stdout/stderr to confirm correct usage and error messages.
+    7.	Add advanced dependency tests:
+    •	Check that cycles are detected or prevented.
+    •	Validate complex pre/post dependencies across multiple scripts.
+    8.	Ensure more coverage for task properties:
+    •	Confirm working_dir (cwd) changes command execution directory.
+    •	Check handling of silent tasks or tasks without any command.
+    9.	Expand the documentation plugin (or “list plugin”) and test:
+    •	Ensure tasks and commands are listed in expected formats.
+    •	Test color/no-color output, and any config overrides.
+    10.	Optimize performance tests:
+
+    •	Push node count higher (e.g., 50k tasks) to find any bottlenecks.
+    •	Confirm memory usage remains stable under large loads.
+
+    11.	Consider integration with external shells or interpreters:
+
+    •	Python scripts, Node.js scripts, etc.
+    •	Test that PATH or environment changes apply correctly for each shell or interpreter type.
+
+    12.	Start capturing code coverage metrics:
+
+    •	Integrate coverage reporting to identify untested lines.
+    •	Set thresholds to avoid regressions.
+
+    13.	Release a minimal alpha version:
+
+    •	Include essential features: graph building, concurrency, plugin basics.
+    •	Gather feedback on CLI, performance, error messages.
+
+    14.	Plan for future expansions:
+
+    •	Plugin for auto-completion or interactive features.
+    •	Reusable plugin architecture for external contributions.
