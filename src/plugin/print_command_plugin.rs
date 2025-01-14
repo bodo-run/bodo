@@ -171,6 +171,40 @@ impl Default for PrintCommandPlugin {
 impl BodoPlugin for PrintCommandPlugin {
     fn on_command_ready(&self, command: &str, task_name: &str) {
         if !command.is_empty() {
+            // Check if task is silent by looking at the task config
+            let is_silent = if task_name.contains(':') {
+                // This is a subtask, format is "script:task"
+                let parts: Vec<&str> = task_name.split(':').collect();
+                if parts.len() == 2 {
+                    if let Ok(script_config) = crate::config::load_script_config(parts[0]) {
+                        if let Some(tasks) = script_config.tasks {
+                            if let Some(task) = tasks.get(parts[1]) {
+                                task.silent.unwrap_or(false)
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                // This is a default task
+                if let Ok(script_config) = crate::config::load_script_config(task_name) {
+                    script_config.default_task.silent.unwrap_or(false)
+                } else {
+                    false
+                }
+            };
+
+            if is_silent {
+                return;
+            }
+
             let prefix = if task_name.starts_with(".:") {
                 format!("[{}]", task_name)
             } else {
