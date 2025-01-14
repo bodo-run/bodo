@@ -5,6 +5,7 @@ use crate::{
 };
 use std::path::PathBuf;
 
+#[derive(Default)]
 pub struct GraphManager {
     pub graph: Graph,
     pub config: BodoConfig,

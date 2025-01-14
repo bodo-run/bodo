@@ -8,6 +8,7 @@ use crate::{
 };
 
 /// A plugin that sets a prefix for each node's output, e.g. "[build]" or "[taskX]".
+#[derive(Default)]
 pub struct PrefixPlugin {
     pub prefix_format: String,
 }

@@ -1,6 +1,5 @@
-use bodo::manager::GraphManager;
 use clap::{Parser, Subcommand};
-use std::{error::Error, path::PathBuf};
+use std::error::Error;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

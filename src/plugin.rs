@@ -19,6 +19,7 @@ pub trait Plugin: Send + Any {
     fn as_any(&self) -> &dyn Any;
 }
 
+#[derive(Default)]
 pub struct PluginManager {
     plugins: Vec<Box<dyn Plugin>>,
 }

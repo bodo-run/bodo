@@ -1,16 +1,19 @@
-use async_trait::async_trait;
-use std::any::Any;
 use std::path::PathBuf;
+
+use async_trait::async_trait;
+use serde_json::Value;
+use std::any::Any;
 
 use crate::{
     errors::Result,
-    graph::{Graph, NodeKind},
+    graph::{Graph, NodeKind, TaskData},
     plugin::{Plugin, PluginConfig},
 };
 
 /// PathPlugin merges any "exec_paths" from the tasks/scripts into the node's environment PATH.
+#[derive(Default)]
 pub struct PathPlugin {
-    pub default_paths: Vec<PathBuf>,
+    default_paths: Vec<PathBuf>,
 }
 
 impl PathPlugin {
@@ -29,52 +32,43 @@ impl Plugin for PathPlugin {
 
     async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
         if let Some(options) = &config.options {
-            if let Some(paths) = options.get("default_paths") {
-                if let Some(paths) = paths.as_array() {
-                    self.default_paths = paths
-                        .iter()
-                        .filter_map(|p| p.as_str().map(PathBuf::from))
-                        .collect();
-                }
+            if let Some(Value::Array(paths)) = options.get("default_paths") {
+                self.default_paths = paths
+                    .iter()
+                    .filter_map(|p| p.as_str().map(PathBuf::from))
+                    .collect();
             }
         }
         Ok(())
     }
 
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
-        for node in &mut graph.nodes {
-            let mut paths = self.default_paths.clone();
-
-            // Add any node-specific paths from metadata
-            if let Some(node_paths) = node.metadata.get("exec_paths") {
-                if let Ok(mut extra_paths) = serde_json::from_str::<Vec<PathBuf>>(node_paths) {
-                    paths.append(&mut extra_paths);
-                }
-            }
-
-            // Add working directory if specified
-            match &node.kind {
-                NodeKind::Task(task) => {
-                    if let Some(dir) = &task.working_dir {
-                        paths.push(dir.into());
+        for node in graph.nodes.iter_mut() {
+            if let NodeKind::Task(TaskData {
+                working_dir: Some(dir),
+                ..
+            }) = &node.kind
+            {
+                let mut paths = self.default_paths.clone();
+                if let Some(exec_paths) = node.metadata.get("exec_paths") {
+                    if let Ok(Value::Array(exec_paths)) = serde_json::from_str(exec_paths) {
+                        paths.extend(
+                            exec_paths
+                                .iter()
+                                .filter_map(|p| p.as_str().map(PathBuf::from)),
+                        );
                     }
                 }
-                NodeKind::Command(cmd) => {
-                    if let Some(dir) = &cmd.working_dir {
-                        paths.push(dir.into());
-                    }
-                }
+                paths.push(PathBuf::from(dir));
+
+                let path_str = paths
+                    .iter()
+                    .filter_map(|p| p.to_str())
+                    .collect::<Vec<_>>()
+                    .join(":");
+
+                node.metadata.insert("env.PATH".to_string(), path_str);
             }
-
-            // Convert paths to string and join with OS path separator
-            let path_str = paths
-                .iter()
-                .filter_map(|p| p.to_str())
-                .collect::<Vec<_>>()
-                .join(&std::env::var("PATH_SEPARATOR").unwrap_or_else(|_| String::from(":")));
-
-            // Set the PATH environment variable in metadata
-            node.metadata.insert("env.PATH".to_string(), path_str);
         }
         Ok(())
     }

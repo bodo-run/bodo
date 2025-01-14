@@ -9,6 +9,7 @@ use crate::{
 
 /// A plugin that deliberately fails during `on_init` or `on_graph_build`.
 /// Useful for testing error handling in the PluginManager.
+#[derive(Default)]
 pub struct FakeFailingPlugin {
     pub fail_on_init: bool,
     pub fail_on_graph_build: bool,
