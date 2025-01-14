@@ -183,6 +183,10 @@ fn test_end_to_end_no_scripts_found_is_okay() -> Result<(), Box<dyn Error>> {
     let temp = tempdir()?;
     let root_path = temp.path();
 
+    // Create an empty scripts directory
+    let scripts_dir = root_path.join("scripts");
+    create_dir_all(&scripts_dir)?;
+
     std::env::set_current_dir(root_path)?;
 
     let mut manager = GraphManager::new();
