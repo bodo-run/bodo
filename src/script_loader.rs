@@ -1,4 +1,3 @@
-use glob::glob;
 use serde::Deserialize;
 use std::{
     fs,
@@ -9,6 +8,8 @@ use crate::{
     errors::PluginError,
     graph::{CommandData, Graph, NodeKind, TaskData},
 };
+
+use glob::glob;
 
 #[derive(Debug, Deserialize, Default)]
 pub struct BodoConfig {
@@ -39,6 +40,60 @@ pub enum TaskOrCommand {
         #[serde(default)]
         description: Option<String>,
     },
+}
+
+fn validate_yaml_for_duplicates(path: &Path) -> Result<(), PluginError> {
+    let content = std::fs::read_to_string(path).map_err(|e| {
+        PluginError::GenericError(format!("Cannot read file {}: {}", path.display(), e))
+    })?;
+
+    // First, parse the content line by line to detect duplicate keys
+    let mut default_count = 0;
+    let mut task_names = std::collections::HashSet::new();
+    let mut in_tasks = false;
+    let mut tasks_indent = 0;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        // Calculate indentation level
+        let indent = line.chars().take_while(|c| *c == ' ').count();
+
+        // Check for default_task at root level
+        if !in_tasks && trimmed.starts_with("default_task:") {
+            default_count += 1;
+            if default_count > 1 {
+                return Err(PluginError::GenericError(format!(
+                    "multiple default_task fields found in {}",
+                    path.display()
+                )));
+            }
+        }
+
+        // Check for tasks section
+        if trimmed == "tasks:" {
+            in_tasks = true;
+            tasks_indent = indent;
+            continue;
+        }
+
+        // Inside tasks section, look for task names
+        if in_tasks && indent == tasks_indent + 2 && trimmed.ends_with(':') {
+            let task_name = trimmed.trim_end_matches(':').to_string();
+            if !task_names.insert(task_name.clone()) {
+                return Err(PluginError::GenericError(format!(
+                    "duplicate task name '{}' found in {}",
+                    task_name,
+                    path.display()
+                )));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Convert ScriptFile to Graph nodes.
@@ -207,12 +262,18 @@ fn process_glob_pattern(pattern: &str, graph: &mut Graph) -> Result<(), PluginEr
 
 fn load_single_yaml_file(path: &Path, graph: &mut Graph) -> Result<(), PluginError> {
     println!("Loading YAML file: {:?}", path);
+
+    // Validate YAML structure first
+    validate_yaml_for_duplicates(path)?;
+
     let content = fs::read_to_string(path).map_err(|e| {
         PluginError::GenericError(format!("File read error for {}: {}", path.display(), e))
     })?;
+
     let parsed: ScriptFile = serde_yaml::from_str(&content).map_err(|e| {
         PluginError::GenericError(format!("YAML parse error in {}: {}", path.display(), e))
     })?;
+
     println!("Parsed YAML: {:?}", parsed);
     parsed.to_graph(graph)?;
     Ok(())

@@ -334,3 +334,223 @@ tasks:
         _ => panic!("Expected Task node named 'alpha'"),
     }
 }
+
+#[test]
+fn test_tasks_with_same_name_in_one_file() {
+    let temp = tempdir().unwrap();
+    let script_path = temp.path().join("duplicate.yaml");
+
+    let yaml = r#"
+default_task:
+  command: "echo 'Default'"
+tasks:
+  build:
+    command: "echo 'Build #1'"
+  build:
+    command: "echo 'Build #2'"
+"#;
+
+    write(&script_path, yaml).unwrap();
+
+    let config = BodoConfig {
+        script_paths: Some(vec![script_path.to_string_lossy().into_owned()]),
+    };
+
+    let mut graph = Graph::new();
+    let result = load_scripts_from_fs(&config, &mut graph);
+
+    match result {
+        Err(PluginError::GenericError(msg)) => {
+            assert!(
+                msg.contains("duplicate"),
+                "Should mention duplicate task name"
+            );
+        }
+        _ => panic!("Expected an error for duplicate tasks"),
+    }
+}
+
+#[test]
+fn test_multiple_default_tasks_in_one_file() {
+    let temp = tempdir().unwrap();
+    let script_path = temp.path().join("multiple_defaults.yaml");
+
+    let yaml = r#"
+default_task:
+  command: "echo 'Default #1'"
+default_task:
+  command: "echo 'Default #2'"
+"#;
+
+    write(&script_path, yaml).unwrap();
+
+    let config = BodoConfig {
+        script_paths: Some(vec![script_path.to_string_lossy().into_owned()]),
+    };
+
+    let mut graph = Graph::new();
+    let result = load_scripts_from_fs(&config, &mut graph);
+
+    match result {
+        Err(PluginError::GenericError(msg)) => {
+            assert!(
+                msg.contains("multiple default_task"),
+                "Should mention multiple defaults"
+            );
+        }
+        _ => panic!("Expected an error for multiple default tasks"),
+    }
+}
+
+#[test]
+fn test_pre_deps_are_ignored_or_stored_for_future() {
+    let temp = tempdir().unwrap();
+    let script_path = temp.path().join("pre_deps.yaml");
+
+    let yaml = r#"
+default_task:
+  pre_deps:
+    - task: test
+    - task: lint
+  command: "echo 'Default with deps'"
+
+tasks:
+  test:
+    command: "cargo test"
+  lint:
+    command: "cargo clippy"
+"#;
+
+    write(&script_path, yaml).unwrap();
+
+    let config = BodoConfig {
+        script_paths: Some(vec![script_path.to_string_lossy().into_owned()]),
+    };
+
+    let mut graph = Graph::new();
+    let result = load_scripts_from_fs(&config, &mut graph).unwrap();
+
+    assert_eq!(graph.nodes.len(), 3);
+
+    // Verify the nodes exist but don't check edges yet since pre_deps isn't implemented
+    let node_names: Vec<String> = graph
+        .nodes
+        .iter()
+        .filter_map(|n| match &n.kind {
+            NodeKind::Task(t) => Some(t.name.clone()),
+            _ => None,
+        })
+        .collect();
+
+    assert!(node_names.contains(&"test".to_string()));
+    assert!(node_names.contains(&"lint".to_string()));
+}
+
+#[test]
+fn test_env_and_exec_paths_ignored_for_now() {
+    let temp = tempdir().unwrap();
+    let script_path = temp.path().join("env_exec.yaml");
+
+    let yaml = r#"
+default_task:
+  command: "echo 'Building...'"
+  env:
+    RUST_BACKTRACE: "1"
+  exec_paths:
+    - "./node_modules/.bin"
+
+tasks:
+  release:
+    command: "cargo build --release"
+    env:
+      RUST_LOG: "debug"
+"#;
+
+    write(&script_path, yaml).unwrap();
+
+    let config = BodoConfig {
+        script_paths: Some(vec![script_path.to_string_lossy().into_owned()]),
+    };
+
+    let mut graph = Graph::new();
+    let result = load_scripts_from_fs(&config, &mut graph).unwrap();
+
+    assert_eq!(graph.nodes.len(), 2);
+}
+
+#[test]
+fn test_large_number_of_scripts() {
+    let temp = tempdir().unwrap();
+    let scripts_dir = temp.path().join("scripts");
+    create_dir_all(&scripts_dir).unwrap();
+
+    for i in 0..100 {
+        let filename = format!("script_{}.yaml", i);
+        let path = scripts_dir.join(filename);
+
+        let content = format!(
+            r#"
+default_task:
+  command: "echo 'Default {i}'"
+tasks:
+  taskA:
+    command: "echo 'A{i}'"
+  taskB:
+    command: "echo 'B{i}'"
+"#
+        );
+        write(path, content).unwrap();
+    }
+
+    let config = BodoConfig {
+        script_paths: Some(vec![scripts_dir.to_string_lossy().into_owned()]),
+    };
+    let mut graph = Graph::new();
+    let result = load_scripts_from_fs(&config, &mut graph);
+    assert!(result.is_ok());
+
+    assert_eq!(graph.nodes.len(), 300);
+}
+
+#[test]
+fn test_task_with_no_command() {
+    let temp = tempdir().unwrap();
+    let script_path = temp.path().join("no_command.yaml");
+
+    let yaml = r#"
+tasks:
+  weird:
+    description: "No command here"
+"#;
+    write(&script_path, yaml).unwrap();
+
+    let config = BodoConfig {
+        script_paths: Some(vec![script_path.to_string_lossy().into_owned()]),
+    };
+    let mut graph = Graph::new();
+    let result = load_scripts_from_fs(&config, &mut graph);
+
+    assert!(result.is_ok());
+    assert_eq!(graph.nodes.len(), 1);
+    match &graph.nodes[0].kind {
+        NodeKind::Task(td) => {
+            assert_eq!(td.name, "weird");
+        }
+        _ => panic!("Expected a Task node"),
+    }
+}
+
+#[test]
+fn test_minimal_empty_yaml() {
+    let temp = tempdir().unwrap();
+    let script_path = temp.path().join("empty.yaml");
+    write(&script_path, "").unwrap();
+
+    let config = BodoConfig {
+        script_paths: Some(vec![script_path.to_string_lossy().into_owned()]),
+    };
+    let mut graph = Graph::new();
+    let result = load_scripts_from_fs(&config, &mut graph);
+    assert!(result.is_ok());
+    assert_eq!(graph.nodes.len(), 0);
+}

@@ -9,7 +9,12 @@ patterns = [
     ".rustup/",
     "test/",
     "examples/",
-    "repo-serialized/"
+    "repo-serialized/",
+    ".vscode/",
+    ".github/",
+    ".gitignore",
+    ".cursorrules",
+    "scripts/",
 ]
 
 # Define priority rules for processing order

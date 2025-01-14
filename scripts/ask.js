@@ -1,5 +1,12 @@
 #!/usr/bin/env node
 
+/**
+ * @fileoverview
+ * This script asks DeepSeek to help with debugging a Rust project.
+ * It serializes the project, gets test failures, and sends the content to DeepSeek.
+ * The response is then printed to the console.
+ */
+
 const { execSync } = require('child_process');
 const https = require('https');
 
@@ -20,7 +27,9 @@ if (!token) {
 }
 
 debug('Serializing...');
-const serialized = execSync('yek -s').toString().trim();
+const serialized = execSync('yek --stream --max-size 5').toString().trim();
+
+debug(`Serialized: ${serialized.length.toLocaleString()} characters`);
 
 // Get test failures
 debug('Getting test failures...');
@@ -49,12 +58,22 @@ const truncateAndEscape = (str) => {
     return JSON.stringify(str);
 };
 
+const content = truncateAndEscape(`Repo:\n\n${serialized}\n\nTest failures:\n\n${testFailures}`);
+const systemPrompt = 
+`You are a an expert Rust developer. You are familiar with the Rust language and its ecosystem.
+You use modern Rust and the latest Rust features.
+You are given a Rust project and some test failures.
+Your task is to help the user debug the test failures.
+You should provide a detailed explanation of the test failures and how to fix them.
+Keep your response concise and to the point.
+Write **exciting** and **clean** code.
+`;
+
 const data = JSON.stringify({
     model: 'deepseek-chat',
     messages: [
-        { role: 'system', content: 'You are a helpful assistant.' },
-        { role: 'user', content: truncateAndEscape(serialized) },
-        { role: 'user', content: truncateAndEscape(testFailures) }
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content }
     ],
     stream: false
 });
