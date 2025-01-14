@@ -113,9 +113,12 @@ impl ProcessManager {
                                 break;
                             }
                             if let Ok(line) = line {
-                                let prefix = format!("[{}]", name);
-                                let prefix_colored = apply_color(&prefix, color.as_ref());
-                                println!("{} {}", prefix_colored, line);
+                                // Don't print if stop signal is set
+                                if !stop_signal.load(Ordering::SeqCst) {
+                                    let prefix = format!("[{}]", name);
+                                    let prefix_colored = apply_color(&prefix, color.as_ref());
+                                    println!("{} {}", prefix_colored, line);
+                                }
                             }
                         }
                     });
@@ -133,9 +136,12 @@ impl ProcessManager {
                                 break;
                             }
                             if let Ok(line) = line {
-                                let prefix = format!("[{}]", name);
-                                let prefix_colored = apply_color(&prefix, color.as_ref());
-                                eprintln!("{} {}", prefix_colored, line);
+                                // Don't print if stop signal is set
+                                if !stop_signal.load(Ordering::SeqCst) {
+                                    let prefix = format!("[{}]", name);
+                                    let prefix_colored = apply_color(&prefix, color.as_ref());
+                                    eprintln!("{} {}", prefix_colored, line);
+                                }
                             }
                         }
                     });

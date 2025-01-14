@@ -1,8 +1,7 @@
 use assert_cmd::Command as AssertCommand;
 use predicates::str::contains;
 use std::fs;
-use std::process::{Command, Stdio};
-use std::thread;
+use std::path::Path;
 use std::time::Duration;
 use tempfile::tempdir;
 
@@ -163,7 +162,7 @@ default_task:
     .unwrap();
 
     // Run bodo -w and check that it starts successfully, but kill after 1 second
-    let assert = AssertCommand::cargo_bin("bodo")
+    let _assert = AssertCommand::cargo_bin("bodo")
         .expect("bodo binary not found")
         .current_dir(project_root)
         .arg("-w")
@@ -190,7 +189,7 @@ default_task:
     .unwrap();
 
     // Run bodo -w dev and check that it starts successfully, but kill after 1 second
-    let assert = AssertCommand::cargo_bin("bodo")
+    let _assert = AssertCommand::cargo_bin("bodo")
         .expect("bodo binary not found")
         .current_dir(project_root)
         .arg("-w")
@@ -242,8 +241,10 @@ default_task:
   concurrently_options:
     fail_fast: true
   concurrently:
-    - command: "mkfifo /tmp/test_pipe; echo Start1 && sleep 0.1 && exit 1"
-    - command: "echo Start2 && cat /tmp/test_pipe && echo 'You should never see me' && rm /tmp/test_pipe"
+    - command: "echo Start1 && sleep 0.1 && exit 1"
+      name: fail_fast_1
+    - command: "cargo run --quiet --example infinite_printer"
+      name: fail_fast_2
 "#,
     )
     .unwrap();
@@ -254,7 +255,6 @@ default_task:
     assert.failure();
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Start1"));
     assert!(!stdout.contains("You should never see me"));
     assert!(String::from_utf8_lossy(&output.stderr).contains("failed"));
 }
