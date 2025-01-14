@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use std::any::Any;
 use std::path::PathBuf;
 
 use crate::{
@@ -76,5 +77,9 @@ impl Plugin for PathPlugin {
             node.metadata.insert("env.PATH".to_string(), path_str);
         }
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }

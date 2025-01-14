@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use std::any::Any;
 
 use crate::{
     errors::Result,
@@ -53,5 +54,9 @@ impl Plugin for PrefixPlugin {
             node.metadata.insert("prefix".to_string(), prefix);
         }
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
