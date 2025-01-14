@@ -1,18 +1,20 @@
+use async_trait::async_trait;
+use std::any::Any;
+
 use crate::{
     errors::{BodoError, Result},
     graph::Graph,
     plugin::{Plugin, PluginConfig},
 };
-use async_trait::async_trait;
-use std::any::Any;
 
-/// A plugin that fails on init or on graph build, depending on flags.
-pub struct FailingPlugin {
-    fail_on_init: bool,
-    fail_on_graph_build: bool,
+/// A plugin that deliberately fails during `on_init` or `on_graph_build`.
+/// Useful for testing error handling in the PluginManager.
+pub struct FakeFailingPlugin {
+    pub fail_on_init: bool,
+    pub fail_on_graph_build: bool,
 }
 
-impl FailingPlugin {
+impl FakeFailingPlugin {
     pub fn new(fail_on_init: bool, fail_on_graph_build: bool) -> Self {
         Self {
             fail_on_init,
@@ -22,62 +24,28 @@ impl FailingPlugin {
 }
 
 #[async_trait]
-impl Plugin for FailingPlugin {
+impl Plugin for FakeFailingPlugin {
     fn name(&self) -> &'static str {
-        "FailingPlugin"
+        "FakeFailingPlugin"
     }
 
     async fn on_init(&mut self, _config: &PluginConfig) -> Result<()> {
         if self.fail_on_init {
-            Err(BodoError::PluginError(
-                "FailingPlugin forced fail on init".into(),
-            ))
-        } else {
-            Ok(())
+            return Err(BodoError::PluginError(
+                "Intentional failure in on_init".to_string(),
+            ));
         }
+        Ok(())
     }
 
     async fn on_graph_build(&mut self, _graph: &mut Graph) -> Result<()> {
         if self.fail_on_graph_build {
-            Err(BodoError::PluginError(
-                "FailingPlugin forced fail on graph build".into(),
-            ))
-        } else {
-            Ok(())
+            return Err(BodoError::PluginError(
+                "Intentional failure in on_graph_build".to_string(),
+            ));
         }
-    }
-
-    fn on_task_start(&mut self) {}
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-/// A plugin that always succeeds. Useful for verifying others still run if we ignore failures.
-pub struct SucceedingPlugin;
-
-impl SucceedingPlugin {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-#[async_trait]
-impl Plugin for SucceedingPlugin {
-    fn name(&self) -> &'static str {
-        "SucceedingPlugin"
-    }
-
-    async fn on_init(&mut self, _config: &PluginConfig) -> Result<()> {
         Ok(())
     }
-
-    async fn on_graph_build(&mut self, _graph: &mut Graph) -> Result<()> {
-        Ok(())
-    }
-
-    fn on_task_start(&mut self) {}
 
     fn as_any(&self) -> &dyn Any {
         self
