@@ -1,103 +1,95 @@
-use petgraph::graph::DiGraph;
 use std::collections::HashMap;
 
-pub struct TaskGraph {
-    graph: DiGraph<String, ()>,
-    node_map: HashMap<String, petgraph::graph::NodeIndex>,
+/// Unique identifier for a node in the graph
+pub type NodeId = u64;
+
+/// Represents the type of a node in the graph.
+/// Task: a structured set of pre/post dependencies, environment, etc.
+/// Command: a simpler stand-alone command (like a shell script).
+#[derive(Debug)]
+pub enum NodeKind {
+    Task(TaskData),
+    Command(CommandData),
 }
 
-impl TaskGraph {
-    pub fn new() -> Self {
-        TaskGraph {
-            graph: DiGraph::new(),
-            node_map: HashMap::new(),
-        }
-    }
-
-    pub fn add_task(&mut self, task: String) {
-        if let std::collections::hash_map::Entry::Vacant(e) = self.node_map.entry(task.clone()) {
-            let node_idx = self.graph.add_node(task);
-            e.insert(node_idx);
-        }
-    }
-
-    pub fn add_dependency(&mut self, task: String, dependency: String) {
-        self.add_task(task.clone());
-        self.add_task(dependency.clone());
-
-        let task_idx = self.node_map[&task];
-        let dep_idx = self.node_map[&dependency];
-
-        if !self.graph.contains_edge(dep_idx, task_idx) {
-            self.graph.add_edge(dep_idx, task_idx, ());
-        }
-    }
-
-    pub fn get_execution_order(&self) -> Vec<String> {
-        let mut order = Vec::new();
-        let mut visited = HashMap::new();
-
-        for node in self.graph.node_indices() {
-            self.visit_node(node, &mut visited, &mut order);
-        }
-
-        order
-    }
-
-    fn visit_node(
-        &self,
-        node: petgraph::graph::NodeIndex,
-        visited: &mut HashMap<petgraph::graph::NodeIndex, bool>,
-        order: &mut Vec<String>,
-    ) {
-        if visited.contains_key(&node) {
-            return;
-        }
-
-        visited.insert(node, true);
-
-        for neighbor in self
-            .graph
-            .neighbors_directed(node, petgraph::Direction::Incoming)
-        {
-            self.visit_node(neighbor, visited, order);
-        }
-
-        if let Some(task) = self.graph.node_weight(node) {
-            order.push(task.clone());
-        }
-    }
+#[derive(Debug)]
+pub struct TaskData {
+    pub name: String,
+    pub description: Option<String>,
+    // Possibly references to concurrency settings, dependencies, etc.
 }
 
-impl Default for TaskGraph {
+#[derive(Debug)]
+pub struct CommandData {
+    pub raw_command: String,
+    pub description: Option<String>,
+}
+
+/// A node in the graph. Could represent either a task or a single command.
+#[derive(Debug)]
+pub struct Node {
+    pub id: NodeId,
+    pub kind: NodeKind,
+    // Arbitrary metadata for plugins to read/write.
+    pub metadata: HashMap<String, String>,
+}
+
+/// Directed edge representing a dependency or an execution order constraint.
+#[derive(Debug)]
+pub struct Edge {
+    pub from: NodeId,
+    pub to: NodeId,
+}
+
+/// The core structure to hold tasks, commands, and the edges between them.
+#[derive(Debug)]
+pub struct Graph {
+    pub nodes: Vec<Node>,
+    pub edges: Vec<Edge>,
+    // Optionally, track node lookup by name, etc.
+}
+
+impl Default for Graph {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl Graph {
+    /// Creates a new, empty graph.
+    pub fn new() -> Self {
+        Self {
+            nodes: Vec::new(),
+            edges: Vec::new(),
+        }
+    }
 
-    #[test]
-    fn test_task_graph() {
-        let mut graph = TaskGraph::new();
+    /// Add a node to the graph and return its NodeId.
+    pub fn add_node(&mut self, kind: NodeKind) -> NodeId {
+        let id = self.nodes.len() as NodeId;
+        self.nodes.push(Node {
+            id,
+            kind,
+            metadata: HashMap::new(),
+        });
+        id
+    }
 
-        // Add tasks
-        graph.add_task("task1".to_string());
-        graph.add_task("task2".to_string());
-        graph.add_task("task3".to_string());
+    /// Add a directed edge between two nodes.
+    pub fn add_edge(&mut self, from: NodeId, to: NodeId) {
+        self.edges.push(Edge { from, to });
+    }
 
-        // Add dependencies
-        graph.add_dependency("task2".to_string(), "task1".to_string());
-        graph.add_dependency("task3".to_string(), "task2".to_string());
-
-        // Get execution order
-        let order = graph.get_execution_order();
-
-        // Check order
-        assert!(order.contains(&"task1".to_string()));
-        assert!(order.contains(&"task2".to_string()));
-        assert!(order.contains(&"task3".to_string()));
+    /// Debug/print the graph structure.
+    pub fn print_debug(&self) {
+        println!("Graph Debug:");
+        println!("Nodes: {}", self.nodes.len());
+        for node in &self.nodes {
+            println!("  Node {}: {:?}", node.id, node.kind);
+        }
+        println!("Edges: {}", self.edges.len());
+        for edge in &self.edges {
+            println!("  {} -> {}", edge.from, edge.to);
+        }
     }
 }

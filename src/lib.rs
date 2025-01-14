@@ -1,23 +1,16 @@
-pub mod cli;
-pub mod config;
-pub mod debug;
-pub mod env;
+pub mod errors;
 pub mod graph;
+pub mod manager;
 pub mod plugin;
-pub mod prompt;
-pub mod task;
-pub mod watch;
+pub mod plugins;
 
-pub use cli::BodoCli;
-pub use config::{BodoConfig, TaskConfig};
-pub use env::EnvManager;
-pub use graph::TaskGraph;
-pub use plugin::PluginManager;
-pub use prompt::PromptManager;
-pub use task::TaskManager;
-pub use watch::WatchManager;
+pub use crate::errors::PluginError;
+pub use crate::graph::{Graph, Node, NodeId, NodeKind};
+pub use crate::manager::GraphManager;
+pub use crate::plugin::{Plugin, PluginConfig};
 
-// Re-export external crates
-pub use serde;
-pub use serde_json;
-pub use serde_yaml;
+// Re-export commonly used plugins
+pub use crate::plugins::{
+    command_exec_plugin::CommandExecPlugin, concurrency_plugin::ConcurrencyPlugin,
+    env_var_plugin::EnvVarPlugin, list_plugin::ListPlugin, watch_plugin::WatchPlugin,
+};
