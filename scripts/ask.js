@@ -27,8 +27,9 @@ if (!token) {
 }
 
 debug('Serializing...');
-// DeepSeek maximum context length is 65536 tokens. we leave some room for the test failures.
-const serialized = execSync('yek --stream --max-size 50000 --tokens').toString().trim();
+// DeepSeek maximum context length is 128K tokens. we leave some room for the test failures.
+const maxSize = 128000 - 10000; // 10000 tokens for test failures
+const serialized = execSync(`yek --stream --max-size ${maxSize} --tokens`).toString().trim();
 
 debug(`Serialized: ${serialized.length.toLocaleString()} characters`);
 
