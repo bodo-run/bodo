@@ -1,303 +1,298 @@
-# Bodo Design Document
+# Bodo Design Document (Expanded)
 
 ## 1. Core Architecture
 
-The core of Bodo is a Graph Manager that builds and manages a graph representing:
+The core of Bodo is a **Graph Manager** that builds and manages a graph representing:
 
-- Script files
-- Tasks within scripts
-- Commands (simpler than tasks, can be bash scripts or executable files)
+- **Script files**
+- **Tasks** within scripts
+- **Commands** (simpler than tasks, can be bash scripts or executable files)
 
-The Graph Manager handles:
+The **Graph Manager** handles:
 
-- Task dependencies (pre/post)
-- Task references
-- Concurrent tasks
-- Circular dependency detection
-- Debugging tools (graph visualization etc)
+- **Task dependencies** (pre/post)
+- **Task references**
+- **Concurrent tasks**
+- **Circular dependency detection**
+- **Debugging tools** (graph visualization etc)
 
 ## 2. Plugin-Based Architecture
 
-Everything beyond core graph management is implemented as plugins:
+Everything beyond core graph management is implemented as plugins. Each plugin can modify or enhance the graph (e.g., adding environment variables, PATH, concurrency wrappers, watchers, etc.) according to its responsibilities.
 
 ### 2.1 Environment Variables Plugin
 
-- Manages environment variables
-- Tracks final env var values on graph nodes
+- Manages environment variables.
+- Tracks final env var values on graph nodes, enabling each task to have consolidated environment properties.
 
 ### 2.2 Command Prefix Plugin
 
-- Handles command output prefixing (e.g. `[build] building...`)
-- Configures prefixes on task/command nodes
+- Handles command output prefixing (e.g. `[build] building...`).
+- Configures prefixes on task/command nodes, integrating color or other formatting settings.
 
 ### 2.3 Execution Plugin
 
-- Uses Tokio for process management
-- Handles script and task execution
+- Uses **Tokio** for process management.
+- Handles script and task execution (launches the actual processes according to the graph).
 
 ### 2.4 Watch Plugin
 
-- Uses Tokio for file watching
-- Manages watched files and task triggers
+- Uses **Tokio** for file watching.
+- Manages watched files and triggers tasks when these files change.
 
 ### 2.5 Path Plugin
 
-- Computes final PATH for each node
-- Adds exec_paths to node environment
+- Computes the final `PATH` for each node.
+- Adds `exec_paths` to node environment.
 
 ### 2.6 List Plugin
 
-- Prints tasks and commands from graph
-- Handles task documentation
+- Prints tasks and commands from the graph.
+- Handles task documentation functionality (retrieving and displaying).
 
 ## 3. Requirements
 
 ### 3.1 Core Graph Management
 
-- Parse script files into node structure
-- Handle dependencies and prevent cycles
-- Provide debugging interface
+- Parse script files into a node structure.
+- Handle dependencies and prevent cycles.
+- Provide debugging interface (e.g., ASCII graph visualization).
 
 ### 3.2 Plugin Lifecycle
 
-- Initialization phase
-- Graph transformation phase
-- Execution preparation phase
-- Before run phase
-- Execution phase
-- After run phase
+1. **Initialization phase**
+2. **Graph transformation phase**
+3. **Execution preparation phase**
+4. **Before run phase**
+5. **Execution phase**
+6. **After run phase**
 
 ### 3.3 Data and Metadata
 
-- Allow plugins to modify node metadata
-- Define conflict resolution
-- Support structured data on nodes
+- Allow plugins to modify node metadata.
+- Define conflict resolution among plugins.
+- Support structured data (e.g., JSON-compatible objects) on nodes.
 
 ### 3.4 Concurrency Support
 
-- Handle parallel task execution
-- Support fail-fast behavior
-- Track task status
+- Handle parallel task execution.
+- Support fail-fast behavior (if one task fails, optional immediate stop).
+- Track task status (in-progress, succeeded, failed, canceled).
 
 ### 3.5 Watch Mode
 
-- Monitor file changes
-- Re-run affected tasks
-- Integrate with concurrency
+- Monitor file changes.
+- Re-run affected tasks on changes.
+- Integrate with concurrency (watch triggers can also run concurrently with other tasks).
 
 ### 3.6 Environment Management
 
-- Gather env vars from config
-- Handle inheritance
-- Merge PATH correctly
+- Gather env vars from config files (`bodo.yaml` or other).
+- Handle inheritance from global environment.
+- Merge `PATH` variables correctly for each node.
 
 ### 3.7 Command Execution
 
-- Async process management
-- Output logging with prefixes
-- Environment integration
+- Asynchronous process management.
+- Output logging with prefixes (if enabled).
+- Environment integration (passing the final `env` to the child process).
 
 ### 3.8 Documentation
 
-- Generate task listings
-- Support multiple formats
-- Include descriptions
+- Generate task listings in multiple formats.
+- Include descriptions, arguments, environment variables, etc.
 
 ### 3.9 Error Handling
 
-- Consistent error types
-- Error bubbling
-- User-friendly logging
+- Consistent error types.
+- Error bubbling (surfacing the original error cause).
+- User-friendly logging (with hints on how to fix issues).
 
 ### 3.10 Testing
 
-- Unit tests per plugin
-- Integration tests
-- Graph validation tests
-- Execution tests
+- **Unit tests** per plugin.
+- **Integration tests** (end-to-end scenario testing).
+- **Graph validation tests** (ensuring correct dependency resolution).
+- **Execution tests** (verifying the actual processes run as intended).
 
 ### 3.11 Plugin-Specific Tests
 
 #### 3.11.1 Plugin Lifecycle Tests
 
-- Test `on_init` phase:
+- **`on_init` phase**:
 
-  - Verify plugin configuration loading
-  - Test initialization error handling
-  - Confirm plugin state after initialization
+  - Verify plugin configuration loading.
+  - Test initialization error handling.
+  - Confirm plugin state after initialization.
 
-- Test `on_graph_build` phase:
+- **`on_graph_build` phase**:
 
-  - Verify node metadata modifications
-  - Test graph transformation operations
-  - Validate error handling during graph building
+  - Verify node metadata modifications.
+  - Test graph transformation operations.
+  - Validate error handling during graph building.
 
-- Test `on_execution_prepare` phase:
+- **`on_execution_prepare` phase**:
 
-  - Verify environment variable setup
-  - Test command prefix configuration
-  - Validate path modifications
+  - Verify environment variable setup.
+  - Test command prefix configuration.
+  - Validate path modifications.
 
-- Test `before_run` phase:
+- **`before_run` phase**:
 
-  - Verify pre-execution setup
-  - Test resource allocation
-  - Validate state preparation
-  - Test cancellation handling
+  - Verify pre-execution setup.
+  - Test resource allocation.
+  - Validate state preparation.
+  - Test cancellation handling.
 
-- Test `on_execution` phase:
+- **`on_execution` phase**:
 
-  - Verify process management
-  - Test output handling
-  - Validate error propagation
+  - Verify process management.
+  - Test output handling.
+  - Validate error propagation.
 
-- Test `after_run` phase:
-
-  - Verify resource cleanup
-  - Test state restoration
-  - Validate post-execution tasks
-  - Test error handling during cleanup
+- **`after_run` phase**:
+  - Verify resource cleanup.
+  - Test state restoration.
+  - Validate post-execution tasks.
+  - Test error handling during cleanup.
 
 #### 3.11.2 Plugin Metadata Tests
 
-- Test metadata conflict resolution:
+- **Test metadata conflict resolution**:
 
-  - Multiple plugins modifying same metadata
-  - Priority handling between plugins
-  - Metadata inheritance rules
+  - Multiple plugins modifying the same metadata.
+  - Priority handling between plugins.
+  - Metadata inheritance rules.
 
-- Test metadata validation:
-  - Type checking for metadata values
-  - Required vs optional metadata fields
-  - Invalid metadata handling
+- **Test metadata validation**:
+  - Type checking for metadata values.
+  - Required vs optional metadata fields.
+  - Invalid metadata handling.
 
 #### 3.11.3 Plugin Error Tests
 
-- Test error types:
+- **Test error types**:
 
-  - Plugin initialization errors
-  - Graph transformation errors
-  - Execution preparation errors
-  - Runtime execution errors
+  - Plugin initialization errors.
+  - Graph transformation errors.
+  - Execution preparation errors.
+  - Runtime execution errors.
 
-- Test error handling:
-  - Error propagation through plugin chain
-  - Graceful plugin disabling on errors
-  - Error recovery mechanisms
+- **Test error handling**:
+  - Error propagation through the plugin chain.
+  - Graceful plugin disabling on errors.
+  - Error recovery mechanisms.
 
 #### 3.11.4 Plugin Integration Tests
 
-- Test plugin interactions:
+- **Test plugin interactions**:
 
-  - Environment + Path plugin cooperation
-  - Watch + Execution plugin integration
-  - Command Prefix + List plugin coordination
+  - Environment + Path plugin cooperation.
+  - Watch + Execution plugin integration.
+  - Command Prefix + List plugin coordination.
 
-- Test plugin ordering:
-  - Verify correct execution order
-  - Test dependency resolution between plugins
-  - Validate plugin priority system
+- **Test plugin ordering**:
+  - Verify correct execution order.
+  - Test dependency resolution between plugins.
+  - Validate plugin priority system.
 
 ## 4. Task File Format and Structure
 
-Tasks are defined in a YAML file. Here are some examples:
+Tasks are defined in a **YAML file**. Below are examples.
 
 ### 4.1 Simple Task File
 
 ```yaml
 default_task:
-  test:
-    command: "cargo test"
+test:
+command: "cargo test"
 ```
 
 ### 4.2 Multiple Tasks
 
 ```yaml
 tasks:
-  test:
-    command: "cargo test"
-  lint:
-    command: "cargo clippy"
+test:
+command: "cargo test"
+lint:
+command: "cargo clippy"
 ```
 
 ### 4.3 Combined Format
 
 ```yaml
 default_task:
-  test:
-    command: "cargo test"
+test:
+command: "cargo test"
 tasks:
-  lint:
-    command: "cargo clippy"
+lint:
+command: "cargo clippy"
 ```
 
 ### 4.4 Configuration
 
-Default configuration in `bodo.yaml`:
+**Default configuration** in `bodo.toml`:
 
 ```toml
-root_task_file_path = "scripts/scripts.yaml"
+root_task_file_path = "scripts/tasks.yaml"
 tasks_paths = ["scripts"]
 ```
 
-Custom configuration:
+**Custom configuration**:
 
 ```toml
-root_task_file_path = "my_tasks.yaml"
+root_task_file_path = "tasks/tasks.yaml"
 tasks_paths = ["packages/*/tasks.yaml"]
 ```
 
 ## 5. Task Properties
 
-- `command`: The command to run
-- `pre_deps`: The tasks that must be run before this task
-- `post_deps`: The tasks that will be run after this task
-- `concurrently`: The tasks that will be run concurrently with this task
-- `description`: The description of the task
-- `env`: The environment variables to set for the task
-- `exec_paths`: The paths to add to the PATH environment variable
-- `args`: The arguments options
-- `cwd`: The current working directory for the task
-- `prefix_color`: The color of the prefix. Colors are from `colored` crate
+- **`command`**: The command to run.
+- **`pre_deps`**: The tasks that must be run before this task.
+- **`post_deps`**: The tasks that will be run after this task.
+- **`concurrently`**: The tasks that will be run concurrently with this task.
+- **`description`**: The description of the task.
+- **`env`**: The environment variables to set for the task.
+- **`exec_paths`**: The paths to add to the PATH environment variable.
+- **`args`**: The arguments options.
+- **`cwd`**: The current working directory for the task.
+- **`prefix_color`**: The color of the prefix (from the `colored` crate).
 
 ## 6. Task Configuration
 
 ### 6.1 Task References
 
-Basic task reference:
+**Basic task reference**:
 
 ```yaml
 default_task:
-  pre_deps:
-    - task: test
+pre_deps: - task: test
 tasks:
-  test:
-    command: "cargo test"
+test:
+command: "cargo test"
 ```
 
-Cross-file reference:
+**Cross-file reference**:
 
 ```yaml
 default_task:
-  pre_deps:
-    - task: ../other_tasks.yaml # default_task will be used
-    - task: ./other_tasks.yaml/some_task # some_task from other_tasks.yaml will be used
+pre_deps: - task: ../other_tasks.yaml # default_task will be used - task: ./other_tasks.yaml/some_task # some_task from other_tasks.yaml will be used
 ```
 
 ### 6.2 Task Name Restrictions
 
-- max length: 100
-- min length: 1
-- Disallow special characters:
-  - `/` (because it is used for relative paths)
-  - `.` (because it is used for current directory)
-  - `..` (because it is used for parent directory)
-- Task name must not be a reserved word:
-  - watch
-  - default_task
-  - pre_deps
-  - post_deps
-  - concurrently
+- **max length**: 100
+- **min length**: 1
+- **Disallow special characters**:
+  - `/` (used for relative paths)
+  - `.` (used for current directory)
+  - `..` (used for parent directory)
+- **Task name must not be a reserved word**:
+  - `watch`
+  - `default_task`
+  - `pre_deps`
+  - `post_deps`
+  - `concurrently`
 
 ### 6.3 Task Resolution
 
@@ -305,82 +300,87 @@ Example task file (`scripts/validate.yaml`):
 
 ```yaml
 default_task:
-  command: "echo 'Hello, World!'"
+command: "echo 'Hello, World!'"
 tasks:
-  test:
-    command: "echo 'Hello, Test!'"
-  lint:
-    command: "echo 'Hello, Lint!'"
+test:
+command: "echo 'Hello, Test!'"
+lint:
+command: "echo 'Hello, Lint!'"
 ```
 
 Usage:
 
 ```bash
-bodo validate # default_task will be used
-bodo validate test # test task will be used
+bodo # default_task will be used
+bodo <task_name> # test task will be used
+bodo <task_name_dir_path> # runs that task from the given directory path
+bodo <task_name_dir_path> <task_name> # runs <task_name> from <task_name_dir_path>
 ```
+
+- `/` can refer to the root directory: `bodo scripts/test`
+- Relative paths also work: `bodo ./scripts/test`
 
 ### 6.4 Custom Directory Structure
 
-Configuration in `bodo.yaml`:
+Configuration in `bodo.toml`:
 
 ```toml
 root_task_file_path = "./tasks.yaml"
-scripts_paths = ["./packages/*/tasks.yaml"]
+tasks_paths = ["./packages/*/tasks.yaml"]
 ```
 
 ## 7. Command Configuration
 
 ### 7.1 Basic Command Forms
 
-Simple command:
+**Simple command**:
 
 ```yaml
 command: "cargo test"
 ```
 
-Shell command:
+**Shell command**:
 
 ```yaml
 command:
-  sh: "echo 'Hello, World!'"
+sh: "echo 'Hello, World!'"
 ```
 
 ### 7.2 Script Files
 
-Shell script:
+**Shell script**:
 
 ```yaml
 command: ./path/to/script.sh
 ```
 
-Other script types:
+**Other script types**:
 
 ```yaml
 command: ./path/to/script.ts
 ```
 
-Language-specific:
+**Language-specific**:
 
 ```yaml
 command:
-  python: ./path/to/script.py
+python: ./path/to/script.py
 ```
 
 ```yaml
 command:
-  js: ./path/to/script.js
+js: ./path/to/script.js
 ```
 
 ### 7.3 Command Options
 
-- `name`: The name of the task
-- `args`: The arguments options
-- `silent`: Whether to run the command silently. Will not print the command content to the console first
-- `cwd`: The current working directory for the task
-- `env`: The environment variables to set for the task
-- `exec_paths`: The paths to add to the PATH environment variable
-- `description`: The description of the task
+- **`name`**: The name of the task
+- **`args`**: The arguments options
+- **`silent`**: Whether to run the command silently. Will not print the command content to the console first
+- **`cwd`**: The current working directory for the task
+- **`env`**: The environment variables to set for the task
+- **`exec_paths`**: The paths to add to the PATH environment variable
+- **`description`**: The description of the task
 
 ## 8. Task Dependencies
 
@@ -388,94 +388,80 @@ command:
 
 ```yaml
 tasks:
-  test:
-    command: "cargo test"
-  lint:
-    command: "cargo clippy"
+test:
+command: "cargo test"
+lint:
+command: "cargo clippy"
 default_task:
-  pre_deps:
-    - task: test
-    - task: lint
+pre_deps: - task: test - task: lint
 ```
 
-Command dependencies:
+**Command dependencies**:
 
 ```yaml
 default_task:
-  pre_deps:
-    - command: "cargo test"
-    - command: "cargo clippy"
-  command: "cargo build"
+pre_deps: - command: "cargo test" - command: "cargo clippy"
+command: "cargo build"
 ```
 
 ### 8.2 Post-dependencies
 
-Works exactly like pre_deps.
+Works exactly like `pre_deps`.
 
 ### 8.3 Concurrent Tasks
 
 ```yaml
 default_task:
-  concurrently:
-    - task: test
-    - task: lint
+concurrently: - task: test - task: lint
 ```
 
-When `concurrently` is used, no `command` is allowed. but a `command` can be used with `concurrently`:
+When `concurrently` is used, **no `command` is allowed.** However, the example below shows a `command` can also be part of `concurrently`:
 
 ```yaml
 default_task:
-  concurrently:
-    - task: test
-    - task: lint
-    - command: echo "Hello, World!"
+concurrently: - task: test - task: lint - command: echo "Hello, World!"
 ```
 
 #### Concurrent Task Options
 
-Set it under `concurrently_options` key.
-
 ```yaml
 default_task:
-  concurrently_options:
-    max_concurrent_tasks: 2
-    prefix_output: false
-    fail_fast_on_error: true
-  concurrently:
-    - task: test
-    - task: lint
-    - task: build
+concurrently_options:
+max_concurrent_tasks: 2
+prefix_output: false
+fail_fast_on_error: true
+concurrently: - task: test - task: lint - task: build
 ```
 
-- `max_concurrent_tasks`: The maximum number of tasks to run concurrently
-- `prefix_output`: Whether to prefix the output of the tasks
-- `fail_fast_on_error`: Whether to fail fast if one of the tasks fails
-- `fail_fast_on_error_exit_code`: The exit code to fail fast on
-- `fail_fast_on_error_exit_code_range`: The range of exit codes to fail fast on
+- **`max_concurrent_tasks`**: The maximum number of tasks to run concurrently
+- **`prefix_output`**: Whether to prefix the output of the tasks
+- **`fail_fast_on_error`**: Whether to fail fast if one of the tasks fails
+- **`fail_fast_on_error_exit_code`**: The exit code to fail fast on
+- **`fail_fast_on_error_exit_code_range`**: The range of exit codes to fail fast on
 
 ## 9. Additional Properties
 
 ### 9.1 Description
 
-Single line:
+**Single line**:
 
 ```yaml
 description: "Build the project"
 ```
 
-Multi-line:
+**Multi-line**:
 
 ```yaml
 description: |
-  Build the project
-  This is a multiline description
+Build the project
+This is a multiline description
 ```
 
 ### 9.2 Environment Variables
 
 ```yaml
 env:
-  RUST_LOG: "info"
+RUST_LOG: "info"
 ```
 
 ### 9.3 Execution Paths
@@ -489,7 +475,7 @@ exec_paths:
 
 ### 9.4 Arguments
 
-Basic string argument:
+**Basic string argument**:
 
 ```yaml
 args:
@@ -499,7 +485,7 @@ args:
     default: "world"
 ```
 
-Enum argument:
+**Enum argument**:
 
 ```yaml
 args:
@@ -510,7 +496,7 @@ args:
     default: "world"
 ```
 
-Number argument:
+**Number argument**:
 
 ```yaml
 args:
@@ -520,7 +506,7 @@ args:
     default: 1
 ```
 
-Prompt argument:
+**Prompt argument**:
 
 ```yaml
 args:
@@ -544,164 +530,238 @@ prefix_color: "red"
 
 ## 10. Plugins
 
-Plugins are the core of Bodo. They are responsible for the core functionality of Bodo.
+Plugins are the core of Bodo's extensibility. They are implemented as **traits** and can hook into each phase of the lifecycle or provide custom transformations.
 
-Plugins are implemented as traits.
+### 11. CLI
 
-## Testing plan for core functionality
+The CLI is a thin layer on top of the manager and aims to be extremely user-friendly. Below are key patterns:
 
-Below is a categorized list of tests that would be valuable for ensuring the correctness of the core Bodo code (graph construction, config loading, script loading) in its stripped-down, no-plugin state. Many of these can be unit tests (testing small pieces in isolation) or integration tests (verifying multiple parts in tandem).
+#### 11.1 CLI Commands
 
-1. Graph Tests
+- **`bodo`** (no arguments)  
+  Runs the default task from the root task file.
+- **`bodo <task_name>`**  
+  Runs `<task_name>` from the root task file.
+- **`bodo <task_name_dir_path>`**  
+  Runs that task from the given directory path.
+- **`bodo <task_name_dir_path> <task_name>`**  
+  Runs `<task_name>` from `<task_name_dir_path>`.
 
-1.1 Node Creation
-• Test: Create an empty Graph. Confirm nodes and edges are both empty.
-• Test: Add a single Task node. Confirm the node’s ID is 0, nodes.len() is 1, and the node has correct data (TaskData).
-• Test: Add multiple Command nodes. Confirm each node ID increments, and nodes.len() matches the count.
-• Test: Confirm that node metadata is empty by default when you add new nodes.
+  - `/` can refer to the root directory: `bodo scripts/test`
+  - Relative paths also work: `bodo ./scripts/test`
 
-1.2 Edge Creation
-• Test: Add an edge between two valid node IDs (0 -> 1). Confirm edges.len() is 1 and that the stored edge is correct.
-• Test: Add multiple edges. Confirm the final edges.len() is as expected and edges are stored in the order they were added.
-• (Optional): Attempt to add an edge with an invalid node ID (e.g., from 999 to 1000). Confirm it either panics or that your system has a safe check for invalid IDs (depending on your design choice).
+- **`bodo <task_name> -- <args>`**  
+  Runs `<task_name>` with `<args>`.
 
-1.3 Graph Debug Print
-• Test: With a small number of nodes/edges, call print_debug() and capture its stdout output. Confirm it contains the correct node count and edge references.
+- **`bodo watch`** or **`bodo --watch`**  
+  Watches for file changes and reruns tasks.  
+  `bodo --watch <task_name> <args>` similarly watches for changes and reruns `<task_name>` with `<args>`.
 
-2. Script Loader Tests
+- **`bodo --list`**  
+  Lists all tasks. If no root task file is specified, running `bodo` may list all tasks too.
 
-2.1 Loading a Single YAML File
-• Test: Minimal YAML with only a default_task (simple command). Confirm the graph has exactly 1 node, which is a Command node, and the raw_command is as expected.
-• Test: YAML with tasks map containing multiple tasks. Confirm the graph node count matches the number of tasks + (optional) default task. Verify the correct TaskData details are stored.
-• Test: YAML in which default_task is a “complex task” (with command, description, maybe a concurrently placeholder). Confirm the resulting node is still recognized as a Command, and the right fields appear in metadata if you store them.
+- **`bodo --graph`**  
+  Visualizes the graph using ASCII art.
 
-2.2 Loading Multiple YAML Files in One Directory
-• Test: Directory with scriptA.yaml and scriptB.yaml. Confirm both files load into the graph (e.g., 2 default tasks from each file, multiple named tasks).
-• Test: Nested directories: place .yaml in subfolders. Ensure WalkDir picks them up if your config says "scripts/".
+- **`bodo --debug`**  
+  Prints Bodo debug logs (must come after `bodo`).
 
-2.3 Using a Glob
-• Test: Provide a glob pattern in bodo.toml like "scripts/**/\*.yaml" or "**/script.yaml". Confirm it recursively loads all matching .yaml files.
-• Test: Provide a broken glob or an empty matching set. Confirm no panic occurs, either zero files loaded or an error is returned (depending on design).
+- **`bodo --run`**  
+  Runs a task. If no task is specified, runs the default task from the root file.
 
-2.4 Invalid Files
-• Test: File not found or no .yaml in scripts/. Confirm the graph ends up with zero nodes, or the loader returns an error if that’s desired.
-• Test: Malformed YAML syntax. Confirm it returns a PluginError::GenericError with a “YAML parse error:” message.
-• Test: Unexpected data structure (like top-level keys that don’t match ScriptFile definitions). Confirm it returns a parse error or gracefully ignores unknown fields if you’ve set #[serde(default)] on those fields.
+#### 11.2 CLI Flags
 
-2.5 Edge Cases in ScriptFile.to_graph()
-• Test: default_task and tasks both empty. Confirm no nodes are created, but no panic occurs.
-• Test: default_task is present but has an empty command string. Ensure the node still becomes a Command node (with possibly an empty command) or that you handle it as a no-op.
-• Test: Named tasks that have an empty command. Confirm a Task node is created with some default or empty metadata.
+- **`-c, --config`**: The path to the configuration file
+- **`-d, --debug`**: Debug the graph
+- **`-g, --graph`**: Visualize the graph (ASCII)
+- **`-l, --list`**: List all tasks
+- **`-w, --watch`**: Watch for file changes and rerun tasks
+- **`-r, --run`**: Run a task
 
-3. BodoConfig Loading Tests
+## Internal Plugins
 
-3.1 Default Config
-• Test: No bodo.toml file in the current directory. Confirm BodoConfig::default() is used, and script_paths is None.
+1. **resolver_plugin**  
+   Resolves task references. It enhances the graph to add the references for each node, removing the `task: ...` references and replacing them with actual `command` or `concurrently` nodes.
 
-3.2 Valid bodo.toml
-• Test: A minimal TOML specifying script_paths = ["custom-scripts/"]. Confirm the config is loaded and script_paths is Some(vec!["custom-scripts/"]).
-• Test: A more complex TOML with extra fields (which your struct might ignore if not declared). Confirm no parse error if the extra fields are harmless.
+2. **path_plugin**  
+   Handles the `PATH` environment variable. It enhances the graph with a final PATH value for each node.
 
-3.3 Invalid bodo.toml
-• Test: Malformed TOML content. Confirm you get PluginError::GenericError("bodo.toml parse error: ...").
-• Test: Missing read permissions on bodo.toml. Confirm you get an IoError or GenericError referencing the inability to read the file.
+3. **env_plugin**  
+   Handles environment variables. It enhances the graph with final env var values for each node.
 
-4. GraphManager Tests
+4. **command_echo_plugin**  
+   Prints the command before execution. It can be turned off by setting `silent: true`.
 
-4.1 GraphManager::new()
-• Test: Confirm manager starts with an empty graph and a default BodoConfig.
+5. **command_prefix_plugin**  
+   Handles output prefixing (e.g. `[build] `).
 
-4.2 load_bodo_config()
-• Test: Provide a path to a valid bodo.toml. After calling load_bodo_config(Some("my-config.toml")), confirm the manager’s self.config matches what’s in the file.
-• Test: Provide None. Confirm it tries bodo.toml in the current directory. If none found, confirm it remains default.
+6. **execution_plugin**  
+   Runs the commands. This is the main plugin that actually spawns child processes.
 
-4.3 build_graph()
-(Integration with script_loader::load_scripts_from_fs)
-• Test: With a known scripts directory containing 2 YAML files. After build_graph(), confirm the graph has the correct nodes.
-• Test: If no scripts exist, confirm you either get 0 nodes or an error (depending on design).
-• Test: If one of the YAML files is invalid. Confirm build_graph() returns an error.
-• Test: If you want to do some extra validation (like cycle detection or name checking), add a test that ensures invalid references are caught.
+7. **watch_plugin**  
+   Handles file watching by enhancing the graph with watch tasks.
 
-5. Integration / End-to-End Tests
+8. **concurrent_plugin**  
+   Adds concurrency tasks or wrappers. The executor plugin sees these tasks and runs them concurrently.
 
-5.1 Minimal Project Directory Setup 1. Create a temp directory. 2. Write a minimal bodo.toml specifying script_paths = ["scripts/"]. 3. Make a scripts/ folder with a script.yaml containing a default task. 4. Run a small “main” function or a test harness that calls GraphManager::new(), load_bodo_config(...), build_graph(). 5. Assert the manager’s graph.nodes.len() == 1.
+9. **timeout_plugin**  
+   Adds a timeout to each node if specified (makes the command concurrent with a timeout process and fail-fast option).
 
-5.2 Multiple YAML + Overlapping Paths
-• If bodo.toml sets script_paths = ["scripts/", "other-scripts/"], place valid YAML in both. Confirm nodes from both directories appear in the final graph.
+Plugins transform the graph step by step, then **execution_plugin** runs the final graph.
 
-5.3 Edge Cases
-• Scripts folder is huge but only has one .yaml. Confirm performance is reasonable or the code doesn’t blow up.
-• A script references advanced fields you haven’t implemented yet (e.g. pre_deps:, post_deps:). Confirm they’re just ignored or stored as raw data if you do so.
+### Example of Plugin Transformations
 
-6. Suggested Additional Structural or Sanity Tests
+Given:
 
-6.1 Task Name Validation
-If in the future you want to enforce name constraints (no slashes, no .., etc.), write tests verifying that attempts to parse invalid task names produce an error or are sanitized.
+```yaml
+env:
+FOO: global
+BAR: global
+exec_paths:
+- ./node_modules/.bin
+default_task:
+pre_deps: - task: c
+post_deps: - task: main
+tasks:
+main:
+concurrently: - task: a - task: b
+a:
+timeout: 1000
+command: echo "A"
+b:
+silent: true
+command: echo "B"
+c:
+env:
+FOO: "bar"
+command: echo "$FOO"
+```
 
-6.2 Graph Consistency
-If you implement a method that verifies no circular references or duplicated node IDs, write tests that feed in a contrived script with a cycle. Confirm the code flags it.
+**1. Timeout Plugin**  
+Wraps task `a` in a concurrent structure with a timeout process:
 
-6.3 Performance or Memory
-Not typically a big issue at early stage, but you could do basic tests loading 100+ scripts or tasks to confirm it doesn’t degrade badly.
+```yaml
+a:
+concurrently_options:
+fail_fast_on_error: true
+concurrently: - command: BODO_TIMEOUT_EXECUTOR $TIMEOUT_MS
+env:
+TIMEOUT_MS: 1000 - command: echo "A"
+```
 
-Next Steps 1. Unit Tests: Place them in the same file under a #[cfg(test)] mod tests or in a separate tests/ folder. 2. Integration Tests: Typically live in the tests/ directory, pulling in your library as a normal crate. 3. Mock File Structures: For file-based tests (like bodo.toml, script.yaml), you can use tempfile or assert_fs crates to create ephemeral directories.
+**2. command_echo_plugin**  
+Sets an env var indicating whether to echo the command:
 
-This covers a broad range of scenarios so that once you add plugins or advanced features later, you’ll have confidence the base graph-loading logic remains solid.
+```yaml
+b:
+env:
+BODO_ECHO_COMMAND: false
+command: echo "B"
+```
 
-## Development Plan
+**3. env_plugin**  
+Merges global and local environment variables:
 
-Note:
-We use tokio for all processes management.
-Watch is a form of concurrency.
+```yaml
+c:
+env:
+FOO: "bar"
+BAR: "global"
+command: echo "$FOO"
+```
 
-    1.	Add plugin-specific tests. Include tests for each plugin lifecycle method (on_init, on_graph_build, etc.). Verify that plugins correctly modify node metadata and respond to errors.
-    2.	Expand concurrency tests:
-    •	Confirm fail_fast behavior kills remaining tasks if one fails.
-    •	Validate timeouts by forcibly causing tasks to sleep beyond the deadline.
-    •	Check output prefixing in concurrent tasks and make sure logs are readable.
-    3.	Implement watch mode tests:
-    •	Use a temporary directory and a mocked file watch to trigger task reruns on file changes.
-    •	Ensure that only relevant tasks rerun and that concurrency logic still holds.
-    4.	Introduce environment and path plugin validations:
-    •	Confirm PATH merges correctly (especially with multiple exec_paths).
-    •	Test environment variable conflicts and overrides.
-    5.	Improve error handling tests:
-    •	Raise and catch custom plugin errors.
-    •	Confirm graceful shutdown or fallback when one plugin fails.
-    6.	Provide a CLI integration test:
-    •	Build a small binary that runs Bodo commands.
-    •	Validate arguments, flags, and subcommands (if any).
-    •	Capture stdout/stderr to confirm correct usage and error messages.
-    7.	Add advanced dependency tests:
-    •	Check that cycles are detected or prevented.
-    •	Validate complex pre/post dependencies across multiple scripts.
-    8.	Ensure more coverage for task properties:
-    •	Confirm working_dir (cwd) changes command execution directory.
-    •	Check handling of silent tasks or tasks without any command.
-    9.	Expand the documentation plugin (or “list plugin”) and test:
-    •	Ensure tasks and commands are listed in expected formats.
-    •	Test color/no-color output, and any config overrides.
-    10.	Optimize performance tests:
+**4. path_plugin**  
+Sets the `PATH`:
 
-    •	Push node count higher (e.g., 50k tasks) to find any bottlenecks.
-    •	Confirm memory usage remains stable under large loads.
+```yaml
+c:
+env:
+PATH: "/usr/local/bin:/usr/bin:/usr/local/bin/node_modules/.bin"
+FOO: "bar"
+BAR: "global"
+command: echo "$FOO"
+```
 
-    11.	Consider integration with external shells or interpreters:
+**5. command_prefix_plugin**  
+Adds a prefix to the output:
 
-    •	Python scripts, Node.js scripts, etc.
-    •	Test that PATH or environment changes apply correctly for each shell or interpreter type.
+```yaml
+c:
+env:
+PATH: "/usr/local/bin:/usr/bin:/usr/local/bin/node_modules/.bin"
+FOO: "bar"
+BAR: "global"
+BODO_PREFIX: "[build] "
+command: echo "$FOO"
+```
 
-    12.	Start capturing code coverage metrics:
+**6. concurrent_plugin**  
+Enhances the graph with concurrency logic.
 
-    •	Integrate coverage reporting to identify untested lines.
-    •	Set thresholds to avoid regressions.
+**7. resolver_plugin**  
+Resolves references:
 
-    13.	Release a minimal alpha version:
+```yaml
+default_task:
+sequence_options:
+order: [1, 2]
+sequence: # was: - task: c - command_id: 1
+env:
+FOO: "bar"
+command: echo "$FOO" # was: - task: main - command_id: 2
+command: $BODO_RUN_CONCURRENTLY $BODO_CONCURRENTLY_COMMAND_IDS
+env:
+BODO_CONCURRENTLY_COMMAND_IDS: [5, 6, 7]
+BODO_CONCURRENTLY_OPTION_FAIL_FAST_ON_ERROR: true - command_id: 3
+command: $BODO_TIMEOUT_EXECUTOR $BODO_TIMEOUT_MS
+env:
+BODO_TIMEOUT_EXECUTOR: "timeout"
+BODO_TIMEOUT_MS: 1000
+BODO_KILL_COMMAND_IDS: [3] - command_id: 4
+env:
+BODO_ECHO_COMMAND: false
+command: echo "B"
+```
 
-    •	Include essential features: graph building, concurrency, plugin basics.
-    •	Gather feedback on CLI, performance, error messages.
+**8. execution_plugin**  
+Finally runs the commands in either sequence or concurrency according to the transformed graph.
 
-    14.	Plan for future expansions:
+### Custom Plugins
 
-    •	Plugin for auto-completion or interactive features.
-    •	Reusable plugin architecture for external contributions.
+Custom plugins implement the `Plugin` trait and can hook into any phase to modify the graph or the runner. For example:
+
+- **`on_init`**: Load custom configurations.
+- **`on_graph_build`**: Add or remove tasks, transform metadata, etc.
+- **`on_execution_prepare`**: Adjust environment or concurrency options.
+- **`before_run`** / **`after_run`**: Setup or cleanup tasks.
+
+## Implementation
+
+### Graph Manager
+
+First step is to build a solid graph amanager.
+
+Responsibilities:
+
+- Build a graph consisting of script files, tasks, commands, and their dependencies.
+- Add configuration option for how to build the graph. where root task file is, where to find tasks, duplicate task names, duplicate script parent directories which can cause issues, etc.
+- Add methods to find tasks and commands in the graph.
+- Throw appropriate errors if there are any issues with the graph. E.g. not found, circular dependency, etc.
+- Provide a way to visualize the graph but not implement it. Provide a nice API for plugins to visualize the graph.
+- Cover with tests.
+
+### CLI
+
+- Build a CLI that is easy to use and understand.
+- In this step add only one plugin, a dummy executor that just prints the command when `bodo --run` is used.
+- Cover with tests.
+- CLI should understand the graph manager and be able to use it.
+- CLI should pass the right arguments to the graph manager.
+
+### Task Resolver
+
+Task resolver is responsible for resolving the tasks and commands in the graph.
+
+First step it will convert `task: ...` references to actual `command` nodes.
+
+TBD
