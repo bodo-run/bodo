@@ -11,14 +11,15 @@ pub enum NodeKind {
 }
 
 /// Represents data for a Task node.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TaskData {
     pub name: String,
     pub description: Option<String>,
+    pub command: Option<String>,
 }
 
 /// Represents data for a Command node.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CommandData {
     pub raw_command: String,
     pub description: Option<String>,
@@ -72,8 +73,12 @@ impl Graph {
     }
 
     /// Add an edge.
-    pub fn add_edge(&mut self, from: NodeId, to: NodeId) {
+    pub fn add_edge(&mut self, from: NodeId, to: NodeId) -> Result<(), String> {
+        if from as usize >= self.nodes.len() || to as usize >= self.nodes.len() {
+            return Err("Invalid node ID".to_string());
+        }
         self.edges.push(Edge { from, to });
+        Ok(())
     }
 
     /// Debugging function to print the graph structure.

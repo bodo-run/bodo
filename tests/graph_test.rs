@@ -8,101 +8,95 @@ fn test_empty_graph() {
 }
 
 #[test]
-fn test_add_single_task_node() {
+fn test_add_task_node() {
     let mut graph = Graph::new();
-    let task = TaskData {
-        name: "build".to_string(),
-        description: Some("Build the project".to_string()),
-    };
-    let node_id = graph.add_node(NodeKind::Task(task));
-
-    // Check basic conditions
-    assert_eq!(node_id, 0);
-    assert_eq!(graph.nodes.len(), 1);
-    assert_eq!(graph.edges.len(), 0);
-
-    let node = &graph.nodes[node_id as usize];
-    match &node.kind {
-        NodeKind::Task(td) => {
-            assert_eq!(td.name, "build");
-            assert_eq!(td.description.as_deref(), Some("Build the project"));
-        }
-        _ => panic!("Expected a Task node"),
-    }
-
-    // Metadata is empty by default
-    assert!(node.metadata.is_empty());
-}
-
-#[test]
-fn test_add_multiple_command_nodes() {
-    let mut graph = Graph::new();
-
-    // Add first command node
-    let cmd1 = CommandData {
-        raw_command: "echo Hello".to_string(),
-        description: None,
-    };
-    let id1 = graph.add_node(NodeKind::Command(cmd1));
-
-    // Add second command node
-    let cmd2 = CommandData {
-        raw_command: "echo World".to_string(),
-        description: Some("Print world".to_string()),
-    };
-    let id2 = graph.add_node(NodeKind::Command(cmd2));
-
-    assert_eq!(id1, 0);
-    assert_eq!(id2, 1);
-    assert_eq!(graph.nodes.len(), 2);
-
-    let node0 = &graph.nodes[0];
-    let node1 = &graph.nodes[1];
-
-    match &node0.kind {
-        NodeKind::Command(cd) => {
-            assert_eq!(cd.raw_command, "echo Hello");
-            assert_eq!(cd.description, None);
-        }
-        _ => panic!("Expected a Command node"),
-    }
-    match &node1.kind {
-        NodeKind::Command(cd) => {
-            assert_eq!(cd.raw_command, "echo World");
-            assert_eq!(cd.description.as_deref(), Some("Print world"));
-        }
-        _ => panic!("Expected a Command node"),
-    }
-}
-
-#[test]
-fn test_add_edges() {
-    let mut graph = Graph::new();
-
-    // Create nodes
     let task = TaskData {
         name: "test".to_string(),
-        description: None,
+        description: Some("test description".to_string()),
+        command: None,
     };
-    let t_id = graph.add_node(NodeKind::Task(task));
+    let node_id = graph.add_node(NodeKind::Task(task.clone()));
+    assert_eq!(node_id, 0);
+    assert_eq!(graph.nodes.len(), 1);
+    match &graph.nodes[0].kind {
+        NodeKind::Task(t) => assert_eq!(t, &task),
+        _ => panic!("Expected Task node"),
+    }
+}
 
-    let cmd = CommandData {
-        raw_command: "cargo test".to_string(),
-        description: None,
+#[test]
+fn test_add_command_node() {
+    let mut graph = Graph::new();
+    let command = CommandData {
+        raw_command: "echo hello".to_string(),
+        description: Some("test description".to_string()),
     };
-    let c_id = graph.add_node(NodeKind::Command(cmd));
+    let node_id = graph.add_node(NodeKind::Command(command.clone()));
+    assert_eq!(node_id, 0);
+    assert_eq!(graph.nodes.len(), 1);
+    match &graph.nodes[0].kind {
+        NodeKind::Command(c) => assert_eq!(c, &command),
+        _ => panic!("Expected Command node"),
+    }
+}
 
-    // Add edges
-    graph.add_edge(t_id, c_id);
-    // Add another edge (arbitrary example)
-    graph.add_edge(c_id, t_id);
+#[test]
+fn test_add_multiple_nodes() {
+    let mut graph = Graph::new();
+    let task = TaskData {
+        name: "test".to_string(),
+        description: Some("test description".to_string()),
+        command: None,
+    };
+    let command = CommandData {
+        raw_command: "echo hello".to_string(),
+        description: Some("test description".to_string()),
+    };
+    let task_id = graph.add_node(NodeKind::Task(task.clone()));
+    let command_id = graph.add_node(NodeKind::Command(command.clone()));
+    assert_eq!(task_id, 0);
+    assert_eq!(command_id, 1);
+    assert_eq!(graph.nodes.len(), 2);
+    match &graph.nodes[0].kind {
+        NodeKind::Task(t) => assert_eq!(t, &task),
+        _ => panic!("Expected Task node"),
+    }
+    match &graph.nodes[1].kind {
+        NodeKind::Command(c) => assert_eq!(c, &command),
+        _ => panic!("Expected Command node"),
+    }
+}
 
-    assert_eq!(graph.edges.len(), 2);
+#[test]
+fn test_add_edge() {
+    let mut graph = Graph::new();
+    let task = TaskData {
+        name: "test".to_string(),
+        description: Some("test description".to_string()),
+        command: None,
+    };
+    let command = CommandData {
+        raw_command: "echo hello".to_string(),
+        description: Some("test description".to_string()),
+    };
+    let task_id = graph.add_node(NodeKind::Task(task));
+    let command_id = graph.add_node(NodeKind::Command(command));
+    let _ = graph.add_edge(task_id, command_id);
+    assert_eq!(graph.edges.len(), 1);
+    assert_eq!(graph.edges[0].from, task_id);
+    assert_eq!(graph.edges[0].to, command_id);
+}
 
-    assert_eq!(graph.edges[0].from, 0);
-    assert_eq!(graph.edges[0].to, 1);
-    assert_eq!(graph.edges[1].from, 1);
-    assert_eq!(graph.edges[1].to, 0);
+#[test]
+fn test_add_edge_invalid_nodes() {
+    let mut graph = Graph::new();
+    let _ = graph.add_node(NodeKind::Task(TaskData {
+        name: "test".to_string(),
+        description: Some("test description".to_string()),
+        command: None,
+    }));
+    assert!(graph.add_edge(0, 1).is_err());
+    assert!(graph.add_edge(1, 0).is_err());
 }
 
 #[test]
@@ -114,6 +108,7 @@ fn test_print_debug_no_panic() {
     let _ = graph.add_node(NodeKind::Task(TaskData {
         name: "something".to_string(),
         description: None,
+        command: None,
     }));
     let _ = graph.add_node(NodeKind::Command(CommandData {
         raw_command: "echo Testing".to_string(),
