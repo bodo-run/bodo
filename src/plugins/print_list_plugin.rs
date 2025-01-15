@@ -65,6 +65,20 @@ impl PrintListPlugin {
 
         let mut output = String::new();
 
+        // Calculate max task name length across all groups
+        let max_name_len = groups
+            .values()
+            .flat_map(|(_, tasks)| tasks.iter())
+            .map(|(name, _)| {
+                if name.ends_with("#default") {
+                    "(default task)".len()
+                } else {
+                    name.split('#').last().unwrap_or(name).len()
+                }
+            })
+            .max()
+            .unwrap_or(0);
+
         for (script_source, (script_desc, tasks)) in groups {
             if script_source == "Root level tasks" {
                 output.push_str(&format!("{}\n", script_source.bright_blue()));
@@ -85,12 +99,25 @@ impl PrintListPlugin {
                     };
                     if let Some(d) = t_desc {
                         if !d.trim().is_empty() {
-                            output.push_str(&format!("  {}: {}\n", display_name, d.bright_black()));
+                            output.push_str(&format!(
+                                "  {:<width$} {}\n",
+                                display_name,
+                                d.bright_black(),
+                                width = max_name_len + 1 // +1 for the colon
+                            ));
                         } else {
-                            output.push_str(&format!("  {}:\n", display_name));
+                            output.push_str(&format!(
+                                "  {:<width$}\n",
+                                display_name,
+                                width = max_name_len
+                            ));
                         }
                     } else {
-                        output.push_str(&format!("  {}:\n", display_name));
+                        output.push_str(&format!(
+                            "  {:<width$}\n",
+                            display_name,
+                            width = max_name_len
+                        ));
                     }
                 }
             } else {
@@ -105,18 +132,28 @@ impl PrintListPlugin {
                 output.push('\n');
 
                 for (t_name, t_desc) in tasks {
+                    let display_name = t_name.bright_green().bold();
                     if let Some(d) = t_desc {
                         if !d.trim().is_empty() {
                             output.push_str(&format!(
-                                "  {}: {}\n",
-                                t_name.bright_green().bold(),
-                                d.bright_black()
+                                "  {:<width$} {}\n",
+                                display_name,
+                                d.bright_black(),
+                                width = max_name_len + 1 // +1 for the colon
                             ));
                         } else {
-                            output.push_str(&format!("  {}:\n", t_name.bright_green().bold()));
+                            output.push_str(&format!(
+                                "  {:<width$}\n",
+                                display_name,
+                                width = max_name_len
+                            ));
                         }
                     } else {
-                        output.push_str(&format!("  {}:\n", t_name.bright_green().bold()));
+                        output.push_str(&format!(
+                            "  {:<width$}\n",
+                            display_name,
+                            width = max_name_len
+                        ));
                     }
                 }
             }
