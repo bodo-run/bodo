@@ -1,4 +1,3 @@
-use crate::debug;
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -7,6 +6,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fs;
+use tracing::debug;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct BodoConfig {
