@@ -21,6 +21,7 @@ impl LifecycleTestPlugin {
         }
     }
 
+    #[allow(dead_code)]
     fn get_events(&self) -> Vec<(PluginExecutionPhase, usize, Vec<String>)> {
         self.events.lock().unwrap().clone()
     }
