@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::{
     config::{ConcurrentItem, ScriptConfig, TaskConfig},
@@ -163,18 +163,42 @@ fn insert_dependency_edges(
     Ok(())
 }
 
+/// Derive the script name from either the YAML config or the parent folder name
+fn derive_script_name(script: &ScriptConfig, file_path: &Path) -> String {
+    if let Some(ref sname) = script.name {
+        sname.clone()
+    } else {
+        // If not specified in YAML, fallback to parent folder name or mark as root
+        match file_path.parent() {
+            Some(parent) if parent.file_name().is_some() => {
+                parent.file_name().unwrap().to_string_lossy().to_string()
+            }
+            _ => "Root".to_string(), // means "no script name / root tasks"
+        }
+    }
+}
+
 /// Insert a ScriptConfig into the graph and return a map of task names to node IDs.
 fn insert_script_config_into_graph(
     graph: &mut Graph,
     script: ScriptConfig,
     file_label: &str,
+    file_path: &Path,
 ) -> Result<ScriptInsertResult> {
     let mut name_to_id = HashMap::new();
     let mut dependencies = Vec::new();
 
+    // Derive script name from YAML or parent folder
+    let script_name = derive_script_name(&script, file_path);
+
     // Insert default task
     let default_task_name = format!("{}#default", file_label);
-    let def_id = insert_task_into_graph(graph, &default_task_name, &script.default_task)?;
+    let def_id = insert_task_into_graph_with_script_name(
+        graph,
+        &default_task_name,
+        &script.default_task,
+        &script_name,
+    )?;
     if let Some(deps) = &script.default_task.dependencies {
         dependencies.push((def_id, deps.clone(), file_label.to_string()));
     }
@@ -184,7 +208,12 @@ fn insert_script_config_into_graph(
     if let Some(tasks_map) = script.tasks {
         for (task_name, task_cfg) in tasks_map {
             let fully_qualified = format!("{}#{}", file_label, task_name);
-            let node_id = insert_task_into_graph(graph, &fully_qualified, &task_cfg)?;
+            let node_id = insert_task_into_graph_with_script_name(
+                graph,
+                &fully_qualified,
+                &task_cfg,
+                &script_name,
+            )?;
             if let Some(deps) = &task_cfg.dependencies {
                 dependencies.push((node_id, deps.clone(), file_label.to_string()));
             }
@@ -193,6 +222,23 @@ fn insert_script_config_into_graph(
     }
 
     Ok((name_to_id, dependencies))
+}
+
+/// A helper that sets the node's metadata with "script_name" too
+fn insert_task_into_graph_with_script_name(
+    graph: &mut Graph,
+    task_name: &str,
+    task_cfg: &TaskConfig,
+    script_name: &str,
+) -> Result<u64> {
+    let node_id = insert_task_into_graph(graph, task_name, task_cfg)?;
+    let node = &mut graph.nodes[node_id as usize];
+
+    // Store the script name in metadata
+    node.metadata
+        .insert("script_name".to_string(), script_name.to_string());
+
+    Ok(node_id)
 }
 
 /// Load scripts from the given paths into the graph.
@@ -221,7 +267,7 @@ pub fn load_scripts(paths: &[PathBuf], graph: &mut Graph) -> Result<()> {
             .to_string();
 
         let (local_map, deps) =
-            insert_script_config_into_graph(graph, script_config.clone(), &file_label)?;
+            insert_script_config_into_graph(graph, script_config.clone(), &file_label, path)?;
         global_name_to_id.extend(local_map);
         all_dependencies.extend(deps);
     }

@@ -49,20 +49,22 @@ impl GraphManager {
         if let Some(ref scripts_dir) = self.config.scripts_dir {
             let dir_path = PathBuf::from(scripts_dir);
             if dir_path.exists() && dir_path.is_dir() {
-                if let Some(ref pattern) = self.config.scripts_glob {
-                    // Use glob to find matching files
-                    let glob_pattern = dir_path.join(pattern).to_string_lossy().into_owned();
-                    for entry in glob::glob(&glob_pattern)
-                        .map_err(|e| BodoError::PluginError(e.to_string()))?
-                    {
-                        match entry {
-                            Ok(path) => paths_to_load.push(path),
-                            Err(e) => return Err(BodoError::PluginError(e.to_string())),
-                        }
+                // First, add the root script.yaml if it exists
+                let root_script = dir_path.join("script.yaml");
+                if root_script.exists() {
+                    paths_to_load.push(root_script);
+                }
+
+                // Then recursively find all script.yaml files in subdirectories
+                for entry in walkdir::WalkDir::new(&dir_path)
+                    .follow_links(true)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                {
+                    let path = entry.path();
+                    if path.is_file() && path.file_name().unwrap_or_default() == "script.yaml" {
+                        paths_to_load.push(path.to_path_buf());
                     }
-                } else {
-                    // Default to loading all .yaml files
-                    paths_to_load.push(dir_path.join("*.yaml"));
                 }
             }
         }

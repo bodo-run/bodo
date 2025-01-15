@@ -10,12 +10,15 @@ fn test_print_list_plugin_shows_help() {
     let mut graph = Graph::new();
 
     // Root level task
-    let _root_id = graph.add_node(NodeKind::Task(TaskData {
+    let root_id = graph.add_node(NodeKind::Task(TaskData {
         name: "root_task".to_string(),
         description: Some("Root level greeting".to_string()),
         command: None,
         working_dir: None,
     }));
+    graph.nodes[root_id as usize]
+        .metadata
+        .insert("script_name".to_string(), "Root".to_string());
 
     // Another script-sourced
     let script_id = graph.add_node(NodeKind::Task(TaskData {
@@ -24,14 +27,9 @@ fn test_print_list_plugin_shows_help() {
         command: None,
         working_dir: None,
     }));
-    graph.nodes[script_id as usize].metadata.insert(
-        "script_source".to_string(),
-        "scripts/code_quality.yaml".to_string(),
-    );
-    graph.nodes[script_id as usize].metadata.insert(
-        "script_description".to_string(),
-        "Some description".to_string(),
-    );
+    graph.nodes[script_id as usize]
+        .metadata
+        .insert("script_name".to_string(), "code_quality".to_string());
 
     // Plugin with show_help = true
     let mut plugin = PrintListPlugin::new(true);
