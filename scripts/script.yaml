@@ -8,7 +8,7 @@ default_task:
 tasks:
   echo:
     command: "echo 'Hello from `bodo echo`!'"
-    description: "Default greeting"
+    description: "echo task"
   build:
     command: "cargo build"
     description: "Build the project"
