@@ -83,13 +83,15 @@ impl PrintListPlugin {
                         let name = t_name.split('#').last().unwrap_or(&t_name);
                         name.bright_green().bold()
                     };
-                    output.push_str(&format!("  {}:\n", display_name));
                     if let Some(d) = t_desc {
                         if !d.trim().is_empty() {
-                            output.push_str(&format!("    {}\n", d.bright_black()));
+                            output.push_str(&format!("  {}: {}\n", display_name, d.bright_black()));
+                        } else {
+                            output.push_str(&format!("  {}:\n", display_name));
                         }
+                    } else {
+                        output.push_str(&format!("  {}:\n", display_name));
                     }
-                    output.push('\n');
                 }
             } else {
                 let dark_blue_bold: ColoredString = script_source.bright_blue().bold();
@@ -103,15 +105,22 @@ impl PrintListPlugin {
                 output.push('\n');
 
                 for (t_name, t_desc) in tasks {
-                    output.push_str(&format!("  {}:\n", t_name.bright_green().bold()));
                     if let Some(d) = t_desc {
                         if !d.trim().is_empty() {
-                            output.push_str(&format!("    {}\n", d.bright_black()));
+                            output.push_str(&format!(
+                                "  {}: {}\n",
+                                t_name.bright_green().bold(),
+                                d.bright_black()
+                            ));
+                        } else {
+                            output.push_str(&format!("  {}:\n", t_name.bright_green().bold()));
                         }
+                    } else {
+                        output.push_str(&format!("  {}:\n", t_name.bright_green().bold()));
                     }
-                    output.push('\n');
                 }
             }
+            output.push('\n');
         }
 
         output
