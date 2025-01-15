@@ -15,7 +15,7 @@ async fn test_new_manager_is_empty() {
 #[test]
 async fn test_load_bodo_config() -> Result<(), Box<dyn Error>> {
     let mut mgr = GraphManager::new();
-    let result = mgr.load_bodo_config().await;
+    let result = mgr.load_bodo_config(None).await;
     assert!(result.is_ok());
     assert!(mgr.config.scripts_dir.is_none());
     assert!(mgr.config.scripts_glob.is_none());
@@ -41,7 +41,7 @@ async fn test_build_graph_with_valid_yaml() -> Result<(), Box<dyn Error>> {
     mgr.config.scripts_dir = Some(scripts_dir.to_string_lossy().into_owned());
     mgr.config.scripts_glob = Some("*.yml".to_string());
 
-    let result = mgr.build_graph(&[script_path]).await;
+    let result = mgr.build_graph().await;
     assert!(result.is_ok(), "build_graph should succeed");
     assert_eq!(
         mgr.graph.nodes.len(),
@@ -65,7 +65,7 @@ async fn test_build_graph_with_invalid_yaml() -> Result<(), Box<dyn Error>> {
     mgr.config.scripts_dir = Some(scripts_dir.to_string_lossy().into_owned());
     mgr.config.scripts_glob = Some("*.yml".to_string());
 
-    let result = mgr.build_graph(&[script_path]).await;
+    let result = mgr.build_graph().await;
     assert!(
         result.is_ok(),
         "build_graph should silently ignore invalid YAML"

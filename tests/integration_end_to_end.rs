@@ -16,7 +16,7 @@ async fn test_end_to_end_invalid_yaml() -> Result<(), Box<dyn Error>> {
     manager.config.scripts_dir = Some(scripts_dir.to_string_lossy().into_owned());
     manager.config.scripts_glob = Some("*.yaml".to_string());
 
-    let result = manager.build_graph(&[script_path]).await;
+    let result = manager.build_graph().await;
     assert!(result.is_ok(), "Should silently ignore invalid YAML");
     assert_eq!(
         manager.graph.nodes.len(),
@@ -37,7 +37,7 @@ async fn test_end_to_end_no_scripts_found_is_okay() -> Result<(), Box<dyn Error>
     manager.config.scripts_dir = Some(scripts_dir.to_string_lossy().into_owned());
     manager.config.scripts_glob = Some("*.yaml".to_string());
 
-    let result = manager.build_graph(&[]).await;
+    let result = manager.build_graph().await;
     assert!(result.is_ok());
     assert_eq!(manager.graph.nodes.len(), 0);
 
@@ -63,7 +63,7 @@ async fn test_end_to_end_custom_glob() -> Result<(), Box<dyn Error>> {
     manager.config.scripts_dir = Some(scripts_dir.to_string_lossy().into_owned());
     manager.config.scripts_glob = Some("*.yml".to_string());
 
-    let result = manager.build_graph(&[script_path]).await;
+    let result = manager.build_graph().await;
     assert!(result.is_ok());
     assert_eq!(
         manager.graph.nodes.len(),

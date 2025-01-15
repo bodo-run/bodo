@@ -15,7 +15,7 @@ pub trait Plugin: Send + Any {
     fn name(&self) -> &'static str;
     async fn on_init(&mut self, config: &PluginConfig) -> Result<()>;
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()>;
-    fn on_task_start(&mut self) {}
+    fn on_task_start(&mut self);
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -47,5 +47,11 @@ impl PluginManager {
             plugin.on_graph_build(graph).await?;
         }
         Ok(())
+    }
+
+    pub fn on_task_start(&mut self) {
+        for plugin in &mut self.plugins {
+            plugin.on_task_start();
+        }
     }
 }

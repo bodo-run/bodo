@@ -51,4 +51,8 @@ impl Plugin for FakeFailingPlugin {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn on_task_start(&mut self) {
+        // Nothing to do on task start for this plugin
+    }
 }
