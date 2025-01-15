@@ -64,40 +64,54 @@ impl PrintListPlugin {
         }
 
         let mut output = String::new();
-        output.push_str("bodo --list\n\n");
 
         for (script_source, (script_desc, tasks)) in groups {
             if script_source == "Root level tasks" {
-                output.push_str("# name for root script is ignored\n");
-                output.push_str(&format!("{}\n\n", script_source.dimmed()));
-            } else {
-                let dark_blue_bold: ColoredString = script_source.bold().truecolor(0, 0, 139);
-                output.push_str(&format!("{}\n", dark_blue_bold));
-            }
-
-            if let Some(desc) = script_desc {
-                if !desc.trim().is_empty() {
-                    output.push_str(&format!("  {}\n\n", desc.dimmed()));
-                } else {
-                    output.push('\n');
-                }
-            } else {
-                output.push('\n');
-            }
-
-            for (t_name, t_desc) in tasks {
-                output.push_str(&format!("  {}:\n", t_name.bold()));
-                if let Some(d) = t_desc {
-                    if !d.trim().is_empty() {
-                        output.push_str(&format!("    {}\n\n", d.dimmed()));
-                    } else {
-                        output.push('\n');
+                output.push_str(&format!("{}\n", script_source.bright_blue()));
+                if let Some(desc) = script_desc {
+                    if !desc.trim().is_empty() {
+                        output.push_str(&format!("{}\n", desc.bright_black()));
                     }
-                } else {
+                }
+                output.push('\n');
+
+                for (t_name, t_desc) in tasks {
+                    let display_name = if t_name.ends_with("#default") {
+                        "(default task)".bright_green().bold()
+                    } else {
+                        // Remove script# prefix for root tasks
+                        let name = t_name.split('#').last().unwrap_or(&t_name);
+                        name.bright_green().bold()
+                    };
+                    output.push_str(&format!("  {}:\n", display_name));
+                    if let Some(d) = t_desc {
+                        if !d.trim().is_empty() {
+                            output.push_str(&format!("    {}\n", d.bright_black()));
+                        }
+                    }
+                    output.push('\n');
+                }
+            } else {
+                let dark_blue_bold: ColoredString = script_source.bright_blue().bold();
+                output.push_str(&format!("{}\n", dark_blue_bold));
+
+                if let Some(desc) = script_desc {
+                    if !desc.trim().is_empty() {
+                        output.push_str(&format!("  {}\n", desc.bright_black()));
+                    }
+                }
+                output.push('\n');
+
+                for (t_name, t_desc) in tasks {
+                    output.push_str(&format!("  {}:\n", t_name.bright_green().bold()));
+                    if let Some(d) = t_desc {
+                        if !d.trim().is_empty() {
+                            output.push_str(&format!("    {}\n", d.bright_black()));
+                        }
+                    }
                     output.push('\n');
                 }
             }
-            output.push('\n');
         }
 
         output

@@ -34,18 +34,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // 1) Load config
     manager.load_bodo_config(None).await?;
-    println!("After load_bodo_config: {:?}", manager.config);
 
     // Set up config
     manager.config = BodoConfig {
         scripts_dir: Some("scripts".to_string()),
         scripts_glob: Some("script.yaml".to_string()),
     };
-    println!("After config setup: {:?}", manager.config);
 
     // 2) Build graph from discovered scripts
     manager.build_graph().await?;
-    println!("Graph nodes: {}", manager.graph.nodes.len());
 
     // 3) Initialize plugins
     manager.init_plugins(Some(PluginConfig::default())).await?;
