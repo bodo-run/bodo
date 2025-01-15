@@ -204,29 +204,29 @@ Tasks are defined in a **YAML file**. Below are examples.
 
 ```yaml
 default_task:
-test:
-command: "cargo test"
+  test:
+    command: "cargo test"
 ```
 
 ### 4.2 Multiple Tasks
 
 ```yaml
 tasks:
-test:
-command: "cargo test"
-lint:
-command: "cargo clippy"
+  test:
+    command: "cargo test"
+  lint:
+    command: "cargo clippy"
 ```
 
 ### 4.3 Combined Format
 
 ```yaml
 default_task:
-test:
-command: "cargo test"
+  test:
+    command: "cargo test"
 tasks:
-lint:
-command: "cargo clippy"
+  lint:
+    command: "cargo clippy"
 ```
 
 ### 4.4 Configuration
@@ -266,17 +266,20 @@ tasks_paths = ["packages/*/tasks.yaml"]
 
 ```yaml
 default_task:
-pre_deps: - task: test
+  pre_deps:
+    - task: test
 tasks:
-test:
-command: "cargo test"
+  test:
+    command: "cargo test"
 ```
 
 **Cross-file reference**:
 
 ```yaml
 default_task:
-pre_deps: - task: ../other_tasks.yaml # default_task will be used - task: ./other_tasks.yaml/some_task # some_task from other_tasks.yaml will be used
+  pre_deps:
+    - task: ../other_tasks.yaml # default_task will be used
+    - task: ./other_tasks.yaml/some_task # some_task from other_tasks.yaml will be used
 ```
 
 ### 6.2 Task Name Restrictions
@@ -300,12 +303,12 @@ Example task file (`scripts/validate.yaml`):
 
 ```yaml
 default_task:
-command: "echo 'Hello, World!'"
+  command: "echo 'Hello, World!'"
 tasks:
-test:
-command: "echo 'Hello, Test!'"
-lint:
-command: "echo 'Hello, Lint!'"
+  test:
+    command: "echo 'Hello, Test!'"
+  lint:
+    command: "echo 'Hello, Lint!'"
 ```
 
 Usage:
@@ -343,7 +346,7 @@ command: "cargo test"
 
 ```yaml
 command:
-sh: "echo 'Hello, World!'"
+  sh: "echo 'Hello, World!'"
 ```
 
 ### 7.2 Script Files
@@ -364,12 +367,12 @@ command: ./path/to/script.ts
 
 ```yaml
 command:
-python: ./path/to/script.py
+  python: ./path/to/script.py
 ```
 
 ```yaml
 command:
-js: ./path/to/script.js
+  js: ./path/to/script.js
 ```
 
 ### 7.3 Command Options
@@ -388,20 +391,24 @@ js: ./path/to/script.js
 
 ```yaml
 tasks:
-test:
-command: "cargo test"
-lint:
-command: "cargo clippy"
+  test:
+    command: "cargo test"
+  lint:
+    command: "cargo clippy"
 default_task:
-pre_deps: - task: test - task: lint
+  pre_deps:
+    - task: test
+    - task: lint
 ```
 
 **Command dependencies**:
 
 ```yaml
 default_task:
-pre_deps: - command: "cargo test" - command: "cargo clippy"
-command: "cargo build"
+  pre_deps:
+    - command: "cargo test"
+    - command: "cargo clippy"
+  command: "cargo build"
 ```
 
 ### 8.2 Post-dependencies
@@ -412,25 +419,33 @@ Works exactly like `pre_deps`.
 
 ```yaml
 default_task:
-concurrently: - task: test - task: lint
+  concurrently:
+    - task: test
+    - task: lint
 ```
 
 When `concurrently` is used, **no `command` is allowed.** However, the example below shows a `command` can also be part of `concurrently`:
 
 ```yaml
 default_task:
-concurrently: - task: test - task: lint - command: echo "Hello, World!"
+  concurrently:
+    - task: test
+    - task: lint
+    - command: echo "Hello, World!"
 ```
 
 #### Concurrent Task Options
 
 ```yaml
 default_task:
-concurrently_options:
-max_concurrent_tasks: 2
-prefix_output: false
-fail_fast_on_error: true
-concurrently: - task: test - task: lint - task: build
+  concurrently_options:
+    max_concurrent_tasks: 2
+    prefix_output: false
+    fail_fast_on_error: true
+  concurrently:
+    - task: test
+    - task: lint
+    - task: build
 ```
 
 - **`max_concurrent_tasks`**: The maximum number of tasks to run concurrently
@@ -453,15 +468,15 @@ description: "Build the project"
 
 ```yaml
 description: |
-Build the project
-This is a multiline description
+  Build the project
+  This is a multiline description
 ```
 
 ### 9.2 Environment Variables
 
 ```yaml
 env:
-RUST_LOG: "info"
+  RUST_LOG: "info"
 ```
 
 ### 9.3 Execution Paths
@@ -615,26 +630,30 @@ Given:
 
 ```yaml
 env:
-FOO: global
-BAR: global
+  FOO: global
+  BAR: global
 exec_paths:
-- ./node_modules/.bin
+  - ./node_modules/.bin
 default_task:
-pre_deps: - task: c
-post_deps: - task: main
+  pre_deps:
+    - task: c
+  post_deps:
+    - task: main
 tasks:
-main:
-concurrently: - task: a - task: b
-a:
-timeout: 1000
-command: echo "A"
-b:
-silent: true
-command: echo "B"
-c:
-env:
-FOO: "bar"
-command: echo "$FOO"
+  main:
+    concurrently:
+      - task: a
+      - task: b
+  a:
+    timeout: 1000
+    command: echo "A"
+  b:
+    silent: true
+    command: echo "B"
+  c:
+    env:
+      FOO: "bar"
+    command: echo "$FOO"
 ```
 
 **1. Timeout Plugin**  
@@ -642,11 +661,13 @@ Wraps task `a` in a concurrent structure with a timeout process:
 
 ```yaml
 a:
-concurrently_options:
-fail_fast_on_error: true
-concurrently: - command: BODO_TIMEOUT_EXECUTOR $TIMEOUT_MS
-env:
-TIMEOUT_MS: 1000 - command: echo "A"
+  concurrently_options:
+    fail_fast_on_error: true
+  concurrently:
+    - command: BODO_TIMEOUT_EXECUTOR $TIMEOUT_MS
+  env:
+    TIMEOUT_MS: 1000
+  command: echo "A"
 ```
 
 **2. command_echo_plugin**  
@@ -654,9 +675,9 @@ Sets an env var indicating whether to echo the command:
 
 ```yaml
 b:
-env:
-BODO_ECHO_COMMAND: false
-command: echo "B"
+  env:
+    BODO_ECHO_COMMAND: false
+  command: echo "B"
 ```
 
 **3. env_plugin**  
@@ -664,10 +685,10 @@ Merges global and local environment variables:
 
 ```yaml
 c:
-env:
-FOO: "bar"
-BAR: "global"
-command: echo "$FOO"
+  env:
+    FOO: "bar"
+    BAR: "global"
+  command: echo "$FOO"
 ```
 
 **4. path_plugin**  
@@ -675,11 +696,11 @@ Sets the `PATH`:
 
 ```yaml
 c:
-env:
-PATH: "/usr/local/bin:/usr/bin:/usr/local/bin/node_modules/.bin"
-FOO: "bar"
-BAR: "global"
-command: echo "$FOO"
+  env:
+    PATH: "/usr/local/bin:/usr/bin:/usr/local/bin/node_modules/.bin"
+    FOO: "bar"
+    BAR: "global"
+  command: echo "$FOO"
 ```
 
 **5. command_prefix_plugin**  
@@ -687,12 +708,12 @@ Adds a prefix to the output:
 
 ```yaml
 c:
-env:
-PATH: "/usr/local/bin:/usr/bin:/usr/local/bin/node_modules/.bin"
-FOO: "bar"
-BAR: "global"
-BODO_PREFIX: "[build] "
-command: echo "$FOO"
+  env:
+    PATH: "/usr/local/bin:/usr/bin:/usr/local/bin/node_modules/.bin"
+    FOO: "bar"
+    BAR: "global"
+    BODO_PREFIX: "[build] "
+  command: echo "$FOO"
 ```
 
 **6. concurrent_plugin**  
@@ -703,24 +724,28 @@ Resolves references:
 
 ```yaml
 default_task:
-sequence_options:
-order: [1, 2]
-sequence: # was: - task: c - command_id: 1
-env:
-FOO: "bar"
-command: echo "$FOO" # was: - task: main - command_id: 2
-command: $BODO_RUN_CONCURRENTLY $BODO_CONCURRENTLY_COMMAND_IDS
-env:
-BODO_CONCURRENTLY_COMMAND_IDS: [5, 6, 7]
-BODO_CONCURRENTLY_OPTION_FAIL_FAST_ON_ERROR: true - command_id: 3
-command: $BODO_TIMEOUT_EXECUTOR $BODO_TIMEOUT_MS
-env:
-BODO_TIMEOUT_EXECUTOR: "timeout"
-BODO_TIMEOUT_MS: 1000
-BODO_KILL_COMMAND_IDS: [3] - command_id: 4
-env:
-BODO_ECHO_COMMAND: false
-command: echo "B"
+  sequence_options:
+    order: [1, 2]
+  sequence:
+    - command_id: 1
+      env:
+        FOO: "bar"
+      command: echo "$FOO"
+    - command_id: 2
+      command: $BODO_RUN_CONCURRENTLY $BODO_CONCURRENTLY_COMMAND_IDS
+      env:
+        BODO_CONCURRENTLY_COMMAND_IDS: [5, 6, 7]
+        BODO_CONCURRENTLY_OPTION_FAIL_FAST_ON_ERROR: true
+    - command_id: 3
+      command: $BODO_TIMEOUT_EXECUTOR $BODO_TIMEOUT_MS
+      env:
+        BODO_TIMEOUT_EXECUTOR: "timeout"
+        BODO_TIMEOUT_MS: 1000
+        BODO_KILL_COMMAND_IDS: [3]
+    - command_id: 4
+      env:
+        BODO_ECHO_COMMAND: false
+      command: echo "B"
 ```
 
 **8. execution_plugin**  
