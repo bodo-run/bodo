@@ -1,8 +1,9 @@
 use crate::{
+    config::BodoConfig,
     errors::{BodoError, Result},
     graph::{Graph, NodeKind},
     plugin::{Plugin, PluginConfig, PluginManager},
-    script_loader::{load_bodo_config, load_scripts, BodoConfig},
+    script_loader::{load_bodo_config, load_scripts},
 };
 use std::path::PathBuf;
 
@@ -42,28 +43,23 @@ impl GraphManager {
     /// 1) Discovers script files using the fields in self.config
     /// 2) Calls `load_scripts` to parse tasks/commands into `self.graph`
     /// 3) Optionally returns an error if something went wrong
-    pub async fn build_graph(&mut self) -> Result<()> {
+    pub async fn build_graph(&mut self, config: BodoConfig) -> Result<()> {
         let mut paths_to_load = vec![];
 
-        // Load from scripts_dir if configured
-        if let Some(ref scripts_dir) = self.config.scripts_dir {
-            let dir_path = PathBuf::from(scripts_dir);
-            if dir_path.exists() && dir_path.is_dir() {
-                // First, add the root script.yaml if it exists
-                let root_script = dir_path.join("script.yaml");
-                if root_script.exists() {
-                    paths_to_load.push(root_script);
-                }
+        // Load the root script if exists
+        if let Some(ref root_script) = config.root_script {
+            paths_to_load.push(PathBuf::from(root_script));
+        }
 
-                // Then recursively find all script.yaml files in subdirectories
-                for entry in walkdir::WalkDir::new(&dir_path)
-                    .follow_links(true)
-                    .into_iter()
-                    .filter_map(|e| e.ok())
-                {
-                    let path = entry.path();
-                    if path.is_file() && path.file_name().unwrap_or_default() == "script.yaml" {
-                        paths_to_load.push(path.to_path_buf());
+        // Load from scripts_dir if configured
+        if let Some(ref scripts_dirs) = config.scripts_dirs {
+            for scripts_dir in scripts_dirs {
+                let dir_path = PathBuf::from(scripts_dir);
+                if dir_path.exists() && dir_path.is_dir() {
+                    // First, add the root script.yaml if it exists
+                    let root_script = dir_path.join("script.yaml");
+                    if root_script.exists() {
+                        paths_to_load.push(root_script);
                     }
                 }
             }
@@ -98,18 +94,36 @@ impl GraphManager {
     }
 
     /// Find a task in the graph by name and return its node index if found
-    pub fn find_task(&self, task_name: &str) -> Option<usize> {
-        self.graph
-            .nodes
-            .iter()
-            .position(|n| matches!(&n.kind, NodeKind::Task(t) if t.name == task_name))
+    /// Name is either
+    /// - None (default_task in the root script)
+    /// - the task name e.g. ["build"]
+    /// - the script name + task name e.g. ["script_name", "build"]
+    pub fn find_task(&self, task_name: Option<Vec<String>>) -> Option<usize> {
+        self.graph.nodes.iter().position(|n| {
+            if let NodeKind::Task(t) = &n.kind {
+                match &task_name {
+                    None => t.is_default,
+                    Some(name_parts) if name_parts.len() == 1 => t.name == name_parts[0],
+                    Some(name_parts) if name_parts.len() == 2 => {
+                        t.script_name
+                            .as_ref()
+                            .map_or(false, |s| s == &name_parts[0])
+                            && t.name == name_parts[1]
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        })
     }
 
     /// Example function to find a node in the graph by name
     /// and run it or do something with it (like scheduling execution).
     /// In a real system, you'd have concurrency, watchers, etc.
     pub async fn run_task(&mut self, task_name: &str) -> Result<()> {
-        let node_idx = self.find_task(task_name).ok_or_else(|| {
+        let task_name_vec = vec![task_name.to_string()];
+        let node_idx = self.find_task(Some(task_name_vec)).ok_or_else(|| {
             BodoError::PluginError(format!("Task '{}' not found in the graph", task_name))
         })?;
 

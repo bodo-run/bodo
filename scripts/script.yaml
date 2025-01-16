@@ -1,4 +1,3 @@
-name: Root Script
 description: Root level tasks
 
 default_task:
@@ -9,6 +8,6 @@ tasks:
   echo:
     command: "echo 'Hello from `bodo echo`!'"
     description: "echo task"
-  build:
-    command: "cargo build"
-    description: "Build the project"
+  echo2:
+    command: "echo 'Hello from `bodo echo2`!'"
+    description: "echo2 task"

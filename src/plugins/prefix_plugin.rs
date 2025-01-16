@@ -41,16 +41,16 @@ impl Plugin for PrefixPlugin {
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
         for node in &mut graph.nodes {
             let prefix = match &node.kind {
-                NodeKind::Task(td) => self.prefix_format.replace("{}", &td.name),
-                NodeKind::Command(cd) => {
-                    let short_cmd = cd
-                        .raw_command
-                        .split_whitespace()
-                        .next()
-                        .unwrap_or("cmd")
-                        .to_string();
-                    self.prefix_format.replace("{}", &short_cmd)
+                NodeKind::Task(task_data) => {
+                    if let Some(script_name) = &task_data.script_name {
+                        format!("[{}] ", script_name)
+                    } else {
+                        String::new()
+                    }
                 }
+                NodeKind::Command(_) => String::new(),
+                NodeKind::ScriptFile(script_data) => format!("[{}] ", script_data.name),
+                NodeKind::RootScriptFile(_) => String::new(),
             };
             node.metadata.insert("prefix".to_string(), prefix);
         }

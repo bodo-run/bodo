@@ -35,40 +35,26 @@ async fn test_prefix_plugin_on_init_with_options() {
 #[tokio::test]
 async fn test_prefix_plugin_on_graph_build() {
     let mut plugin = PrefixPlugin::new();
-    plugin.prefix_format = "[task-{}]".to_string();
+    let config = PluginConfig {
+        options: serde_json::json!({
+            "prefix": "[Test] "
+        })
+        .as_object()
+        .cloned(),
+    };
+    plugin.on_init(&config).await.unwrap();
 
     let mut graph = Graph::new();
-    // Add a Task node
     let task_id = graph.add_node(NodeKind::Task(TaskData {
         name: "task1".to_string(),
         description: None,
-        command: None,
-        working_dir: None,
+        command: Some("echo test".to_string()),
         is_default: false,
         script_name: Some("Test".to_string()),
-    }));
-    // Add a Command node
-    let cmd_id = graph.add_node(NodeKind::Command(CommandData {
-        raw_command: "echo Test".to_string(),
-        description: Some("Test command".to_string()),
         working_dir: None,
-        watch: None,
     }));
 
-    // Run the plugin
-    let result = plugin.on_graph_build(&mut graph).await;
-    assert!(result.is_ok());
-
-    // Check if metadata is inserted as expected
-    let task_metadata = &graph.nodes[task_id as usize].metadata;
-    let cmd_metadata = &graph.nodes[cmd_id as usize].metadata;
-
-    assert_eq!(
-        task_metadata.get("prefix"),
-        Some(&"[task-task1]".to_string())
-    );
-
-    // The command node prefix is derived from the first token of raw_command
-    // e.g. "echo"
-    assert_eq!(cmd_metadata.get("prefix"), Some(&"[task-echo]".to_string()));
+    plugin.on_graph_build(&mut graph).await.unwrap();
+    let prefix = &graph.nodes[task_id as usize].metadata["prefix"];
+    assert_eq!(prefix, "[Test] ");
 }

@@ -8,13 +8,47 @@ use std::fmt;
 use std::fs;
 use tracing::debug;
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct BodoConfig {
+    /// The directories containing script files.
+    /// Defaults to `scripts/`
+    /// TODO: Make this a GlobalPath
+    pub scripts_dirs: Option<Vec<String>>,
+
+    /// Path to the file containing the root script.
+    /// Defaults to `scripts/script.yaml`
+    pub root_script: Option<String>,
+
+    /// The .env files to load.
     pub env_files: Option<Vec<String>>,
+
+    /// The executable map. Add more executables to the path.
     pub executable_map: Option<Vec<ExecutableMap>>,
+
+    /// The maximum number of concurrent tasks.
+    /// Defaults to unlimited.
     pub max_concurrency: Option<usize>,
+
+    /// List of paths to plugin files to load.
+    /// Plugins are loaded in the order they are specified here.
     pub plugins: Option<Vec<String>>,
+
+    /// Whether to disable color output.
     pub disable_color: Option<bool>,
+}
+
+impl Default for BodoConfig {
+    fn default() -> Self {
+        Self {
+            scripts_dirs: Some(vec!["scripts".to_string()]),
+            root_script: Some("scripts/script.yaml".to_string()),
+            env_files: None,
+            executable_map: None,
+            max_concurrency: None,
+            plugins: None,
+            disable_color: None,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -47,7 +81,7 @@ impl fmt::Display for ConcurrentItem {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub enum ColorSpec {
+pub enum SerializableColor {
     Black,
     Red,
     Green,
@@ -69,7 +103,7 @@ pub enum ColorSpec {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct OutputConfig {
     pub prefix: Option<String>,
-    pub color: Option<ColorSpec>,
+    pub color: Option<SerializableColor>,
     pub disable_color: Option<bool>,
 }
 
@@ -97,7 +131,7 @@ pub struct TaskConfig {
     pub tasks: Option<HashMap<String, TaskConfig>>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct ExecutableMap {
     pub executable: Option<String>,
     pub path: Option<String>,

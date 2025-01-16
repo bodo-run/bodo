@@ -8,8 +8,11 @@ async fn test_new_manager_is_empty() {
     let mgr = GraphManager::new();
     assert_eq!(mgr.graph.nodes.len(), 0);
     assert_eq!(mgr.graph.edges.len(), 0);
-    assert!(mgr.config.scripts_dir.is_none());
-    assert!(mgr.config.scripts_glob.is_none());
+    assert_eq!(mgr.config.scripts_dirs, Some(vec!["scripts".to_string()]));
+    assert_eq!(
+        mgr.config.root_script,
+        Some("scripts/script.yaml".to_string())
+    );
 }
 
 #[test]
@@ -17,8 +20,11 @@ async fn test_load_bodo_config() -> Result<(), Box<dyn Error>> {
     let mut mgr = GraphManager::new();
     let result = mgr.load_bodo_config(None).await;
     assert!(result.is_ok());
-    assert!(mgr.config.scripts_dir.is_none());
-    assert!(mgr.config.scripts_glob.is_none());
+    assert_eq!(mgr.config.scripts_dirs, Some(vec!["scripts".to_string()]));
+    assert_eq!(
+        mgr.config.root_script,
+        Some("scripts/script.yaml".to_string())
+    );
     Ok(())
 }
 
@@ -38,10 +44,10 @@ async fn test_build_graph_with_valid_yaml() -> Result<(), Box<dyn Error>> {
     )?;
 
     let mut mgr = GraphManager::new();
-    mgr.config.scripts_dir = Some(scripts_dir.to_string_lossy().into_owned());
-    mgr.config.scripts_glob = Some("*.yml".to_string());
+    mgr.config.scripts_dirs = Some(vec![scripts_dir.to_string_lossy().into_owned()]);
+    mgr.config.root_script = Some("*.yml".to_string());
 
-    let result = mgr.build_graph().await;
+    let result = mgr.build_graph(mgr.config.clone()).await;
     assert!(result.is_ok(), "build_graph should succeed");
     assert_eq!(
         mgr.graph.nodes.len(),
@@ -62,10 +68,10 @@ async fn test_build_graph_with_invalid_yaml() -> Result<(), Box<dyn Error>> {
     std::fs::write(&script_path, "invalid: - yaml: content")?;
 
     let mut mgr = GraphManager::new();
-    mgr.config.scripts_dir = Some(scripts_dir.to_string_lossy().into_owned());
-    mgr.config.scripts_glob = Some("*.yml".to_string());
+    mgr.config.scripts_dirs = Some(vec![scripts_dir.to_string_lossy().into_owned()]);
+    mgr.config.root_script = Some("*.yml".to_string());
 
-    let result = mgr.build_graph().await;
+    let result = mgr.build_graph(mgr.config.clone()).await;
     assert!(
         result.is_ok(),
         "build_graph should silently ignore invalid YAML"

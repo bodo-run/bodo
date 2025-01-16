@@ -2,8 +2,8 @@ use clap::{Parser, Subcommand};
 use std::error::Error;
 
 use bodo::{
-    manager::GraphManager, plugin::PluginConfig, plugins::print_list_plugin::PrintListPlugin,
-    script_loader::BodoConfig,
+    config::BodoConfig, manager::GraphManager, plugin::PluginConfig,
+    plugins::print_list_plugin::PrintListPlugin,
 };
 
 #[derive(Parser)]
@@ -35,14 +35,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // 1) Load config
     manager.load_bodo_config(None).await?;
 
-    // Set up config
-    manager.config = BodoConfig {
-        scripts_dir: Some("scripts".to_string()),
-        scripts_glob: Some("script.yaml".to_string()),
-    };
+    // TODO: if CLI args are provided, override config with them
+    manager.config = BodoConfig::default();
 
     // 2) Build graph from discovered scripts
-    manager.build_graph().await?;
+    manager.build_graph(manager.config.clone()).await?;
 
     // 3) Initialize plugins
     manager.init_plugins(Some(PluginConfig::default())).await?;

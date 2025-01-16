@@ -13,10 +13,10 @@ async fn test_end_to_end_invalid_yaml() -> Result<(), Box<dyn Error>> {
     std::fs::write(&script_path, "invalid: - yaml: content")?;
 
     let mut manager = GraphManager::new();
-    manager.config.scripts_dir = Some(scripts_dir.to_string_lossy().into_owned());
-    manager.config.scripts_glob = Some("*.yaml".to_string());
+    manager.config.scripts_dirs = Some(vec![scripts_dir.to_string_lossy().into_owned()]);
+    manager.config.root_script = Some("*.yaml".to_string());
 
-    let result = manager.build_graph().await;
+    let result = manager.build_graph(manager.config.clone()).await;
     assert!(result.is_ok(), "Should silently ignore invalid YAML");
     assert_eq!(
         manager.graph.nodes.len(),
@@ -34,10 +34,10 @@ async fn test_end_to_end_no_scripts_found_is_okay() -> Result<(), Box<dyn Error>
     std::fs::create_dir_all(&scripts_dir)?;
 
     let mut manager = GraphManager::new();
-    manager.config.scripts_dir = Some(scripts_dir.to_string_lossy().into_owned());
-    manager.config.scripts_glob = Some("*.yaml".to_string());
+    manager.config.scripts_dirs = Some(vec![scripts_dir.to_string_lossy().into_owned()]);
+    manager.config.root_script = Some("*.yaml".to_string());
 
-    let result = manager.build_graph().await;
+    let result = manager.build_graph(manager.config.clone()).await;
     assert!(result.is_ok());
     assert_eq!(manager.graph.nodes.len(), 0);
 
@@ -60,10 +60,10 @@ async fn test_end_to_end_custom_glob() -> Result<(), Box<dyn Error>> {
     )?;
 
     let mut manager = GraphManager::new();
-    manager.config.scripts_dir = Some(scripts_dir.to_string_lossy().into_owned());
-    manager.config.scripts_glob = Some("*.yml".to_string());
+    manager.config.scripts_dirs = Some(vec![scripts_dir.to_string_lossy().into_owned()]);
+    manager.config.root_script = Some("*.yml".to_string());
 
-    let result = manager.build_graph().await;
+    let result = manager.build_graph(manager.config.clone()).await;
     assert!(result.is_ok());
     assert_eq!(
         manager.graph.nodes.len(),

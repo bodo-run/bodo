@@ -8,17 +8,42 @@ pub type NodeId = u64;
 pub enum NodeKind {
     Task(TaskData),
     Command(CommandData),
+    ScriptFile(ScriptFileData),
+    RootScriptFile(RootScriptFileData),
+}
+
+/// Represents data for a ScriptFile node.
+#[derive(Debug, PartialEq)]
+pub struct ScriptFileData {
+    pub name: String,
+    pub description: Option<String>,
+    pub tasks: Vec<TaskData>,
+    pub default_task: Option<TaskData>,
+}
+
+/// Represents data for a RootScriptFile node.
+#[derive(Debug, PartialEq)]
+pub struct RootScriptFileData {
+    pub description: Option<String>,
+    pub tasks: Vec<TaskData>,
+    pub default_task: Option<TaskData>,
 }
 
 /// Represents data for a Task node.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TaskData {
+    /// The name of the task
     pub name: String,
-    pub description: Option<String>,
-    pub command: Option<String>,
-    pub working_dir: Option<String>,
-    pub script_name: Option<String>,
+    /// Whether this is the default task in the script file.
     pub is_default: bool,
+    /// The description of the task
+    pub description: Option<String>,
+    /// The command to run
+    pub command: Option<String>,
+    /// The name of the script
+    pub script_name: Option<String>,
+    /// The working directory for the task
+    pub working_dir: Option<String>,
 }
 
 /// Represents data for a Command node.
@@ -26,8 +51,8 @@ pub struct TaskData {
 pub struct CommandData {
     pub raw_command: String,
     pub description: Option<String>,
-    pub working_dir: Option<String>,
     pub watch: Option<Vec<String>>,
+    pub working_dir: Option<String>,
 }
 
 /// A node in the graph
