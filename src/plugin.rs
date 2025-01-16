@@ -1,37 +1,10 @@
 use async_trait::async_trait;
-use serde_json::Map;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::any::Any;
 
-use crate::{errors::Result, graph::Graph};
-
-/// Represents the major phases in which the plugin manager invokes plugins.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PluginExecutionPhase {
-    /// Manager is about to call `on_init` on the plugin.
-    InitStart,
-    /// Manager just finished calling `on_init` on the plugin.
-    InitEnd,
-    /// Manager is about to call `on_graph_build`.
-    GraphBuildStart,
-    /// Manager just finished calling `on_graph_build`.
-    GraphBuildEnd,
-    /// Manager is about to invoke `on_task_start`.
-    TaskStartBegin,
-    /// Manager just finished `on_task_start`.
-    TaskStartEnd,
-}
-
-/// Provides context for the plugin about the plugin execution order.
-#[derive(Debug)]
-pub struct PluginExecutionContext<'a> {
-    /// All plugin names in the order they are registered.
-    pub all_plugin_names: &'a [String],
-    /// Index of the current plugin in `all_plugin_names`.
-    pub current_plugin_index: usize,
-    /// The phase that is about to happen, or just happened.
-    pub phase: PluginExecutionPhase,
-}
+use crate::errors::BodoError;
+use crate::graph::{Graph, NodeId};
+use crate::Result;
 
 #[derive(Default)]
 pub struct PluginConfig {
@@ -42,15 +15,37 @@ pub struct PluginConfig {
 pub trait Plugin: Send + Any {
     fn name(&self) -> &'static str;
 
-    /// Called by the manager to let the plugin know about each major lifecycle event.
-    /// (Optional to implement; default is a no-op.)
-    async fn on_lifecycle_event(&mut self, _ctx: &PluginExecutionContext<'_>) -> Result<()> {
+    /// Called first to load or parse plugin config
+    async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
+        let _ = config;
         Ok(())
     }
 
-    async fn on_init(&mut self, config: &PluginConfig) -> Result<()>;
-    async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()>;
-    fn on_task_start(&mut self);
+    /// Called after the scripts or config have been loaded into a Graph, but before plugins mutate it
+    async fn on_before_graph_build(&mut self, _graph: &mut Graph) -> Result<()> {
+        Ok(())
+    }
+
+    /// Called to transform or annotate the Graph (resolving tasks, concurrency, watchers, etc.)
+    async fn on_graph_build(&mut self, _graph: &mut Graph) -> Result<()> {
+        Ok(())
+    }
+
+    /// Called just before execution starts, after the graph transformations are done
+    async fn on_before_run(&mut self, _graph: &mut Graph) -> Result<()> {
+        Ok(())
+    }
+
+    /// Called for each node that is about to run (or as it runs)
+    async fn on_run(&mut self, _node_id: NodeId, _graph: &mut Graph) -> Result<()> {
+        Ok(())
+    }
+
+    /// Called after all tasks have completed
+    async fn on_after_run(&mut self, _graph: &mut Graph) -> Result<()> {
+        Ok(())
+    }
+
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -70,75 +65,52 @@ impl PluginManager {
         self.plugins.push(plugin);
     }
 
-    /// Return the plugin names in the order they were registered
-    fn plugin_names(&self) -> Vec<String> {
+    pub fn plugin_names(&self) -> Vec<String> {
         self.plugins.iter().map(|p| p.name().to_string()).collect()
     }
 
-    pub async fn init_plugins(&mut self, config: &PluginConfig) -> Result<()> {
-        let names = self.plugin_names();
-        for (index, plugin) in self.plugins.iter_mut().enumerate() {
-            let ctx_start = PluginExecutionContext {
-                all_plugin_names: &names,
-                current_plugin_index: index,
-                phase: PluginExecutionPhase::InitStart,
-            };
-            plugin.on_lifecycle_event(&ctx_start).await?;
-
-            plugin.on_init(config).await?;
-
-            let ctx_end = PluginExecutionContext {
-                all_plugin_names: &names,
-                current_plugin_index: index,
-                phase: PluginExecutionPhase::InitEnd,
-            };
-            plugin.on_lifecycle_event(&ctx_end).await?;
+    pub async fn run_lifecycle(&mut self, graph: &mut Graph, cfg: &PluginConfig) -> Result<()> {
+        // Phase 1: on_init
+        for plugin in self.plugins.iter_mut() {
+            plugin.on_init(cfg).await?;
         }
-        Ok(())
-    }
 
-    pub async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
-        let names = self.plugin_names();
-        for (index, plugin) in self.plugins.iter_mut().enumerate() {
-            let ctx_start = PluginExecutionContext {
-                all_plugin_names: &names,
-                current_plugin_index: index,
-                phase: PluginExecutionPhase::GraphBuildStart,
-            };
-            plugin.on_lifecycle_event(&ctx_start).await?;
+        // Phase 2: on_before_graph_build
+        for plugin in self.plugins.iter_mut() {
+            plugin.on_before_graph_build(graph).await?;
+        }
 
+        // Phase 3: on_graph_build
+        for plugin in self.plugins.iter_mut() {
             plugin.on_graph_build(graph).await?;
-
-            let ctx_end = PluginExecutionContext {
-                all_plugin_names: &names,
-                current_plugin_index: index,
-                phase: PluginExecutionPhase::GraphBuildEnd,
-            };
-            plugin.on_lifecycle_event(&ctx_end).await?;
         }
+
+        // Check for cycles after graph transformations
+        if graph.has_cycle() {
+            return Err(BodoError::PluginError(
+                "Cycle detected in graph".to_string(),
+            ));
+        }
+
+        // Phase 4: on_before_run
+        for plugin in self.plugins.iter_mut() {
+            plugin.on_before_run(graph).await?;
+        }
+
+        // Phase 5: on_run is called by the execution plugin for each node
+
+        // Phase 6: on_after_run
+        for plugin in self.plugins.iter_mut() {
+            plugin.on_after_run(graph).await?;
+        }
+
         Ok(())
     }
 
-    pub fn on_task_start(&mut self) {
-        let names = self.plugin_names();
-        for (index, plugin) in self.plugins.iter_mut().enumerate() {
-            // Before
-            let ctx_start = PluginExecutionContext {
-                all_plugin_names: &names,
-                current_plugin_index: index,
-                phase: PluginExecutionPhase::TaskStartBegin,
-            };
-            let _ = futures::executor::block_on(plugin.on_lifecycle_event(&ctx_start));
-
-            plugin.on_task_start();
-
-            // After
-            let ctx_end = PluginExecutionContext {
-                all_plugin_names: &names,
-                current_plugin_index: index,
-                phase: PluginExecutionPhase::TaskStartEnd,
-            };
-            let _ = futures::executor::block_on(plugin.on_lifecycle_event(&ctx_end));
+    pub async fn on_run_node(&mut self, node_id: NodeId, graph: &mut Graph) -> Result<()> {
+        for plugin in self.plugins.iter_mut() {
+            plugin.on_run(node_id, graph).await?;
         }
+        Ok(())
     }
 }

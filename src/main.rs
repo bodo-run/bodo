@@ -1,62 +1,77 @@
-use clap::{Parser, Subcommand};
-use std::error::Error;
-
 use bodo::{
-    config::BodoConfig, manager::GraphManager, plugin::PluginConfig,
-    plugins::print_list_plugin::PrintListPlugin,
+    graph::{Graph, NodeKind, TaskData},
+    plugin::{PluginConfig, PluginManager},
+    plugins::{
+        concurrency_plugin::ConcurrencyPlugin,
+        env_plugin::EnvPlugin,
+        execution_plugin::{execute_graph, ExecutionPlugin},
+    },
+    Result,
 };
-
-#[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-struct Cli {
-    #[command(subcommand)]
-    command: Option<Commands>,
-
-    /// Show list of available tasks
-    #[arg(long, short)]
-    list: bool,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    // Add other commands here as needed
-}
+use serde_json::json;
+use std::collections::HashMap;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let cli = Cli::parse();
+async fn main() -> Result<()> {
+    // Create a simple graph with two tasks
+    let mut graph = Graph::new();
 
-    let mut manager = GraphManager::new();
+    // Add a "build" task
+    let task_id = graph.add_node(NodeKind::Task(TaskData {
+        name: "build".into(),
+        description: Some("Build the project".into()),
+        command: Some("echo Building".into()),
+        working_dir: None,
+        env: HashMap::new(),
+    }));
 
-    if cli.list {
-        manager.register_plugin(Box::new(PrintListPlugin::new(true)));
+    // Add a "test" task
+    let test_id = graph.add_node(NodeKind::Task(TaskData {
+        name: "test".into(),
+        description: Some("Run tests".into()),
+        command: Some("echo Testing".into()),
+        working_dir: None,
+        env: HashMap::new(),
+    }));
+
+    // Add concurrency metadata to the build task
+    {
+        let node = &mut graph.nodes[task_id as usize];
+        node.metadata.insert(
+            "concurrently".to_string(),
+            json!({
+                "children": [test_id],
+                "fail_fast": true
+            })
+            .to_string(),
+        );
     }
 
-    // 1) Load config
-    manager.load_bodo_config(None).await?;
+    // Create and configure plugins
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(ConcurrencyPlugin));
+    manager.register(Box::new(EnvPlugin::new()));
+    manager.register(Box::new(ExecutionPlugin));
 
-    // TODO: if CLI args are provided, override config with them
-    manager.config = BodoConfig::default();
+    // Configure global environment variables
+    let plugin_config = PluginConfig {
+        options: Some(
+            json!({
+                "env": {
+                    "RUST_LOG": "info"
+                }
+            })
+            .as_object()
+            .cloned()
+            .unwrap(),
+        ),
+    };
 
-    // 2) Build graph from discovered scripts
-    manager.build_graph(manager.config.clone()).await?;
+    // Run plugin lifecycle
+    manager.run_lifecycle(&mut graph, &plugin_config).await?;
 
-    // 3) Initialize plugins
-    manager.init_plugins(Some(PluginConfig::default())).await?;
-
-    // 4) Let the plugins transform the graph
-    manager.apply_plugins_to_graph().await?;
-
-    // If the user used --list, the plugin has printed it. Exit:
-    if cli.list {
-        std::process::exit(0);
-    }
-
-    match cli.command {
-        None => {
-            println!("No command specified");
-        }
-    }
+    // Execute the graph
+    execute_graph(&mut manager, &mut graph).await?;
 
     Ok(())
 }
