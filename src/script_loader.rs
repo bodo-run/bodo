@@ -48,6 +48,8 @@ fn insert_task_into_graph(
         description: task_cfg.description.clone(),
         command: task_cfg.command.clone(),
         working_dir: task_cfg.cwd.clone(),
+        is_default: false,
+        script_name: Some("Root".to_string()),
     };
 
     let node_id = graph.add_node(NodeKind::Task(task_data));
@@ -163,18 +165,19 @@ fn insert_dependency_edges(
     Ok(())
 }
 
-/// Derive the script name from either the YAML config or the parent folder name
-fn derive_script_name(script: &ScriptConfig, file_path: &Path) -> String {
-    if let Some(ref sname) = script.name {
-        sname.clone()
-    } else {
-        // If not specified in YAML, fallback to parent folder name or mark as root
-        match file_path.parent() {
-            Some(parent) if parent.file_name().is_some() => {
-                parent.file_name().unwrap().to_string_lossy().to_string()
-            }
-            _ => "Root".to_string(), // means "no script name / root tasks"
+/// Derive the script name from the parent folder name or mark as root
+fn derive_script_name(file_path: &Path, graph: &Graph) -> Option<String> {
+    // if this is the root script, name should be empty
+    // root script is the first node in the graph
+    if graph.nodes.len() == 1 {
+        return None;
+    }
+
+    match file_path.parent() {
+        Some(parent) if parent.file_name().is_some() => {
+            Some(parent.file_name().unwrap().to_string_lossy().to_string())
         }
+        _ => None, // means "no script name / root tasks"
     }
 }
 
@@ -189,7 +192,8 @@ fn insert_script_config_into_graph(
     let mut dependencies = Vec::new();
 
     // Derive script name from YAML or parent folder
-    let script_name = derive_script_name(&script, file_path);
+    let script_name = derive_script_name(file_path, graph);
+    let script_name_str = script_name.as_deref().unwrap_or("Root");
 
     // Insert default task
     let default_task_name = format!("{}#default", file_label);
@@ -197,7 +201,7 @@ fn insert_script_config_into_graph(
         graph,
         &default_task_name,
         &script.default_task,
-        &script_name,
+        script_name_str,
     )?;
     if let Some(deps) = &script.default_task.dependencies {
         dependencies.push((def_id, deps.clone(), file_label.to_string()));
@@ -212,7 +216,7 @@ fn insert_script_config_into_graph(
                 graph,
                 &fully_qualified,
                 &task_cfg,
-                &script_name,
+                script_name_str,
             )?;
             if let Some(deps) = &task_cfg.dependencies {
                 dependencies.push((node_id, deps.clone(), file_label.to_string()));

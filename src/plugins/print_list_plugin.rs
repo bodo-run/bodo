@@ -9,12 +9,25 @@ use crate::{
     plugin::{Plugin, PluginConfig},
 };
 
-/// Type alias for the task groups map
-type TaskGroups = BTreeMap<String, Vec<(String, Option<String>)>>;
+/// Struct to hold basic info about a task for rendering.
+#[derive(Debug)]
+struct TaskInfo {
+    left_label: String,  // e.g. (default task) or "build clippy"
+    description: String, // possibly multi-line
+}
+
+/// Info about each script file group
+#[derive(Debug)]
+struct FileGroup {
+    /// The file path, e.g. scripts/build/script.yaml
+    path: String,
+    /// Top-level script description
+    script_desc: String,
+    /// List of tasks
+    tasks: Vec<TaskInfo>,
+}
 
 /// A plugin that prints a "nice help" when `--list` is requested.
-/// We gather tasks grouped by `script_name` metadata. NodeKind::Command is
-/// ignored in the listing.
 #[derive(Default)]
 pub struct PrintListPlugin {
     show_help: bool,
@@ -25,127 +38,152 @@ impl PrintListPlugin {
         Self { show_help }
     }
 
-    /// Group tasks by their `script_name` metadata, returning a map:
-    ///   script_name -> Vec<(task_name, task_desc)>
-    fn gather_tasks(&self, graph: &Graph) -> TaskGroups {
-        let mut map = BTreeMap::new();
-
-        // First pass: gather tasks and deduplicate by name
-        for node in &graph.nodes {
-            if let NodeKind::Task(task_data) = &node.kind {
-                let script_name = node
-                    .metadata
-                    .get("script_name")
-                    .cloned()
-                    .unwrap_or_else(|| "Root".to_string());
-
-                let entry = map.entry(script_name).or_insert(Vec::new());
-
-                // Check if this task name already exists
-                let task_base_name = task_data.name.split('#').last().unwrap_or(&task_data.name);
-                if !entry.iter().any(|(name, _): &(String, Option<String>)| {
-                    name.split('#').last().unwrap_or(name) == task_base_name
-                }) {
-                    entry.push((task_data.name.clone(), task_data.description.clone()));
-                }
-            }
-        }
-
-        // Sort tasks within each group
-        for tasks in map.values_mut() {
-            tasks.sort_by(|a, b| {
-                // Default task always comes first
-                if a.0.ends_with("#default") {
-                    return std::cmp::Ordering::Less;
-                }
-                if b.0.ends_with("#default") {
-                    return std::cmp::Ordering::Greater;
-                }
-                // Otherwise sort by task name
-                let a_name = a.0.split('#').last().unwrap_or(&a.0);
-                let b_name = b.0.split('#').last().unwrap_or(&b.0);
-                a_name.cmp(b_name)
-            });
-        }
-
-        // Ensure "Root" tasks come first by creating a new ordered map
-        let mut ordered_map = BTreeMap::new();
-        if let Some(root_tasks) = map.remove("Root") {
-            ordered_map.insert("Root".to_string(), root_tasks);
-        }
-        ordered_map.extend(map);
-
-        ordered_map
+    /// Breaks multi-line descriptions into lines.
+    fn split_description_lines(desc: &str) -> Vec<String> {
+        desc.lines().map(|l| l.to_string()).collect()
     }
 
-    /// Renders the tasks in the "nice help" format requested.
-    fn build_help_output(&self, graph: &Graph) -> String {
-        let groups = self.gather_tasks(graph);
-        if groups.is_empty() {
-            return "No tasks found.\n".to_string();
-        }
+    /// We gather tasks by the node's `script_file` metadata.
+    /// For each file, we also note the `script_desc`, which should be the same for all tasks from that file.
+    /// Then we store the tasks in `tasks: Vec<TaskInfo>`.
+    fn gather_file_groups(&self, graph: &Graph) -> BTreeMap<String, FileGroup> {
+        let mut map = BTreeMap::new();
 
-        // Calculate max task name length across all groups
-        let max_name_len = groups
-            .values()
-            .flat_map(|tasks| tasks.iter())
-            .map(|(name, _)| {
-                if name.ends_with("#default") {
-                    "(default task)".len()
+        for node in &graph.nodes {
+            if let NodeKind::Task(task_data) = &node.kind {
+                // The `script_file` is set in script_loader
+                let path = node
+                    .metadata
+                    .get("script_file")
+                    .cloned()
+                    .unwrap_or_else(|| "unknown_path.yaml".to_string());
+
+                let script_desc = node
+                    .metadata
+                    .get("script_desc")
+                    .cloned()
+                    .unwrap_or_default();
+
+                // Build the left label
+                // If it's default task in the root script => "(default task)"
+                // Else we want "<script_prefix> <actual_task>"
+                let left_label = if task_data.is_default && task_data.script_name.is_none() {
+                    "(default task)".to_string()
                 } else {
-                    name.split('#').last().unwrap_or(name).len()
-                }
-            })
-            .max()
-            .unwrap_or(0);
-
-        let mut output = String::new();
-
-        for (script_name, tasks) in groups {
-            // Print header based on script name
-            let header = if script_name == "Root" {
-                "Root tasks".bright_blue()
-            } else {
-                script_name.bright_blue()
-            };
-            output.push_str(&format!("{}\n\n", header));
-
-            for (t_name, t_desc) in tasks {
-                let display_name = if t_name.ends_with("#default") {
-                    "(default task)".bright_green().bold()
-                } else {
-                    // Remove script# prefix for all tasks
-                    let name = t_name.split('#').last().unwrap_or(&t_name);
-                    name.bright_green().bold()
+                    // Get the script name from metadata
+                    let script_name = node
+                        .metadata
+                        .get("script_name")
+                        .cloned()
+                        .unwrap_or("Root".to_string());
+                    // Get the task name part after "#"
+                    let short_name = task_data.name.split('#').last().unwrap_or(&task_data.name);
+                    if script_name == "Root" {
+                        short_name.to_string()
+                    } else {
+                        format!("{} {}", script_name, short_name)
+                    }
                 };
 
-                if let Some(d) = t_desc {
-                    if !d.trim().is_empty() {
-                        output.push_str(&format!(
-                            "  {:<width$}  {}\n",
-                            display_name,
-                            d.bright_black(),
-                            width = max_name_len
-                        ));
-                    } else {
-                        output.push_str(&format!(
-                            "  {:<width$}\n",
-                            display_name,
-                            width = max_name_len
-                        ));
-                    }
-                } else {
-                    output.push_str(&format!(
-                        "  {:<width$}\n",
-                        display_name,
-                        width = max_name_len
-                    ));
-                }
+                // The description is from `task_data.description`, which can be multi-line.
+                let task_desc = task_data
+                    .description
+                    .as_ref()
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
+
+                // Insert or update the group
+                let group = map.entry(path.clone()).or_insert_with(|| FileGroup {
+                    path,
+                    script_desc: script_desc.clone(),
+                    tasks: Vec::new(),
+                });
+
+                group.tasks.push(TaskInfo {
+                    left_label,
+                    description: task_desc,
+                });
             }
-            output.push('\n');
         }
 
-        output
+        map
+    }
+
+    /// Compute the maximum width for the left_label within a group of tasks
+    fn compute_left_label_width(&self, tasks: &[TaskInfo]) -> usize {
+        tasks.iter().map(|t| t.left_label.len()).max().unwrap_or(0)
+    }
+
+    /// Render one file group in the fancy style
+    fn render_file_group(&self, group: &FileGroup) -> String {
+        let mut out = String::new();
+
+        // The path is dimmed
+        let path_dim = group.path.dimmed();
+        out.push_str(&format!("{}\n", path_dim));
+
+        // If the script_desc is not empty, also print it (dimmed), possibly multiple lines
+        if !group.script_desc.trim().is_empty() {
+            for line in group.script_desc.lines() {
+                out.push_str(&format!("{}\n", line.dimmed()));
+            }
+        }
+        out.push('\n');
+
+        // We align left_label with descriptions
+        let left_width = self.compute_left_label_width(&group.tasks);
+        for task in &group.tasks {
+            // Split multi-line desc
+            let lines = Self::split_description_lines(&task.description);
+
+            if lines.is_empty() || (lines.len() == 1 && lines[0].trim().is_empty()) {
+                // If no description or empty => just print the left_label
+                let label_colored = if task.left_label == "(default task)" {
+                    task.left_label.bright_green().bold()
+                } else {
+                    task.left_label.bright_green()
+                };
+                out.push_str(&format!(
+                    "  {:<width$}\n",
+                    label_colored,
+                    width = left_width
+                ));
+            } else {
+                // Print the first line with the label
+                let label_colored = if task.left_label == "(default task)" {
+                    task.left_label.bright_green().bold()
+                } else {
+                    task.left_label.bright_green()
+                };
+                let first_line = &lines[0];
+                out.push_str(&format!(
+                    "  {:<width$}  {}\n",
+                    label_colored,
+                    first_line.dimmed(),
+                    width = left_width
+                ));
+                // If there are more lines, print them aligned under the description column
+                for extra_line in lines.iter().skip(1) {
+                    if extra_line.trim().is_empty() {
+                        out.push_str(&format!(
+                            "  {:<width$}\n",
+                            "", // just blank
+                            width = left_width
+                        ));
+                    } else {
+                        out.push_str(&format!(
+                            "  {:<width$}  {}\n",
+                            "",
+                            extra_line.dimmed(),
+                            width = left_width
+                        ));
+                    }
+                }
+            }
+        }
+
+        out.push('\n');
+        out
     }
 }
 
@@ -161,7 +199,22 @@ impl Plugin for PrintListPlugin {
 
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
         if self.show_help {
-            print!("{}", self.build_help_output(graph));
+            // Gather everything
+            let file_groups = self.gather_file_groups(graph);
+
+            // If no tasks found
+            if file_groups.is_empty() {
+                println!("No tasks found.\n");
+                return Ok(());
+            }
+
+            // Render each group
+            let mut output = String::new();
+            for (_, group) in file_groups {
+                output.push_str(&self.render_file_group(&group));
+            }
+
+            print!("{}", output);
         }
         Ok(())
     }
@@ -171,6 +224,6 @@ impl Plugin for PrintListPlugin {
     }
 
     fn on_task_start(&mut self) {
-        // Nothing to do on task start for this plugin
+        // Nothing to do
     }
 }

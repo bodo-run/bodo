@@ -15,6 +15,8 @@ fn test_add_task_node() {
         description: Some("test description".to_string()),
         command: None,
         working_dir: None,
+        is_default: false,
+        script_name: Some("Test".to_string()),
     };
     let node_id = graph.add_node(NodeKind::Task(task.clone()));
     assert_eq!(node_id, 0);
@@ -51,6 +53,8 @@ fn test_add_multiple_nodes() {
         description: Some("test description".to_string()),
         command: None,
         working_dir: None,
+        is_default: false,
+        script_name: Some("Test".to_string()),
     };
     let command = CommandData {
         raw_command: "echo hello".to_string(),
@@ -81,6 +85,8 @@ fn test_add_edge() {
         description: Some("test description".to_string()),
         command: None,
         working_dir: None,
+        is_default: false,
+        script_name: Some("Test".to_string()),
     };
     let command = CommandData {
         raw_command: "echo hello".to_string(),
@@ -104,6 +110,8 @@ fn test_add_edge_invalid_nodes() {
         description: Some("test description".to_string()),
         command: None,
         working_dir: None,
+        is_default: false,
+        script_name: Some("Test".to_string()),
     }));
     assert!(graph.add_edge(0, 1).is_err());
     assert!(graph.add_edge(1, 0).is_err());
@@ -120,6 +128,8 @@ fn test_print_debug_no_panic() {
         description: None,
         command: None,
         working_dir: None,
+        is_default: false,
+        script_name: Some("Test".to_string()),
     }));
     let _ = graph.add_node(NodeKind::Command(CommandData {
         raw_command: "echo Testing".to_string(),

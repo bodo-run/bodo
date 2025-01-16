@@ -13,6 +13,8 @@ fn test_graph_large_insertion() {
             description: None,
             command: Some(format!("echo task_{i}")),
             working_dir: None,
+            is_default: false,
+            script_name: Some("Test".to_string()),
         }));
     }
 
@@ -39,6 +41,8 @@ fn test_graph_large_edge_creation() {
             description: None,
             command: Some(format!("echo task_{i}")),
             working_dir: None,
+            is_default: false,
+            script_name: Some("Test".to_string()),
         }));
         node_ids.push(node);
     }
@@ -71,6 +75,8 @@ fn test_large_graph_manager() {
             description: None,
             command: Some(format!("echo task_{i}")),
             working_dir: None,
+            is_default: false,
+            script_name: Some("Test".to_string()),
         }));
     }
     manager.graph = g;

@@ -20,6 +20,8 @@ fn make_graph_with_concurrent_tasks(
             description: None,
             command: Some(command),
             working_dir: None,
+            is_default: false,
+            script_name: Some("Test".to_string()),
         });
         graph.add_node(task);
     }

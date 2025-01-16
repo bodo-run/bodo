@@ -40,10 +40,12 @@ async fn test_prefix_plugin_on_graph_build() {
     let mut graph = Graph::new();
     // Add a Task node
     let task_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "build".to_string(),
-        description: Some("Build something".to_string()),
+        name: "task1".to_string(),
+        description: None,
         command: None,
         working_dir: None,
+        is_default: false,
+        script_name: Some("Test".to_string()),
     }));
     // Add a Command node
     let cmd_id = graph.add_node(NodeKind::Command(CommandData {
@@ -63,7 +65,7 @@ async fn test_prefix_plugin_on_graph_build() {
 
     assert_eq!(
         task_metadata.get("prefix"),
-        Some(&"[task-build]".to_string())
+        Some(&"[task-task1]".to_string())
     );
 
     // The command node prefix is derived from the first token of raw_command

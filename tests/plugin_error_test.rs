@@ -12,10 +12,12 @@ async fn test_one_plugin_fails_on_init_others_succeed() -> BodoResult<()> {
     // Set up a normal graph
     let mut graph = Graph::new();
     graph.add_node(NodeKind::Task(TaskData {
-        name: "example".to_string(),
+        name: "task1".to_string(),
         description: None,
-        command: Some("echo example".to_string()),
+        command: None,
         working_dir: None,
+        is_default: false,
+        script_name: Some("Test".to_string()),
     }));
 
     // Create plugin manager and register plugins
@@ -39,10 +41,12 @@ async fn test_one_plugin_fails_on_init_others_succeed() -> BodoResult<()> {
 async fn test_one_plugin_fails_on_graph_build_others_succeed() -> BodoResult<()> {
     let mut graph = Graph::new();
     graph.add_node(NodeKind::Task(TaskData {
-        name: "example".to_string(),
+        name: "task1".to_string(),
         description: None,
-        command: Some("echo example".to_string()),
+        command: None,
         working_dir: None,
+        is_default: false,
+        script_name: Some("Test".to_string()),
     }));
 
     let mut manager = PluginManager::new();

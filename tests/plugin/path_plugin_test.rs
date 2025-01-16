@@ -18,6 +18,8 @@ async fn test_path_plugin_on_init_no_paths() {
         description: None,
         command: Some("echo test".to_string()),
         working_dir: Some("/tmp".to_string()),
+        is_default: false,
+        script_name: Some("Test".to_string()),
     }));
 
     plugin.on_graph_build(&mut graph).await.unwrap();
@@ -45,6 +47,8 @@ async fn test_path_plugin_on_init_with_paths() {
         description: None,
         command: Some("echo test".to_string()),
         working_dir: Some("/tmp".to_string()),
+        is_default: false,
+        script_name: Some("Test".to_string()),
     }));
 
     plugin.on_graph_build(&mut graph).await.unwrap();
@@ -72,6 +76,8 @@ async fn test_path_plugin_on_graph_build() {
         description: None,
         command: Some("make build".to_string()),
         working_dir: Some("/tmp".to_string()),
+        is_default: false,
+        script_name: Some("Test".to_string()),
     }));
     let cmd_id = graph.add_node(NodeKind::Command(CommandData {
         raw_command: "echo Hello".to_string(),

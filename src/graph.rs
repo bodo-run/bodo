@@ -17,6 +17,8 @@ pub struct TaskData {
     pub description: Option<String>,
     pub command: Option<String>,
     pub working_dir: Option<String>,
+    pub script_name: Option<String>,
+    pub is_default: bool,
 }
 
 /// Represents data for a Command node.

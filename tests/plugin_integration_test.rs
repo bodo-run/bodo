@@ -35,6 +35,8 @@ async fn test_prefix_and_path_plugin_integration() {
         description: None,
         command: Some("make build".to_string()),
         working_dir: Some("/tmp".to_string()),
+        is_default: false,
+        script_name: Some("Test".to_string()),
     }));
 
     // Add some metadata that path plugin will interpret
@@ -72,6 +74,8 @@ async fn test_plugin_execution_order() {
         description: None,
         command: Some("echo test".to_string()),
         working_dir: Some("/tmp".to_string()),
+        is_default: false,
+        script_name: Some("Test".to_string()),
     }));
 
     // Try both orders to ensure no dependency between these plugins
@@ -116,6 +120,8 @@ async fn test_plugin_error_propagation() {
         description: None,
         command: Some("echo test".to_string()),
         working_dir: None,
+        is_default: false,
+        script_name: Some("Test".to_string()),
     }));
 
     // Add invalid JSON that path plugin can't parse
