@@ -6,9 +6,8 @@ pub mod plugin;
 pub mod plugins;
 pub mod script_loader;
 
-pub use errors::BodoError;
-pub use errors::Result;
-pub use graph::{CommandData, Graph, NodeKind, TaskData};
+pub use config::BodoConfig;
+pub use errors::{BodoError, Result};
+pub use graph::Graph;
 pub use manager::GraphManager;
 pub use plugin::{Plugin, PluginConfig, PluginManager};
-pub use script_loader::{load_bodo_config, load_scripts};

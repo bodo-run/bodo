@@ -4,7 +4,7 @@ use std::any::Any;
 
 use crate::{
     graph::{ConcurrentGroupData, Graph, NodeKind},
-    plugin::{Plugin, PluginConfig},
+    plugin::Plugin,
     Result,
 };
 

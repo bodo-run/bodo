@@ -3,15 +3,14 @@ use crate::{
     errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
     plugin::{PluginConfig, PluginManager},
-    script_loader::ScriptLoader,
     Result,
 };
 
+/// Simplified GraphManager that no longer references ScriptLoader.
 pub struct GraphManager {
     pub config: BodoConfig,
     pub graph: Graph,
     plugin_manager: PluginManager,
-    script_loader: ScriptLoader,
 }
 
 impl GraphManager {
@@ -20,7 +19,6 @@ impl GraphManager {
             config: BodoConfig::default(),
             graph: Graph::new(),
             plugin_manager: PluginManager::new(),
-            script_loader: ScriptLoader::new(),
         }
     }
 
@@ -28,13 +26,9 @@ impl GraphManager {
         self.plugin_manager.register(plugin);
     }
 
-    pub async fn load_bodo_config(&mut self, config_path: Option<String>) -> Result<()> {
-        self.config = BodoConfig::load(config_path).await?;
-        Ok(())
-    }
-
+    /// If you actually need to build the graph from script files, re-implement here.
     pub async fn build_graph(&mut self, config: BodoConfig) -> Result<()> {
-        self.graph = self.script_loader.build_graph(config).await?;
+        self.config = config;
         Ok(())
     }
 

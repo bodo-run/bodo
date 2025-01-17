@@ -6,7 +6,7 @@ use tokio::{sync::mpsc, time::timeout};
 use crate::{
     errors::BodoError,
     graph::{ConcurrentGroupData, Graph, NodeKind},
-    plugin::{Plugin, PluginConfig, PluginManager},
+    plugin::{Plugin, PluginManager},
     Result,
 };
 
@@ -72,7 +72,7 @@ pub async fn execute_graph(manager: &mut PluginManager, graph: &mut Graph) -> Re
 }
 
 async fn execute_concurrent_group(
-    manager: &mut PluginManager,
+    _manager: &mut PluginManager,
     graph: &mut Graph,
     group_id: u64,
     group_data: &ConcurrentGroupData,
