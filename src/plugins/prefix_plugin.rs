@@ -2,22 +2,18 @@ use async_trait::async_trait;
 use std::any::Any;
 
 use crate::{
-    errors::Result,
     graph::{Graph, NodeKind},
     plugin::{Plugin, PluginConfig},
+    Result,
 };
 
-/// A plugin that sets a prefix for each node's output, e.g. "[build]" or "[taskX]".
-#[derive(Default)]
 pub struct PrefixPlugin {
-    pub prefix_format: String,
+    prefix: Option<String>,
 }
 
 impl PrefixPlugin {
     pub fn new() -> Self {
-        PrefixPlugin {
-            prefix_format: "[{}]".to_string(),
-        }
+        Self { prefix: None }
     }
 }
 
@@ -29,9 +25,9 @@ impl Plugin for PrefixPlugin {
 
     async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
         if let Some(options) = &config.options {
-            if let Some(format) = options.get("prefix_format") {
-                if let Some(format) = format.as_str() {
-                    self.prefix_format = format.to_string();
+            if let Some(prefix) = options.get("prefix") {
+                if let Some(s) = prefix.as_str() {
+                    self.prefix = Some(s.to_string());
                 }
             }
         }
@@ -39,29 +35,27 @@ impl Plugin for PrefixPlugin {
     }
 
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
-        for node in &mut graph.nodes {
-            let prefix = match &node.kind {
-                NodeKind::Task(task_data) => {
-                    if let Some(script_name) = &task_data.script_name {
-                        format!("[{}] ", script_name)
-                    } else {
-                        String::new()
+        if let Some(ref prefix) = self.prefix {
+            for node in &mut graph.nodes {
+                match &mut node.kind {
+                    NodeKind::Task(task_data) => {
+                        if let Some(desc) = &task_data.description {
+                            task_data.description = Some(format!("{}{}", prefix, desc));
+                        }
                     }
+                    NodeKind::Command(cmd_data) => {
+                        if let Some(desc) = &cmd_data.description {
+                            cmd_data.description = Some(format!("{}{}", prefix, desc));
+                        }
+                    }
+                    _ => {}
                 }
-                NodeKind::Command(_) => String::new(),
-                NodeKind::ScriptFile(script_data) => format!("[{}] ", script_data.name),
-                NodeKind::RootScriptFile(_) => String::new(),
-            };
-            node.metadata.insert("prefix".to_string(), prefix);
+            }
         }
         Ok(())
     }
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-
-    fn on_task_start(&mut self) {
-        // Nothing to do on task start for this plugin
     }
 }

@@ -1,45 +1,40 @@
+use std::collections::HashMap;
+
 use bodo::{
     graph::{Graph, NodeKind, TaskData},
-    plugin::{Plugin, PluginConfig},
+    plugin::Plugin,
     plugins::print_list_plugin::PrintListPlugin,
+    Result,
 };
 
-#[test]
-fn test_print_list_plugin_shows_help() {
-    // Build a small graph with 2 tasks (root-level, plus a script-sourced one)
+#[tokio::test]
+async fn test_print_list_plugin() -> Result<()> {
     let mut graph = Graph::new();
 
-    // Root level task
-    let root_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "build".to_string(),
-        description: Some("Build something".to_string()),
-        command: None,
+    // Add a root task
+    let _root_id = graph.add_node(NodeKind::Task(TaskData {
+        name: "root".to_string(),
+        description: Some("Root task".to_string()),
+        command: Some("echo root".to_string()),
         working_dir: None,
         is_default: false,
-        script_name: Some("Root".to_string()),
+        script_name: None,
+        env: HashMap::new(),
     }));
 
-    // Another script-sourced
-    let script_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "clippy".to_string(),
-        description: Some("Run clippy".to_string()),
-        command: None,
+    // Add a task from a script
+    let _script_id = graph.add_node(NodeKind::Task(TaskData {
+        name: "script_task".to_string(),
+        description: Some("Task from script".to_string()),
+        command: Some("echo script".to_string()),
         working_dir: None,
         is_default: false,
-        script_name: Some("code_quality".to_string()),
+        script_name: Some("test_script".to_string()),
+        env: HashMap::new(),
     }));
 
-    // Plugin with show_help = true
-    let mut plugin = PrintListPlugin::new(true);
+    let mut plugin = PrintListPlugin;
+    plugin.on_graph_build(&mut graph).await?;
 
-    // Run the plugin - this will print to stdout
-    futures::executor::block_on(async {
-        // init
-        plugin.on_init(&PluginConfig::default()).await.unwrap();
-        // run on_graph_build
-        plugin.on_graph_build(&mut graph).await.unwrap();
-    });
-
-    // Note: We can't verify the exact output since we're not capturing stdout,
-    // but we can at least verify the plugin runs without errors
+    Ok(())
 }

@@ -49,7 +49,7 @@ function execCommand(command, options = {}) {
 // Run serialization and testing in parallel
 debug('Starting serialization and testing in parallel...');
 Promise.all([
-    execCommand(`yek --stream --max-size ${maxSize} --tokens`),
+    execCommand(`yek --max-size ${maxSize} --tokens`),
     execCommand(testCommand, { stdio: ['pipe', 'pipe', 'pipe'], returnError: true })
 ])
 .then(([serialized, testOutput]) => {

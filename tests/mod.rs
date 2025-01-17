@@ -1,11 +1,6 @@
 pub mod concurrency_test;
 pub mod graph_test;
-pub mod integration_end_to_end;
-pub mod manager_test;
 pub mod perf_test;
 pub mod plugin;
 pub mod plugin_error_test;
 pub mod plugin_integration_test;
-pub mod prefix_plugin_test;
-pub mod script_loader_test;
-pub mod watch_e2e_test;

@@ -26,6 +26,10 @@ pub struct TaskData {
     pub working_dir: Option<String>,
     /// Environment variables for the task
     pub env: HashMap<String, String>,
+    /// Whether this is a default task
+    pub is_default: bool,
+    /// The name of the script this task came from
+    pub script_name: Option<String>,
 }
 
 /// Represents data for a Command node.
@@ -35,6 +39,7 @@ pub struct CommandData {
     pub description: Option<String>,
     pub working_dir: Option<String>,
     pub env: HashMap<String, String>,
+    pub watch: Option<String>,
 }
 
 /// Represents data for a ConcurrentGroup node.
@@ -102,6 +107,72 @@ impl Graph {
         }
         self.edges.push(Edge { from, to });
         Ok(())
+    }
+
+    /// Print debug information about the graph
+    pub fn print_debug(&self) {
+        println!("\nGraph Debug Info:");
+        println!("Nodes: {}", self.nodes.len());
+        for node in &self.nodes {
+            match &node.kind {
+                NodeKind::Task(task) => {
+                    println!("  Task[{}]: {}", node.id, task.name);
+                    if let Some(desc) = &task.description {
+                        println!("    Description: {}", desc);
+                    }
+                    if let Some(cmd) = &task.command {
+                        println!("    Command: {}", cmd);
+                    }
+                    if let Some(dir) = &task.working_dir {
+                        println!("    Working Dir: {}", dir);
+                    }
+                    if !task.env.is_empty() {
+                        println!("    Environment:");
+                        for (k, v) in &task.env {
+                            println!("      {}={}", k, v);
+                        }
+                    }
+                }
+                NodeKind::Command(cmd) => {
+                    println!("  Command[{}]: {}", node.id, cmd.raw_command);
+                    if let Some(desc) = &cmd.description {
+                        println!("    Description: {}", desc);
+                    }
+                    if let Some(dir) = &cmd.working_dir {
+                        println!("    Working Dir: {}", dir);
+                    }
+                    if !cmd.env.is_empty() {
+                        println!("    Environment:");
+                        for (k, v) in &cmd.env {
+                            println!("      {}={}", k, v);
+                        }
+                    }
+                }
+                NodeKind::ConcurrentGroup(group) => {
+                    println!("  ConcurrentGroup[{}]:", node.id);
+                    println!("    Children: {:?}", group.child_nodes);
+                    println!("    Fail Fast: {}", group.fail_fast);
+                    if let Some(max) = group.max_concurrent {
+                        println!("    Max Concurrent: {}", max);
+                    }
+                    if let Some(timeout) = group.timeout_secs {
+                        println!("    Timeout: {}s", timeout);
+                    }
+                }
+            }
+            if !node.metadata.is_empty() {
+                println!("    Metadata:");
+                for (k, v) in &node.metadata {
+                    println!("      {}={}", k, v);
+                }
+            }
+        }
+
+        println!("\nEdges: {}", self.edges.len());
+        for edge in &self.edges {
+            println!("  {} -> {}", edge.from, edge.to);
+        }
+        println!();
     }
 
     /// Detects cycles in the graph using DFS

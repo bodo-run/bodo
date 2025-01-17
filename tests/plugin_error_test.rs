@@ -1,69 +1,82 @@
+use std::collections::HashMap;
+
 use bodo::{
-    errors::Result as BodoResult,
+    errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
     plugin::{PluginConfig, PluginManager},
     plugins::{
         failing_plugin::FakeFailingPlugin, path_plugin::PathPlugin, prefix_plugin::PrefixPlugin,
     },
+    Result,
 };
 
 #[tokio::test]
-async fn test_one_plugin_fails_on_init_others_succeed() -> BodoResult<()> {
-    // Set up a normal graph
+async fn test_plugin_init_failure() -> Result<()> {
     let mut graph = Graph::new();
     graph.add_node(NodeKind::Task(TaskData {
-        name: "task1".to_string(),
-        description: None,
-        command: None,
+        name: "test".to_string(),
+        description: Some("Test task".to_string()),
+        command: Some("echo test".to_string()),
         working_dir: None,
         is_default: false,
         script_name: Some("Test".to_string()),
+        env: HashMap::new(),
     }));
 
-    // Create plugin manager and register plugins
     let mut manager = PluginManager::new();
-    manager.register(Box::new(PrefixPlugin::new()));
-    manager.register(Box::new(FakeFailingPlugin::new(
-        /*fail_on_init=*/ true, /*fail_on_graph_build=*/ false,
-    )));
-    manager.register(Box::new(PathPlugin::new()));
+    manager.register(Box::new(FakeFailingPlugin));
 
-    let config = PluginConfig { options: None };
+    let config = PluginConfig::default();
+    let result = manager.run_lifecycle(&mut graph, &config).await;
 
-    // Initialize plugins - this should return an error
-    let result = manager.init_plugins(&config).await;
-    assert!(result.is_err(), "Expected plugin initialization to fail");
-
+    assert!(matches!(result, Err(BodoError::PluginError(_))));
     Ok(())
 }
 
 #[tokio::test]
-async fn test_one_plugin_fails_on_graph_build_others_succeed() -> BodoResult<()> {
+async fn test_plugin_build_failure() -> Result<()> {
     let mut graph = Graph::new();
     graph.add_node(NodeKind::Task(TaskData {
-        name: "task1".to_string(),
-        description: None,
-        command: None,
+        name: "test".to_string(),
+        description: Some("Test task".to_string()),
+        command: Some("echo test".to_string()),
         working_dir: None,
         is_default: false,
         script_name: Some("Test".to_string()),
+        env: HashMap::new(),
     }));
 
     let mut manager = PluginManager::new();
-    manager.register(Box::new(PrefixPlugin::new()));
-    manager.register(Box::new(FakeFailingPlugin::new(
-        /*fail_on_init=*/ false, /*fail_on_graph_build=*/ true,
-    )));
+    manager.register(Box::new(FakeFailingPlugin));
+
+    let config = PluginConfig::default();
+    let result = manager.run_lifecycle(&mut graph, &config).await;
+
+    assert!(matches!(result, Err(BodoError::PluginError(_))));
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_plugin_chain_failure() -> Result<()> {
+    let mut graph = Graph::new();
+    graph.add_node(NodeKind::Task(TaskData {
+        name: "test".to_string(),
+        description: Some("Test task".to_string()),
+        command: Some("echo test".to_string()),
+        working_dir: None,
+        is_default: false,
+        script_name: Some("Test".to_string()),
+        env: HashMap::new(),
+    }));
+
+    let mut manager = PluginManager::new();
     manager.register(Box::new(PathPlugin::new()));
+    manager.register(Box::new(PrefixPlugin::new()));
+    manager.register(Box::new(FakeFailingPlugin));
 
-    let config = PluginConfig { options: None };
+    let config = PluginConfig::default();
+    let result = manager.run_lifecycle(&mut graph, &config).await;
 
-    // Initialize plugins - should succeed
-    manager.init_plugins(&config).await?;
-
-    // Build graph - should fail
-    let result = manager.on_graph_build(&mut graph).await;
-    assert!(result.is_err(), "Expected graph build to fail");
-
+    assert!(matches!(result, Err(BodoError::PluginError(_))));
     Ok(())
 }

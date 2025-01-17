@@ -23,6 +23,8 @@ async fn main() -> Result<()> {
         command: Some("echo Building".into()),
         working_dir: None,
         env: HashMap::new(),
+        is_default: false,
+        script_name: None,
     }));
 
     // Add a "test" task
@@ -32,6 +34,8 @@ async fn main() -> Result<()> {
         command: Some("echo Testing".into()),
         working_dir: None,
         env: HashMap::new(),
+        is_default: false,
+        script_name: None,
     }));
 
     // Add concurrency metadata to the build task

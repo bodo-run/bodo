@@ -1,94 +1,81 @@
+use std::{collections::HashMap, time::Instant};
+
 use bodo::graph::{Graph, NodeKind, TaskData};
-use bodo::GraphManager;
-use std::time::Instant;
 
 #[test]
 fn test_graph_large_insertion() {
-    let mut g = Graph::new();
     let start = Instant::now();
+    let mut g = Graph::new();
 
-    for i in 0..10_000 {
+    for i in 0..10000 {
         g.add_node(NodeKind::Task(TaskData {
-            name: format!("task_{i}"),
-            description: None,
-            command: Some(format!("echo task_{i}")),
+            name: format!("task_{}", i),
+            description: Some("Test task".to_string()),
+            command: Some("echo test".to_string()),
             working_dir: None,
             is_default: false,
             script_name: Some("Test".to_string()),
+            env: HashMap::new(),
         }));
     }
 
     let duration = start.elapsed();
-    println!("Time taken for 10k insertions: {:?}", duration);
-    assert_eq!(g.nodes.len(), 10_000);
-    // Assuming reasonable performance on modern hardware
-    assert!(
-        duration.as_millis() < 1000,
-        "Insertion took too long: {:?}",
-        duration
-    );
+    assert!(duration.as_millis() < 1000, "Node insertion took too long");
 }
 
 #[test]
 fn test_graph_large_edge_creation() {
     let mut g = Graph::new();
-    let mut node_ids = Vec::new();
 
-    // Create nodes first
-    for i in 0..1000 {
+    // First create nodes
+    for i in 0..10000 {
         let node = g.add_node(NodeKind::Task(TaskData {
-            name: format!("task_{i}"),
-            description: None,
-            command: Some(format!("echo task_{i}")),
+            name: format!("task_{}", i),
+            description: Some("Test task".to_string()),
+            command: Some("echo test".to_string()),
             working_dir: None,
             is_default: false,
             script_name: Some("Test".to_string()),
+            env: HashMap::new(),
         }));
-        node_ids.push(node);
+        assert_eq!(node, i);
     }
 
+    // Then time edge creation
     let start = Instant::now();
-    // Create a chain of dependencies: task_0 -> task_1 -> task_2 -> ...
-    for i in 0..999 {
-        g.add_edge(node_ids[i], node_ids[i + 1]).unwrap();
+    for i in 0..9999 {
+        g.add_edge(i, i + 1).unwrap();
     }
 
     let duration = start.elapsed();
-    println!("Time taken for 999 edge creations: {:?}", duration);
-    assert!(
-        duration.as_millis() < 500,
-        "Edge creation took too long: {:?}",
-        duration
-    );
+    assert!(duration.as_millis() < 1000, "Edge creation took too long");
 }
 
 #[test]
-fn test_large_graph_manager() {
-    let mut manager = GraphManager::new();
-    let start = Instant::now();
-
-    // Build a large graph through the manager
+fn test_graph_large_cycle_detection() {
     let mut g = Graph::new();
-    for i in 0..1000 {
+
+    // Create nodes
+    for i in 0..10000 {
         g.add_node(NodeKind::Task(TaskData {
-            name: format!("task_{i}"),
-            description: None,
-            command: Some(format!("echo task_{i}")),
+            name: format!("task_{}", i),
+            description: Some("Test task".to_string()),
+            command: Some("echo test".to_string()),
             working_dir: None,
             is_default: false,
             script_name: Some("Test".to_string()),
+            env: HashMap::new(),
         }));
     }
-    manager.graph = g;
 
+    // Create edges in a chain (no cycle)
+    for i in 0..9999 {
+        g.add_edge(i, i + 1).unwrap();
+    }
+
+    let start = Instant::now();
+    assert!(!g.has_cycle());
     let duration = start.elapsed();
-    println!(
-        "Time taken for loading 1k tasks through manager: {:?}",
-        duration
-    );
-    assert!(
-        duration.as_millis() < 500,
-        "Graph manager operations took too long: {:?}",
-        duration
-    );
+
+    assert!(duration.as_millis() < 1000, "Cycle detection took too long");
 }

@@ -119,6 +119,8 @@ impl ScriptLoader {
             command: cfg.command.clone(),
             working_dir: cfg.cwd.clone(),
             env: HashMap::new(),
+            is_default: false,
+            script_name: None,
         };
         graph.add_node(NodeKind::Task(task_data))
     }
