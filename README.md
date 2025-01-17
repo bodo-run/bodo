@@ -8,6 +8,9 @@
 
 # `bodo`
 
+> [!WARNING]
+> This project is currently in development and is not ready for production use. It's open source just so I can use free CI!
+
 A task runner with intuitive organization and powerful features.
 
 > The name "bodo" comes from Farsi, meaning "run," and it's fast to type on a QWERTY keyboard.
