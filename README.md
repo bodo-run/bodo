@@ -9,7 +9,7 @@
 # `bodo`
 
 > [!WARNING]
-> This project is currently in development and is not ready for production use. It's open source just so I can use free CI!
+> This project is currently in the [design](./design.md] phase and is not ready for any sort of use. It's open source just so I can use free CI!
 
 A task runner with intuitive organization and powerful features.
 
