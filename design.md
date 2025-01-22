@@ -6,7 +6,7 @@ The core of Bodo is a **Graph Manager** that builds/manages a graph representing
 
 - **Script files**
 - **Tasks** (units of work with dependencies)
-- **Commands** (shell/executable steps)
+- **Commands** (shell/executable steps). Commands are the leaf nodes of the graph.
 
 **Responsibilities**:
 
@@ -31,9 +31,8 @@ The core of Bodo is a **Graph Manager** that builds/manages a graph representing
 
 - **Timeout Plugin**: Adds task timeouts
 - **Interactive Plugin**: Enables TUI prompts
-- **Sandbox Plugin**: Restricts filesystem/network access
 
-### 2.3 Plugin Lifecycle
+### 2.3 Plugin Lifecycle and Ordering
 
 1. **Initialization**: Load configs, initialize plugins
 2. **Graph Build**: Resolve tasks, apply plugin transformations
@@ -42,10 +41,22 @@ The core of Bodo is a **Graph Manager** that builds/manages a graph representing
 5. **Execution**: Run commands/tasks
 6. **After Run**: Cleanup resources
 
+Plugins operate in a defined order to avoid conflicts:
+
+1. Initial resolution plugins (e.g., resolver_plugin)
+2. Environment and Path plugins
+3. Concurrency and Timeout plugins
+4. Other transformations (e.g., watchers, prefixing)
+5. Execution plugins
+
+Custom plugins fit into this order by declaring their priority and intended phases.
+
 ### 2.4 Conflict Resolution
 
 - Plugins modify node metadata via `metadata` field
 - Last-plugin-wins by default (configurable via `priority`)
+- Conflicts resolved using plugin priority system
+- Must handle structured data (e.g., JSON-compatible)
 
 ## 3. Task File Format
 
@@ -73,6 +84,11 @@ tasks_paths = ["packages/*/tasks.yaml"]
 [watch]
 ignore = ["*.tmp", "node_modules/"]
 debounce_ms = 500
+
+[env]
+# All Bodo-specific environment variables are prefixed with BODO_
+BODO_LOG_LEVEL = "info"
+BODO_TASK_PATH = "./tasks"
 ```
 
 ## 4. Task Properties
@@ -87,6 +103,9 @@ debounce_ms = 500
 | `exec_paths`   | Directories added to `PATH`                   |
 | `timeout`      | Maximum runtime (e.g., `10s`)                 |
 | `prefix_color` | Output prefix color (e.g., `"green"`)         |
+| `cwd`          | Working directory for the task                |
+| `args`         | CLI argument definitions                      |
+| `silent`       | Don't echo command before running             |
 
 ## 5. Task References
 
@@ -99,8 +118,21 @@ debounce_ms = 500
 ### 5.2 Resolution Rules
 
 - Paths are relative to the referencing file
-- Environment variables expanded (e.g., `$PROJECT_ROOT/build.yaml`)
+- Environment variables expanded (e.g., `$BODO_PROJECT_ROOT/build.yaml`)
 - Name collisions error unless fully qualified
+
+### 5.3 Restrictions
+
+- Task names can't contain `/`, `.`, or `..`
+- Max length: 100 characters
+- Min length: 1 character
+- Reserved words (cannot be used as task names):
+  - `watch`
+  - `default_task`
+  - `pre_deps`
+  - `post_deps`
+  - `concurrently`
+- Name collisions between files are errors unless resolved in config
 
 ## 6. CLI Commands
 
@@ -111,6 +143,7 @@ bodo                          # Run default_task
 bodo build                    # Run "build" task
 bodo ./frontend/tasks.yaml    # Run default_task from frontend/tasks.yaml
 bodo --watch test             # Re-run "test" on file changes
+bodo <task_name> -- <args>    # Pass args to task
 ```
 
 ### 6.2 Flags
@@ -121,6 +154,8 @@ bodo --watch test             # Re-run "test" on file changes
 | `--list`        | List all tasks                     |
 | `--sandbox`     | Restrict filesystem/network access |
 | `--interactive` | Launch TUI task selector           |
+| `--graph`       | Show ASCII dependency graph        |
+| `--debug`       | Show verbose internal logs         |
 
 ## 7. Concurrency Model
 
@@ -131,6 +166,7 @@ deploy:
   concurrently_options:
     max_concurrent_tasks: 2
     fail_fast: true
+    prefix_output: true
   concurrently:
     - task: build
     - task: migrate
@@ -141,51 +177,43 @@ deploy:
 
 - `fail_fast: true`: Send SIGTERM to all processes on failure
 - `signal: "SIGKILL"`: Override termination signal
+- Without `fail_fast`, tasks continue and group is considered partially successful/failed
+- Behavior is plugin-configurable
+- Process signals controlled via `BODO_KILL_SIGNAL` environment variable
 
 ## 8. Watch Mode
 
 - Debounces changes (default: 500ms)
 - Triggers task re-runs with same arguments
 - Ignores patterns from `bodo.toml`
+- Prevents infinite trigger loops with concurrency
 
-## 9. Security
+## 9. Testing Strategy
 
-### 9.1 Sandbox Mode
-
-```bash
-bodo --sandbox run-untrusted
-```
-
-- Blocks network access
-- Restricts filesystem to `cwd`
-
-## 10. Language Server (LSP)
-
-**Features**:
-
-- Autocomplete task names/paths
-- Validate task references
-- Hover documentation
-
-**Editors**: VS Code, Neovim, etc.
-
-## 11. Testing Strategy
-
-### 11.1 Test Types
+### 9.1 Test Types
 
 - **Unit Tests**: Per-plugin functionality
 - **Integration Tests**: Multi-plugin scenarios
 - **E2E Tests**: Full CLI workflows
 - **Cross-Platform**: Windows/Unix path handling
 
-### 11.2 Plugin-Specific Tests
+### 9.2 Plugin-Specific Tests
 
 - **Lifecycle Tests**: Test each plugin phase
 - **Metadata Tests**: Test conflict resolution
 - **Error Tests**: Test error handling and recovery
 - **Integration Tests**: Test plugin interactions
 
-## 12. Example: Complex Workflow
+### 9.3 Error Handling
+
+- Consistent error types across plugins
+- Error bubbling to surface root causes
+- User-friendly suggestions:
+  - "Did you mean <closest_task>?" for typos
+  - Clear messages for name collisions
+  - Hints for fixing configuration issues
+
+## 10. Example: Complex Workflow
 
 ```yaml
 # tasks/ci.yaml
@@ -200,6 +228,8 @@ tasks:
     timeout: 10m
     env:
       CI: "true"
+      BODO_LOG_LEVEL: "debug"
+      BODO_PREFIX_COLOR: "cyan"
 ```
 
 **Run with**:
@@ -208,14 +238,51 @@ tasks:
 bodo --dry-run ci  # Validate execution plan
 ```
 
-## 13. Roadmap
+## 11. Future Enhancements
 
-- **Documentation Generator**: `bodo docs`
+- **Documentation Generator**: `bodo docs` opens documentation in browser
 - **Artifact Caching**: Skip tasks if outputs exist
 - **Metrics Dashboard**: Track task performance
+- **Documentation Site**: Generate Markdown/HTML docs and output to a directory to be served
+- **Robust Editor Integration**: Real-time feedback
+- **Enhanced Kill Behavior**: Fine-tuned process control
+- **Task Aliasing**: Allow controlled name collisions
+- **Custom Plugins**: Allow custom plugins to be added to the graph
+- **Language Server Protocol (LSP)**:
+  - Autocomplete task names/paths
+  - Validate task references
+  - Hover documentation
+  - Warn about name collisions
+  - Suggest fixes for typos
+  - Auto-complete environment variables
+  - Support for VS Code, Neovim, etc.
+- **Sandbox Mode**:
+  - Restrict filesystem access to `cwd`
+  - Block network access
+  - Run untrusted tasks safely via `bodo --sandbox run-untrusted`
 
-## 14. Philosophy
+## 12. Philosophy
 
 - **Unix-like**: Composability, clear failure signals
 - **User-Centric**: Helpful errors, interactive prompts
 - **Extensible**: Plugin API > hardcoded features
+
+## 13. Environment Variables
+
+All Bodo-specific environment variables are prefixed with `BODO_`. Common variables include:
+
+| Variable              | Description                               | Default     |
+| --------------------- | ----------------------------------------- | ----------- |
+| `BODO_LOG_LEVEL`      | Logging verbosity (error/warn/info/debug) | `"info"`    |
+| `BODO_TASK_PATH`      | Default path for task files               | `"./tasks"` |
+| `BODO_PREFIX_COLOR`   | Default color for task output prefix      | `"white"`   |
+| `BODO_KILL_SIGNAL`    | Signal used to terminate tasks            | `"SIGTERM"` |
+| `BODO_WATCH_DEBOUNCE` | Watch mode debounce in ms                 | `500`       |
+| `BODO_MAX_CONCURRENT` | Default max concurrent tasks              | `4`         |
+| `BODO_PROJECT_ROOT`   | Root directory for relative paths         | `cwd`       |
+
+These variables can be set in:
+
+- Environment
+- `bodo.toml` configuration
+- Task-specific `env` section
