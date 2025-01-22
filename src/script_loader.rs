@@ -152,6 +152,11 @@ impl ScriptLoader {
                 .insert("watch".to_string(), serde_json::to_string(watch).unwrap());
         }
 
+        if let Some(timeout) = &cfg.timeout {
+            let node = &mut graph.nodes[node_id as usize];
+            node.metadata.insert("timeout".to_string(), timeout.clone());
+        }
+
         node_id
     }
 }

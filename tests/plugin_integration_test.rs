@@ -2,8 +2,13 @@ use std::collections::HashMap;
 
 use bodo::{
     graph::{Graph, NodeKind, TaskData},
-    plugin::{Plugin, PluginConfig},
-    plugins::{path_plugin::PathPlugin, prefix_plugin::PrefixPlugin},
+    plugin::{Plugin, PluginConfig, PluginManager},
+    plugins::{
+        execution_plugin::{self, ExecutionPlugin},
+        path_plugin::PathPlugin,
+        prefix_plugin::PrefixPlugin,
+        timeout_plugin::TimeoutPlugin,
+    },
     Result,
 };
 use serde_json::json;
@@ -168,6 +173,45 @@ async fn test_plugin_chain_with_empty_config() -> Result<()> {
     } else {
         panic!("Expected task node");
     }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_timeout_plugin() -> Result<()> {
+    let mut graph = Graph::new();
+    let task_id = graph.add_node(NodeKind::Task(TaskData {
+        name: "timeout_test".to_string(),
+        description: Some("Test timeout".to_string()),
+        command: Some("sleep 2".to_string()), // Command that runs longer than timeout
+        working_dir: None,
+        env: HashMap::new(),
+        is_default: false,
+        script_name: None,
+    }));
+
+    // Add timeout metadata (1 second)
+    let node = &mut graph.nodes[task_id as usize];
+    node.metadata
+        .insert("timeout".to_string(), "1s".to_string());
+
+    // Setup plugins
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(TimeoutPlugin));
+    manager.register(Box::new(ExecutionPlugin));
+
+    // Run plugins to process metadata
+    manager
+        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .await?;
+
+    // Execute the graph
+    let result = execution_plugin::execute_graph(&mut manager, &mut graph).await;
+
+    // Verify timeout error
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(err_msg.contains("timed out"), "Error was: {}", err_msg);
 
     Ok(())
 }

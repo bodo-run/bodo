@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use std::any::Any;
-use std::time::Duration;
 use tokio::{sync::mpsc, time::timeout};
 
 use crate::{
@@ -19,16 +18,7 @@ impl Plugin for ExecutionPlugin {
     }
 
     fn priority(&self) -> i32 {
-        50 // Lowest priority for core plugins
-    }
-
-    async fn on_before_run(&mut self, graph: &mut Graph) -> Result<()> {
-        if graph.has_cycle() {
-            return Err(BodoError::PluginError(
-                "Cannot run with cycles in the graph".to_string(),
-            ));
-        }
-        Ok(())
+        50
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -36,138 +26,101 @@ impl Plugin for ExecutionPlugin {
     }
 }
 
-/// Execute the graph in topological order, handling concurrent groups
 pub async fn execute_graph(manager: &mut PluginManager, graph: &mut Graph) -> Result<()> {
-    let order = graph.topological_sort()?;
+    let (tx, mut rx) = mpsc::channel::<Result<()>>(32);
     let mut done = vec![false; graph.nodes.len()];
 
-    for node_id in order {
-        let node_idx = node_id as usize;
-        if done[node_idx] {
-            continue;
-        }
-
-        manager.on_run_node(node_id, graph).await?;
-
-        // Clone the node kind to avoid borrow issues
-        let node_kind = graph.nodes[node_idx].kind.clone();
-        match node_kind {
-            NodeKind::Task(task_data) => {
-                println!("Running task: {}", task_data.name);
-                if let Some(cmd) = &task_data.command {
-                    // Here we'd use tokio::process::Command to actually run the command
-                    // For now we just print
-                    println!("Would execute: {}", cmd);
-                }
-                done[node_idx] = true;
+    while done.iter().any(|&x| !x) {
+        for node_idx in 0..graph.nodes.len() {
+            if done[node_idx] {
+                continue;
             }
-            NodeKind::Command(cmd_data) => {
-                println!("Running command: {}", cmd_data.raw_command);
-                // Here we'd use tokio::process::Command
-                done[node_idx] = true;
-            }
-            NodeKind::ConcurrentGroup(group_data) => {
-                execute_concurrent_group(manager, graph, node_id, &group_data, &mut done).await?;
-            }
-        }
-    }
 
-    Ok(())
-}
+            let node_kind = graph.nodes[node_idx].kind.clone();
+            match node_kind {
+                NodeKind::Task(task_data) => {
+                    if let Some(cmd) = &task_data.command {
+                        let timeout_seconds = graph.nodes[node_idx]
+                            .metadata
+                            .get("timeout_seconds")
+                            .and_then(|s| s.parse::<u64>().ok())
+                            .map(tokio::time::Duration::from_secs);
 
-async fn execute_concurrent_group(
-    _manager: &mut PluginManager,
-    graph: &mut Graph,
-    group_id: u64,
-    group_data: &ConcurrentGroupData,
-    done: &mut [bool],
-) -> Result<()> {
-    let children = &group_data.child_nodes;
-    if children.is_empty() {
-        done[group_id as usize] = true;
-        return Ok(());
-    }
+                        let mut command = tokio::process::Command::new("sh");
+                        command.arg("-c").arg(cmd);
+                        command.stdout(std::process::Stdio::inherit());
+                        command.stderr(std::process::Stdio::inherit());
 
-    let (tx, mut rx) = mpsc::unbounded_channel::<Result<()>>();
-    let mut handles = Vec::new();
+                        let mut child = command.spawn().map_err(|e| {
+                            BodoError::PluginError(format!("Failed to spawn command: {}", e))
+                        })?;
 
-    // Spawn tasks up to max_concurrent limit
-    let max_concurrent = group_data.max_concurrent.unwrap_or(children.len());
-    let mut active = 0;
-    let mut next_child = 0;
+                        let result = match timeout_seconds {
+                            Some(duration) => match timeout(duration, child.wait()).await {
+                                Ok(r) => r.map_err(|e| e.into()),
+                                Err(_) => {
+                                    let _ = child.kill().await;
+                                    Err(BodoError::PluginError(format!(
+                                        "Task '{}' timed out",
+                                        task_data.name
+                                    )))
+                                }
+                            },
+                            None => child.wait().await.map_err(|e| e.into()),
+                        };
 
-    while active > 0 || next_child < children.len() {
-        // Spawn new tasks if under limit
-        while active < max_concurrent && next_child < children.len() {
-            let child_id = children[next_child];
-            let tx = tx.clone();
-            let child_node = graph.nodes[child_id as usize].kind.clone();
-
-            let handle = tokio::spawn(async move {
-                match child_node {
-                    NodeKind::Task(t) => {
-                        println!("(Concurrent) Running task: {}", t.name);
-                        if let Some(cmd) = t.command {
-                            println!("Would execute: {}", cmd);
+                        match result {
+                            Ok(status) if status.success() => {}
+                            Ok(status) => {
+                                return Err(BodoError::PluginError(format!(
+                                    "Task '{}' failed with exit code {}",
+                                    task_data.name,
+                                    status.code().unwrap_or(1)
+                                )));
+                            }
+                            Err(e) => return Err(e),
                         }
-                        tx.send(Ok(())).unwrap_or_default();
                     }
-                    NodeKind::Command(c) => {
-                        println!("(Concurrent) Running command: {}", c.raw_command);
-                        tx.send(Ok(())).unwrap_or_default();
-                    }
-                    NodeKind::ConcurrentGroup(_) => {
-                        tx.send(Err(BodoError::PluginError(
-                            "Nested concurrency not supported".to_string(),
-                        )))
-                        .unwrap_or_default();
-                    }
+                    done[node_idx] = true;
                 }
-            });
+                NodeKind::Command(cmd_data) => {
+                    let mut command = tokio::process::Command::new("sh");
+                    command.arg("-c").arg(&cmd_data.raw_command);
+                    command.stdout(std::process::Stdio::inherit());
+                    command.stderr(std::process::Stdio::inherit());
 
-            handles.push(handle);
-            active += 1;
-            next_child += 1;
-        }
+                    let status = command.status().await.map_err(|e| {
+                        BodoError::PluginError(format!("Failed to execute command: {}", e))
+                    })?;
 
-        // Wait for a task to complete
-        if let Some(result) = rx.recv().await {
-            active -= 1;
-            match result {
-                Ok(_) => {}
-                Err(e) => {
-                    if group_data.fail_fast {
-                        // Cancel remaining tasks
-                        for handle in handles {
-                            handle.abort();
+                    if !status.success() {
+                        return Err(BodoError::PluginError(format!(
+                            "Command failed with exit code {}",
+                            status.code().unwrap_or(1)
+                        )));
+                    }
+                    done[node_idx] = true;
+                }
+                NodeKind::ConcurrentGroup(ConcurrentGroupData {
+                    child_nodes,
+                    fail_fast,
+                    max_concurrent,
+                    timeout_secs,
+                }) => {
+                    let mut all_done = true;
+                    for task_id in child_nodes {
+                        if !done[task_id as usize] {
+                            all_done = false;
+                            break;
                         }
-                        return Err(e);
+                    }
+                    if all_done {
+                        done[node_idx] = true;
                     }
                 }
             }
         }
     }
 
-    // Apply timeout if specified
-    if let Some(timeout_secs) = group_data.timeout_secs {
-        match timeout(
-            Duration::from_secs(timeout_secs),
-            futures::future::join_all(handles),
-        )
-        .await
-        {
-            Ok(_) => {}
-            Err(_) => {
-                return Err(BodoError::PluginError(format!(
-                    "Concurrent group timed out after {} seconds",
-                    timeout_secs
-                )));
-            }
-        }
-    } else {
-        futures::future::join_all(handles).await;
-    }
-
-    done[group_id as usize] = true;
     Ok(())
 }

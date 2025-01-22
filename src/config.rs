@@ -18,6 +18,7 @@ pub struct TaskConfig {
     pub pre_deps: Vec<String>,
     #[serde(default)]
     pub post_deps: Vec<String>,
+    pub timeout: Option<String>,
     pub watch: Option<WatchConfig>,
 }
 
