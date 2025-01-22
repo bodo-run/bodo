@@ -17,6 +17,10 @@ impl Plugin for ResolverPlugin {
         "ResolverPlugin"
     }
 
+    fn priority(&self) -> i32 {
+        100 // Highest priority for dependency resolution
+    }
+
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
         let mut edges = Vec::new();
 

@@ -116,6 +116,10 @@ impl Plugin for WatchPlugin {
         "WatchPlugin"
     }
 
+    fn priority(&self) -> i32 {
+        70 // Before execution plugins
+    }
+
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
         self.is_watching.store(true, Ordering::SeqCst);
 

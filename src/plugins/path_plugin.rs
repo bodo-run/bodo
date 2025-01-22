@@ -25,6 +25,10 @@ impl Plugin for PathPlugin {
         "PathPlugin"
     }
 
+    fn priority(&self) -> i32 {
+        85 // After env but before concurrency
+    }
+
     async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
         if let Some(options) = &config.options {
             if let Some(paths) = options.get("default_paths") {

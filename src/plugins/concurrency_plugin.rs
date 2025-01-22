@@ -16,6 +16,10 @@ impl Plugin for ConcurrencyPlugin {
         "ConcurrencyPlugin"
     }
 
+    fn priority(&self) -> i32 {
+        80 // After environment/path setup
+    }
+
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
         let mut transformations = Vec::new();
 

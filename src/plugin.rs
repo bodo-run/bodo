@@ -12,7 +12,14 @@ pub struct PluginConfig {
 }
 
 #[async_trait]
-pub trait Plugin: Send + Any {
+pub trait Plugin: Send + Any + Sync {
+    /// Returns the execution priority for this plugin. Plugins with higher
+    /// priority values execute earlier in the lifecycle phases. The default
+    /// priority is 0.
+    fn priority(&self) -> i32 {
+        0
+    }
+
     fn name(&self) -> &'static str;
 
     /// Called first to load or parse plugin config
@@ -70,6 +77,7 @@ impl PluginManager {
     }
 
     pub async fn run_lifecycle(&mut self, graph: &mut Graph, cfg: &PluginConfig) -> Result<()> {
+        self.plugins.sort_by(|a, b| b.priority().cmp(&a.priority()));
         // Phase 1: on_init
         for plugin in self.plugins.iter_mut() {
             plugin.on_init(cfg).await?;

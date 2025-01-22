@@ -18,6 +18,10 @@ impl Plugin for ExecutionPlugin {
         "ExecutionPlugin"
     }
 
+    fn priority(&self) -> i32 {
+        50 // Lowest priority for core plugins
+    }
+
     async fn on_before_run(&mut self, graph: &mut Graph) -> Result<()> {
         if graph.has_cycle() {
             return Err(BodoError::PluginError(
