@@ -8,6 +8,8 @@
 
 # `bodo`
 
+Read the [Design Document](./DESIGN.md) to see what am I cooking. 👨🏽‍🍳
+
 > [!WARNING]
 > This project is currently in development and is not ready for production use. It's open source just so I can use free CI!
 

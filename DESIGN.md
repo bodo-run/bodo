@@ -26,13 +26,12 @@ The core of Bodo is a **Graph Manager** that builds/manages a graph representing
 4. **Concurrent Plugin**: Wraps concurrent tasks
 5. **Watch Plugin**: Adds file watchers
 6. **Execution Plugin**: Runs processes
-
-### 2.2 Optional Plugins
-
-- **Timeout Plugin**: Adds task timeouts
-- **Interactive Plugin**: Enables TUI prompts
+7. **Timeout Plugin**: Adds task timeouts
+8. **Interactive Plugin**: Enables TUI prompts
 
 ### 2.3 Plugin Lifecycle and Ordering
+
+> Currently all plugins are internal. Custom plugins are not supported and will be added in the future.
 
 1. **Initialization**: Load configs, initialize plugins
 2. **Graph Build**: Resolve tasks, apply plugin transformations
