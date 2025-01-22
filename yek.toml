@@ -1,8 +1,7 @@
 output_dir = "./repo-serialized"
 
 # Add patterns to ignore (in addition to .gitignore)
-[ignore_patterns]
-patterns = [
+ignore_patterns = [
     "docs/",
     "target/",
     "Cargo.lock",
@@ -26,15 +25,15 @@ patterns = [
 # Higher scores are processed first
 [[priority_rules]]
 score = 100
-patterns = ["^src/"]
+pattern = "^src/"
 
 [[priority_rules]]
 score = 90
-patterns = ["^src/plugins/"]
+pattern = "^src/plugins/"
 
 [[priority_rules]]
 score = 40
-patterns = ["^tests/"]
+pattern = "^tests/"
 
 # Add additional binary file extensions to ignore
 binary_extensions = [
