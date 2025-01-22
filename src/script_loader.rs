@@ -57,9 +57,16 @@ impl ScriptLoader {
         Ok(graph)
     }
 
-    fn register_task(&mut self, file_label: &str, task_name: &str, node_id: u64) {
+    fn register_task(
+        &mut self,
+        file_label: &str,
+        task_name: &str,
+        node_id: u64,
+        graph: &mut Graph,
+    ) {
         let key = format!("{}#{}", file_label, task_name);
-        self.name_to_id.insert(key, node_id);
+        self.name_to_id.insert(key.clone(), node_id);
+        graph.task_registry.insert(key, node_id);
     }
 
     fn load_one_file(&mut self, path: &Path, graph: &mut Graph) -> Result<()> {
@@ -96,11 +103,25 @@ impl ScriptLoader {
 
         // Create nodes for each task
         let default_id = self.create_task_node(graph, &file_stem, "default", &default_task);
-        self.register_task(&file_stem, "default", default_id);
+        self.register_task(&file_stem, "default", default_id, graph);
 
         for (name, task_config) in tasks_map {
             let task_id = self.create_task_node(graph, &file_stem, &name, &task_config);
-            self.register_task(&file_stem, &name, task_id);
+            self.register_task(&file_stem, &name, task_id, graph);
+
+            let node = &mut graph.nodes[task_id as usize];
+            if !task_config.pre_deps.is_empty() {
+                node.metadata.insert(
+                    "pre_deps".to_string(),
+                    serde_json::to_string(&task_config.pre_deps).unwrap(),
+                );
+            }
+            if !task_config.post_deps.is_empty() {
+                node.metadata.insert(
+                    "post_deps".to_string(),
+                    serde_json::to_string(&task_config.post_deps).unwrap(),
+                );
+            }
         }
 
         Ok(())

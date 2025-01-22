@@ -14,6 +14,10 @@ pub struct TaskConfig {
     pub description: Option<String>,
     pub command: Option<String>,
     pub cwd: Option<String>,
+    #[serde(default)]
+    pub pre_deps: Vec<String>,
+    #[serde(default)]
+    pub post_deps: Vec<String>,
 }
 
 impl BodoConfig {

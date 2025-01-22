@@ -5,6 +5,7 @@ use bodo::{
         concurrency_plugin::ConcurrencyPlugin,
         env_plugin::EnvPlugin,
         execution_plugin::{execute_graph, ExecutionPlugin},
+        resolver_plugin::ResolverPlugin,
     },
     Result,
 };
@@ -38,21 +39,20 @@ async fn main() -> Result<()> {
         script_name: None,
     }));
 
-    // Add concurrency metadata to the build task
+    // Register tasks in registry
+    graph.task_registry.insert("build".to_string(), task_id);
+    graph.task_registry.insert("test".to_string(), test_id);
+
+    // Add dependency metadata to the test task
     {
-        let node = &mut graph.nodes[task_id as usize];
-        node.metadata.insert(
-            "concurrently".to_string(),
-            json!({
-                "children": [test_id],
-                "fail_fast": true
-            })
-            .to_string(),
-        );
+        let node = &mut graph.nodes[test_id as usize];
+        node.metadata
+            .insert("pre_deps".to_string(), json!(["build"]).to_string());
     }
 
     // Create and configure plugins
     let mut manager = PluginManager::new();
+    manager.register(Box::new(ResolverPlugin));
     manager.register(Box::new(ConcurrencyPlugin));
     manager.register(Box::new(EnvPlugin::new()));
     manager.register(Box::new(ExecutionPlugin));

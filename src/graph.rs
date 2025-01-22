@@ -79,6 +79,7 @@ pub struct Edge {
 pub struct Graph {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
+    pub task_registry: HashMap<String, NodeId>,
 }
 
 impl Graph {
@@ -86,6 +87,7 @@ impl Graph {
         Self {
             nodes: Vec::new(),
             edges: Vec::new(),
+            task_registry: HashMap::new(),
         }
     }
 
