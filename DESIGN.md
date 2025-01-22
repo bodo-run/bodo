@@ -239,13 +239,10 @@ bodo --dry-run ci  # Validate execution plan
 
 ## 11. Future Enhancements
 
-- **Documentation Generator**: `bodo docs` opens documentation in browser
-- **Artifact Caching**: Skip tasks if outputs exist
-- **Metrics Dashboard**: Track task performance
-- **Documentation Site**: Generate Markdown/HTML docs and output to a directory to be served
+- **Documentation Generator**:
+  - `bodo docs` opens documentation in browser
+  - Generate Markdown/HTML docs and output to a directory to be served
 - **Robust Editor Integration**: Real-time feedback
-- **Enhanced Kill Behavior**: Fine-tuned process control
-- **Task Aliasing**: Allow controlled name collisions
 - **Custom Plugins**: Allow custom plugins to be added to the graph
 - **Language Server Protocol (LSP)**:
   - Autocomplete task names/paths
@@ -259,6 +256,7 @@ bodo --dry-run ci  # Validate execution plan
   - Restrict filesystem access to `cwd`
   - Block network access
   - Run untrusted tasks safely via `bodo --sandbox run-untrusted`
+- **Automatic Migration Scripts**: Generate scripts for migrating from `Makefile`/`package.json`/other script runners
 
 ## 12. Philosophy
 
