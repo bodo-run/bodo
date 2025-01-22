@@ -192,10 +192,8 @@ impl Graph {
             visited[u] = true;
             stack[u] = true;
             for e in &graph.edges {
-                if e.from as usize == u {
-                    if dfs(graph, e.to as usize, visited, stack) {
-                        return true;
-                    }
+                if e.from as usize == u && dfs(graph, e.to as usize, visited, stack) {
+                    return true;
                 }
             }
             stack[u] = false;

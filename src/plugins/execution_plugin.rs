@@ -26,8 +26,8 @@ impl Plugin for ExecutionPlugin {
     }
 }
 
-pub async fn execute_graph(manager: &mut PluginManager, graph: &mut Graph) -> Result<()> {
-    let (tx, mut rx) = mpsc::channel::<Result<()>>(32);
+pub async fn execute_graph(_manager: &mut PluginManager, graph: &mut Graph) -> Result<()> {
+    let (_tx, _rx) = mpsc::channel::<Result<()>>(32);
     let mut done = vec![false; graph.nodes.len()];
 
     while done.iter().any(|&x| !x) {
@@ -103,9 +103,9 @@ pub async fn execute_graph(manager: &mut PluginManager, graph: &mut Graph) -> Re
                 }
                 NodeKind::ConcurrentGroup(ConcurrentGroupData {
                     child_nodes,
-                    fail_fast,
-                    max_concurrent,
-                    timeout_secs,
+                    fail_fast: _,
+                    max_concurrent: _,
+                    timeout_secs: _,
                 }) => {
                     let mut all_done = true;
                     for task_id in child_nodes {
