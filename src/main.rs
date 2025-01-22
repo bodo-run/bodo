@@ -6,6 +6,7 @@ use bodo::{
         env_plugin::EnvPlugin,
         execution_plugin::{execute_graph, ExecutionPlugin},
         resolver_plugin::ResolverPlugin,
+        watch_plugin::WatchPlugin,
     },
     Result,
 };
@@ -55,6 +56,7 @@ async fn main() -> Result<()> {
     manager.register(Box::new(ResolverPlugin));
     manager.register(Box::new(ConcurrencyPlugin));
     manager.register(Box::new(EnvPlugin::new()));
+    manager.register(Box::new(WatchPlugin::new()));
     manager.register(Box::new(ExecutionPlugin));
 
     // Configure global environment variables

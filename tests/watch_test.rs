@@ -11,12 +11,10 @@ use tokio::time::sleep;
 
 #[tokio::test]
 async fn test_watch_basic() -> Result<()> {
-    // Create a temporary directory
     let dir = tempdir()?;
     let test_file = dir.path().join("test.txt");
     fs::write(&test_file, "initial content")?;
 
-    // Create graph with watched task
     let mut graph = Graph::new();
     let task_id = graph.add_node(NodeKind::Task(TaskData {
         name: "watch_test".into(),
@@ -28,7 +26,6 @@ async fn test_watch_basic() -> Result<()> {
         script_name: None,
     }));
 
-    // Add watch config
     let node = &mut graph.nodes[task_id as usize];
     node.metadata.insert(
         "watch".to_string(),
@@ -40,17 +37,14 @@ async fn test_watch_basic() -> Result<()> {
         .to_string(),
     );
 
-    // Setup plugins
     let mut manager = PluginManager::new();
     manager.register(Box::new(WatchPlugin::new()));
     manager.register(Box::new(ExecutionPlugin));
 
-    // Run plugins
     manager
         .run_lifecycle(&mut graph, &PluginConfig::default())
         .await?;
 
-    // Modify file and wait for debounce
     sleep(Duration::from_millis(200)).await;
     fs::write(&test_file, "modified content")?;
     sleep(Duration::from_millis(200)).await;
@@ -60,14 +54,12 @@ async fn test_watch_basic() -> Result<()> {
 
 #[tokio::test]
 async fn test_watch_ignore_patterns() -> Result<()> {
-    // Create a temporary directory
     let dir = tempdir()?;
     let test_file = dir.path().join("test.txt");
     let ignored_file = dir.path().join("ignored.tmp");
     fs::write(&test_file, "initial content")?;
     fs::write(&ignored_file, "initial content")?;
 
-    // Create graph with watched task
     let mut graph = Graph::new();
     let task_id = graph.add_node(NodeKind::Task(TaskData {
         name: "watch_test".into(),
@@ -79,7 +71,6 @@ async fn test_watch_ignore_patterns() -> Result<()> {
         script_name: None,
     }));
 
-    // Add watch config with ignore pattern
     let node = &mut graph.nodes[task_id as usize];
     node.metadata.insert(
         "watch".to_string(),
@@ -91,17 +82,14 @@ async fn test_watch_ignore_patterns() -> Result<()> {
         .to_string(),
     );
 
-    // Setup plugins
     let mut manager = PluginManager::new();
     manager.register(Box::new(WatchPlugin::new()));
     manager.register(Box::new(ExecutionPlugin));
 
-    // Run plugins
     manager
         .run_lifecycle(&mut graph, &PluginConfig::default())
         .await?;
 
-    // Modify both files and wait for debounce
     sleep(Duration::from_millis(200)).await;
     fs::write(&test_file, "modified content")?;
     fs::write(&ignored_file, "modified content")?;
@@ -112,12 +100,10 @@ async fn test_watch_ignore_patterns() -> Result<()> {
 
 #[tokio::test]
 async fn test_watch_debounce() -> Result<()> {
-    // Create a temporary directory
     let dir = tempdir()?;
     let test_file = dir.path().join("test.txt");
     fs::write(&test_file, "initial content")?;
 
-    // Create graph with watched task
     let mut graph = Graph::new();
     let task_id = graph.add_node(NodeKind::Task(TaskData {
         name: "watch_test".into(),
@@ -129,7 +115,6 @@ async fn test_watch_debounce() -> Result<()> {
         script_name: None,
     }));
 
-    // Add watch config with long debounce
     let node = &mut graph.nodes[task_id as usize];
     node.metadata.insert(
         "watch".to_string(),
@@ -141,17 +126,14 @@ async fn test_watch_debounce() -> Result<()> {
         .to_string(),
     );
 
-    // Setup plugins
     let mut manager = PluginManager::new();
     manager.register(Box::new(WatchPlugin::new()));
     manager.register(Box::new(ExecutionPlugin));
 
-    // Run plugins
     manager
         .run_lifecycle(&mut graph, &PluginConfig::default())
         .await?;
 
-    // Modify file multiple times within debounce period
     sleep(Duration::from_millis(200)).await;
     for i in 0..5 {
         fs::write(&test_file, format!("content {}", i))?;

@@ -143,6 +143,15 @@ impl ScriptLoader {
             is_default: false,
             script_name: None,
         };
-        graph.add_node(NodeKind::Task(task_data))
+        let node_id = graph.add_node(NodeKind::Task(task_data));
+
+        // Add watch config to metadata if present
+        if let Some(watch) = &cfg.watch {
+            let node = &mut graph.nodes[node_id as usize];
+            node.metadata
+                .insert("watch".to_string(), serde_json::to_string(watch).unwrap());
+        }
+
+        node_id
     }
 }

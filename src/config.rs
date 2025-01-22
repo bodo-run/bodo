@@ -18,6 +18,20 @@ pub struct TaskConfig {
     pub pre_deps: Vec<String>,
     #[serde(default)]
     pub post_deps: Vec<String>,
+    pub watch: Option<WatchConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatchConfig {
+    pub patterns: Vec<String>,
+    #[serde(default = "default_debounce_ms")]
+    pub debounce_ms: u64,
+    #[serde(default)]
+    pub ignore_patterns: Vec<String>,
+}
+
+fn default_debounce_ms() -> u64 {
+    500
 }
 
 impl BodoConfig {

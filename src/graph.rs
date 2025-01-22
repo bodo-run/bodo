@@ -59,7 +59,7 @@ pub struct ConcurrentGroupData {
 }
 
 /// A node in the graph
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
     pub id: NodeId,
     pub kind: NodeKind,
@@ -68,14 +68,14 @@ pub struct Node {
 }
 
 /// A directed edge in the graph (dependency or order).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Edge {
     pub from: NodeId,
     pub to: NodeId,
 }
 
 /// Core Graph structure.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Graph {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,

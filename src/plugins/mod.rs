@@ -6,3 +6,4 @@ pub mod path_plugin;
 pub mod prefix_plugin;
 pub mod print_list_plugin;
 pub mod resolver_plugin;
+pub mod watch_plugin;
