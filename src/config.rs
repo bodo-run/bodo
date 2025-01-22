@@ -19,6 +19,7 @@ pub struct TaskConfig {
     #[serde(default)]
     pub post_deps: Vec<String>,
     pub watch: Option<WatchConfig>,
+    pub timeout: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
