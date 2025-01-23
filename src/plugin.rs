@@ -77,7 +77,8 @@ impl PluginManager {
     }
 
     pub async fn run_lifecycle(&mut self, graph: &mut Graph, cfg: &PluginConfig) -> Result<()> {
-        self.plugins.sort_by(|a, b| b.priority().cmp(&a.priority()));
+        self.plugins
+            .sort_by_key(|b| std::cmp::Reverse(b.priority()));
         // Phase 1: on_init
         for plugin in self.plugins.iter_mut() {
             plugin.on_init(cfg).await?;
@@ -120,5 +121,10 @@ impl PluginManager {
             plugin.on_run(node_id, graph).await?;
         }
         Ok(())
+    }
+
+    pub fn sort_plugins(&mut self) {
+        self.plugins
+            .sort_by_key(|b| std::cmp::Reverse(b.priority()));
     }
 }

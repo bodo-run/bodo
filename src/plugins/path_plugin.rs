@@ -19,6 +19,12 @@ impl PathPlugin {
     }
 }
 
+impl Default for PathPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl Plugin for PathPlugin {
     fn name(&self) -> &'static str {

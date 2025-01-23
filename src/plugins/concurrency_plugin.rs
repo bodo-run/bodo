@@ -3,7 +3,6 @@ use serde_json::Value;
 use std::any::Any;
 
 use crate::{
-    errors::BodoError,
     graph::{ConcurrentGroupData, Graph, NodeKind},
     plugin::Plugin,
     Result,

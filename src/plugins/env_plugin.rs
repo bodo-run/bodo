@@ -17,6 +17,12 @@ impl EnvPlugin {
     }
 }
 
+impl Default for EnvPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl Plugin for EnvPlugin {
     fn name(&self) -> &'static str {

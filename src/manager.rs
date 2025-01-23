@@ -13,6 +13,12 @@ pub struct GraphManager {
     plugin_manager: PluginManager,
 }
 
+impl Default for GraphManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GraphManager {
     pub fn new() -> Self {
         Self {
@@ -81,5 +87,9 @@ impl GraphManager {
         }
 
         Ok(())
+    }
+
+    pub fn get_task_name_by_name(&self, task_name: &str) -> Option<String> {
+        self.get_task_by_name(task_name).map(|t| t.name.clone())
     }
 }

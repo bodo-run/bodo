@@ -39,12 +39,7 @@ impl Plugin for TimeoutPlugin {
 }
 
 fn parse_timeout(s: &str) -> Result<u64> {
-    let duration = parse_duration(s).map_err(|e| {
-        BodoError::PluginError(format!(
-            "Invalid timeout duration '{}': {}",
-            s,
-            e.to_string()
-        ))
-    })?;
+    let duration = parse_duration(s)
+        .map_err(|e| BodoError::PluginError(format!("Invalid timeout duration '{}': {}", s, e)))?;
     Ok(duration.as_secs())
 }

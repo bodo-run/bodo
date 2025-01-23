@@ -14,6 +14,12 @@ pub struct ScriptLoader {
     name_to_id: HashMap<String, u64>,
 }
 
+impl Default for ScriptLoader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScriptLoader {
     pub fn new() -> Self {
         Self {

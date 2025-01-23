@@ -24,6 +24,12 @@ pub struct WatchPlugin {
     is_watching: Arc<AtomicBool>,
 }
 
+impl Default for WatchPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WatchPlugin {
     pub fn new() -> Self {
         Self {

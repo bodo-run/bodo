@@ -17,6 +17,12 @@ impl PrefixPlugin {
     }
 }
 
+impl Default for PrefixPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl Plugin for PrefixPlugin {
     fn name(&self) -> &'static str {
