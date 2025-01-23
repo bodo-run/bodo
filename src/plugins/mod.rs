@@ -1,6 +1,7 @@
 use crate::{errors::BodoError, graph::Graph, Result};
 use serde_json::{Map, Value};
 use std::any::Any;
+use std::error::Error;
 
 pub mod concurrent_plugin;
 pub mod env_plugin;
@@ -44,6 +45,16 @@ impl PluginManager {
         self.plugins.push(plugin);
     }
 
+    pub fn register_plugin(
+        &mut self,
+        plugin: Box<dyn Plugin>,
+        config: Option<Value>,
+    ) -> Result<()> {
+        let _config = config.unwrap_or_default();
+        self.plugins.push(plugin);
+        Ok(())
+    }
+
     pub async fn run_lifecycle(
         &mut self,
         graph: &mut Graph,
@@ -68,5 +79,11 @@ impl PluginManager {
         }
 
         Ok(())
+    }
+}
+
+impl Default for PluginManager {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -1,6 +1,6 @@
 use bodo::{
     config::BodoConfig, errors::BodoError, manager::GraphManager,
-    plugins::print_list_plugin::PrintListPlugin, Result,
+    plugins::print_list_plugin::PrintListPlugin,
 };
 use clap::Parser;
 use std::collections::HashMap;

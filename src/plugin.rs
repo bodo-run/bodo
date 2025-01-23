@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use serde_json::{Map, Value};
 use std::any::Any;
 
@@ -102,5 +101,11 @@ impl PluginManager {
     pub fn sort_plugins(&mut self) {
         self.plugins
             .sort_by_key(|b| std::cmp::Reverse(b.priority()));
+    }
+}
+
+impl Default for PluginManager {
+    fn default() -> Self {
+        Self::new()
     }
 }

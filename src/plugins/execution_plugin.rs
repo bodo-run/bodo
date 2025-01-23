@@ -1,5 +1,6 @@
 use crate::{
-    errors::BodoError,
+    // Remove unused import
+    // errors::BodoError,
     graph::{Graph, NodeKind},
     plugin::Plugin,
     Result,
@@ -12,6 +13,12 @@ pub struct ExecutionPlugin;
 impl ExecutionPlugin {
     pub fn new() -> Self {
         Self
+    }
+}
+
+impl Default for ExecutionPlugin {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

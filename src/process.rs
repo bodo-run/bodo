@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::{
@@ -96,6 +95,8 @@ impl ProcessManager {
                 let mc_name = locked[idx].name.clone();
                 let mc_color = locked[idx].color.clone();
                 let mut child_orig = std::mem::replace(&mut locked[idx].child, dummy_child()?);
+                // Wait for the child process to avoid zombie processes
+                child_orig.wait()?;
 
                 let c_any_failure = Arc::clone(&any_failure_for_threads);
                 let c_stop_signal = Arc::clone(&stop_for_threads);

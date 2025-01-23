@@ -5,7 +5,6 @@ use crate::{
     Result,
 };
 use async_trait::async_trait;
-use serde_json::from_str;
 use std::any::Any;
 
 pub struct ConcurrentPlugin;
@@ -13,6 +12,12 @@ pub struct ConcurrentPlugin;
 impl ConcurrentPlugin {
     pub fn new() -> Self {
         Self
+    }
+}
+
+impl Default for ConcurrentPlugin {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -74,11 +79,11 @@ impl Plugin for ConcurrentPlugin {
             let group_id = graph.add_node(group_node);
 
             // Add edge from parent to group
-            graph.add_edge(parent_id, group_id);
+            let _ = graph.add_edge(parent_id, group_id);
 
             // Add edges from group to children
             for child_id in children {
-                graph.add_edge(group_id, child_id);
+                let _ = graph.add_edge(group_id, child_id);
             }
         }
 
