@@ -1,0 +1,25 @@
+default_task:
+  command: echo "Running default task"
+  description: "Default task example"
+
+tasks:
+  build:
+    command: cargo build --release
+    description: Build release binary
+
+  test:
+    command: cargo test --verbose
+    description: Run all tests
+    pre_deps: [build]
+
+  check:
+    command: cargo clippy
+    description: Run clippy checks
+
+  watch:
+    command: cargo watch -x test
+    description: Watch for changes and run tests
+
+  clean:
+    command: cargo clean
+    description: Clean build artifacts

@@ -148,13 +148,13 @@ struct PrefixSettings {
     padding_width: usize,
 }
 
-pub struct TaskManager {
+pub struct TaskManager<'a> {
     pub config: TaskConfig,
-    pub(crate) plugin_manager: PluginManager,
+    pub(crate) plugin_manager: &'a PluginManager,
 }
 
-impl TaskManager {
-    pub fn new(config: TaskConfig, plugin_manager: PluginManager) -> Self {
+impl<'a> TaskManager<'a> {
+    pub fn new(config: TaskConfig, plugin_manager: &'a PluginManager) -> Self {
         Self {
             config,
             plugin_manager,
@@ -349,6 +349,6 @@ mod tests {
         };
         let plugin_manager = PluginManager::new();
 
-        let _task_manager = TaskManager::new(config, plugin_manager);
+        let _task_manager = TaskManager::new(config, &plugin_manager);
     }
 }

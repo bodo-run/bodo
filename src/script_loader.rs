@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
 
 use crate::{
     config::{BodoConfig, TaskConfig},
@@ -11,7 +12,8 @@ use crate::{
 /// Simplified ScriptLoader that handles loading task configurations from files.
 pub struct ScriptLoader {
     // Track tasks across all files: "fileLabel#taskName" -> node ID
-    name_to_id: HashMap<String, u64>,
+    pub name_to_id: HashMap<String, u64>,
+    pub task_registry: HashMap<String, u64>,
 }
 
 impl Default for ScriptLoader {
@@ -24,6 +26,7 @@ impl ScriptLoader {
     pub fn new() -> Self {
         Self {
             name_to_id: HashMap::new(),
+            task_registry: HashMap::new(),
         }
     }
 
@@ -40,116 +43,105 @@ impl ScriptLoader {
             }
         }
 
-        // Load from scripts_dir if configured
+        // Load additional scripts from scripts_dirs
         if let Some(ref scripts_dirs) = config.scripts_dirs {
-            for scripts_dir in scripts_dirs {
-                let dir_path = PathBuf::from(scripts_dir);
-                if dir_path.exists() && dir_path.is_dir() {
-                    // First try to load script.yaml in the root
-                    let root_script = dir_path.join("script.yaml");
-                    if root_script.exists() {
-                        paths_to_load.push((root_script, "default".to_string()));
-                    }
+            for dir in scripts_dirs {
+                let dir_path = PathBuf::from(dir);
+                if !dir_path.exists() {
+                    continue;
+                }
 
-                    // Then load all subdirectories
-                    if let Ok(entries) = fs::read_dir(&dir_path) {
-                        for entry in entries.flatten() {
-                            let path = entry.path();
-                            if path.is_dir() {
-                                let script_path = path.join("script.yaml");
-                                if script_path.exists() {
-                                    let script_name = path
-                                        .file_name()
-                                        .unwrap_or_default()
-                                        .to_string_lossy()
-                                        .to_string();
-                                    paths_to_load.push((script_path, script_name));
-                                }
-                            }
+                // Use walkdir to traverse directories recursively
+                for entry in WalkDir::new(&dir_path)
+                    .follow_links(true)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                {
+                    let path = entry.path().to_path_buf();
+                    let file_name = path.file_name().map(|n| n.to_string_lossy());
+
+                    if let Some(name) = file_name {
+                        if name == "script.yaml" || name == "script.yml" {
+                            // For script.yaml files, use the parent directory name
+                            let script_name = path
+                                .parent()
+                                .and_then(|p| p.file_name())
+                                .map(|n| n.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| "default".to_string());
+                            paths_to_load.push((path, script_name));
+                        } else if name.ends_with(".yaml") || name.ends_with(".yml") {
+                            // For other YAML files, use the file stem
+                            let script_name = path
+                                .file_stem()
+                                .map(|n| n.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| "default".to_string());
+                            paths_to_load.push((path, script_name));
                         }
                     }
                 }
             }
         }
 
-        // Load each file in sequence
+        // Load each script file
         for (path, script_name) in paths_to_load {
-            if path.is_file() {
-                if let Err(e) = self.load_one_file(&path, &script_name, &mut graph) {
-                    eprintln!("Warning: could not parse {:?}: {}", path, e);
-                }
-            }
+            self.load_script(&mut graph, &path, &script_name)?;
         }
 
-        // Return empty graph if no tasks were loaded
         Ok(graph)
     }
 
-    fn register_task(
-        &mut self,
-        script_name: &str,
-        task_name: &str,
-        node_id: u64,
-        graph: &mut Graph,
-    ) -> Result<()> {
-        // Use script_name:task_name as registry key
-        let key = if script_name == "default" {
-            task_name.to_string()
-        } else {
-            format!("{}:{}", script_name, task_name)
-        };
-
-        // Check for name collisions
-        if graph.task_registry.contains_key(&key) {
-            return Err(BodoError::PluginError(format!(
-                "Task name collision: {}",
-                key
-            )));
-        }
-
-        self.name_to_id.insert(key.clone(), node_id);
-        graph.task_registry.insert(key, node_id);
-
-        Ok(())
-    }
-
-    fn load_one_file(&mut self, path: &Path, script_name: &str, graph: &mut Graph) -> Result<()> {
+    fn load_script(&mut self, graph: &mut Graph, path: &Path, script_name: &str) -> Result<()> {
         let contents = fs::read_to_string(path)?;
-        let yaml: serde_yaml::Value = serde_yaml::from_str(&contents).map_err(|e| {
-            BodoError::PluginError(format!("YAML parse error in {:?}: {}", path, e))
-        })?;
-
-        // First try to load tasks
-        let tasks_obj = yaml
-            .get("tasks")
-            .cloned()
-            .unwrap_or_else(|| serde_yaml::Value::Mapping(Default::default()));
-
-        let tasks_map: HashMap<String, TaskConfig> = match tasks_obj {
-            serde_yaml::Value::Mapping(map) => {
-                let mut result = HashMap::new();
-                for (key, value) in map {
-                    let key_str = key.as_str().ok_or_else(|| {
-                        BodoError::PluginError("Task name must be a string".to_string())
-                    })?;
-                    let task_config: TaskConfig = serde_yaml::from_value(value).map_err(|e| {
-                        BodoError::PluginError(format!("Cannot parse task {}: {}", key_str, e))
-                    })?;
-                    result.insert(key_str.to_string(), task_config);
-                }
-                result
+        let yaml = match serde_yaml::from_str::<serde_yaml::Value>(&contents) {
+            Ok(yaml) => yaml,
+            Err(e) => {
+                eprintln!(
+                    "Warning: Skipping invalid YAML file {}: {}",
+                    path.display(),
+                    e
+                );
+                return Ok(());
             }
-            _ => HashMap::new(),
         };
 
-        // Then try to load default_task if present
-        if let Some(default_obj) = yaml.get("default_task") {
-            let default_task: TaskConfig = serde_yaml::from_value(default_obj.clone())
-                .map_err(|e| BodoError::PluginError(format!("Cannot parse default_task: {e}")))?;
-
-            let default_id = self.create_task_node(graph, script_name, "default", &default_task);
+        // Load default task if present
+        if let Some(default_task) = yaml.get("default_task") {
+            let task_config = match serde_yaml::from_value(default_task.clone()) {
+                Ok(config) => config,
+                Err(e) => {
+                    eprintln!("Warning: Invalid default task in {}: {}", path.display(), e);
+                    return Ok(());
+                }
+            };
+            let default_id = self.create_task_node(graph, script_name, "default", &task_config);
             self.register_task(script_name, "default", default_id, graph)?;
         }
+
+        // Load tasks map
+        let tasks_map = yaml
+            .get("tasks")
+            .and_then(|v| v.as_mapping())
+            .map(|m| {
+                m.iter()
+                    .filter_map(|(k, v)| {
+                        let name = k.as_str().unwrap_or_default().to_string();
+                        match serde_yaml::from_value(v.clone()) {
+                            Ok(config) => Some(Ok((name, config))),
+                            Err(e) => {
+                                eprintln!(
+                                    "Warning: Invalid task '{}' in {}: {}",
+                                    name,
+                                    path.display(),
+                                    e
+                                );
+                                None
+                            }
+                        }
+                    })
+                    .collect::<Result<HashMap<String, TaskConfig>>>()
+            })
+            .transpose()?
+            .unwrap_or_default();
 
         // Create nodes for each task
         for (name, task_config) in tasks_map {
@@ -182,32 +174,50 @@ impl ScriptLoader {
         cfg: &TaskConfig,
     ) -> u64 {
         let task_data = TaskData {
-            name: if script_name == "default" {
-                name.to_string()
-            } else {
-                format!("{}:{}", script_name, name)
-            },
+            name: name.to_string(),
             description: cfg.description.clone(),
             command: cfg.command.clone(),
             working_dir: cfg.cwd.clone(),
-            env: cfg.env.clone(),
             is_default: name == "default",
             script_name: Some(script_name.to_string()),
+            env: cfg.env.clone(),
         };
-        let node_id = graph.add_node(NodeKind::Task(task_data));
 
-        // Add watch config to metadata if present
-        if let Some(watch) = &cfg.watch {
-            let node = &mut graph.nodes[node_id as usize];
-            node.metadata
-                .insert("watch".to_string(), serde_json::to_string(watch).unwrap());
+        graph.add_node(NodeKind::Task(task_data))
+    }
+
+    fn register_task(
+        &mut self,
+        script_name: &str,
+        task_name: &str,
+        node_id: u64,
+        graph: &mut Graph,
+    ) -> Result<()> {
+        // Register with full key
+        let full_key = format!("{}#{}", script_name, task_name);
+        if self.name_to_id.contains_key(&full_key) {
+            return Err(BodoError::PluginError(format!(
+                "Duplicate task name: {}",
+                task_name
+            )));
+        }
+        self.name_to_id.insert(full_key.clone(), node_id);
+        graph.task_registry.insert(full_key, node_id);
+
+        // Register default task under script name
+        if task_name == "default" {
+            let script_key = script_name.to_string();
+            if !graph.task_registry.contains_key(&script_key) {
+                graph.task_registry.insert(script_key, node_id);
+            }
         }
 
-        if let Some(timeout) = &cfg.timeout {
-            let node = &mut graph.nodes[node_id as usize];
-            node.metadata.insert("timeout".to_string(), timeout.clone());
+        // Register task under its name if it doesn't conflict
+        let task_key = task_name.to_string();
+        if !graph.task_registry.contains_key(&task_key) {
+            graph.task_registry.insert(task_key, node_id);
         }
 
-        node_id
+        Ok(())
     }
 }

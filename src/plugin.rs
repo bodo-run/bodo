@@ -6,9 +6,11 @@ use crate::errors::BodoError;
 use crate::graph::{Graph, NodeId};
 use crate::Result;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct PluginConfig {
-    pub options: Option<Map<String, Value>>,
+    pub watch: bool,
+    pub list: bool,
+    pub options: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 #[async_trait]
@@ -56,7 +58,6 @@ pub trait Plugin: Send + Any + Sync {
     fn as_any(&self) -> &dyn Any;
 }
 
-#[derive(Default)]
 pub struct PluginManager {
     plugins: Vec<Box<dyn Plugin>>,
 }
@@ -76,12 +77,12 @@ impl PluginManager {
         self.plugins.iter().map(|p| p.name().to_string()).collect()
     }
 
-    pub async fn run_lifecycle(&mut self, graph: &mut Graph, cfg: &PluginConfig) -> Result<()> {
+    pub async fn run_lifecycle(&mut self, graph: &mut Graph, config: &PluginConfig) -> Result<()> {
         self.plugins
             .sort_by_key(|b| std::cmp::Reverse(b.priority()));
         // Phase 1: on_init
         for plugin in self.plugins.iter_mut() {
-            plugin.on_init(cfg).await?;
+            plugin.on_init(config).await?;
         }
 
         // Phase 2: on_before_graph_build

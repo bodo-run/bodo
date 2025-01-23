@@ -25,6 +25,8 @@ async fn test_path_plugin_task() -> Result<()> {
 
     let mut plugin = PathPlugin::new();
     let config = PluginConfig {
+        watch: false,
+        list: false,
         options: Some(
             json!({
                 "default_paths": ["/usr/local/bin", "/usr/bin"]
@@ -65,6 +67,8 @@ async fn test_path_plugin_command() -> Result<()> {
 
     let mut plugin = PathPlugin::new();
     let config = PluginConfig {
+        watch: false,
+        list: false,
         options: Some(
             json!({
                 "default_paths": ["/usr/local/bin", "/usr/bin"]

@@ -12,7 +12,7 @@ use crate::{
 pub struct GraphManager {
     pub config: BodoConfig,
     pub graph: Graph,
-    plugin_manager: PluginManager,
+    pub plugin_manager: PluginManager,
 }
 
 impl Default for GraphManager {
@@ -34,11 +34,11 @@ impl GraphManager {
         self.plugin_manager.register(plugin);
     }
 
-    pub async fn build_graph(&mut self, config: BodoConfig) -> Result<()> {
+    pub async fn build_graph(&mut self, config: BodoConfig) -> Result<&Graph> {
         self.config = config.clone();
         let mut loader = ScriptLoader::new();
         self.graph = loader.build_graph(config).await?;
-        Ok(())
+        Ok(&self.graph)
     }
 
     pub async fn run_plugins(&mut self, config: Option<PluginConfig>) -> Result<()> {
@@ -90,27 +90,40 @@ impl GraphManager {
             .and_then(|t| t.script_name.clone())
     }
 
-    pub async fn run_task(&mut self, task_name: &str) -> Result<()> {
-        let task = self
-            .get_task_by_name(task_name)
-            .ok_or_else(|| BodoError::PluginError(format!("Task not found: {}", task_name)))?;
+    pub async fn run_task(&self, task_name: &str) -> Result<()> {
+        let task = if let Some(node_id) = self.graph.task_registry.get(task_name) {
+            // First try to find a task by exact name in the registry
+            let node = self
+                .graph
+                .nodes
+                .get(*node_id as usize)
+                .ok_or_else(|| BodoError::PluginError("Invalid node ID".to_string()))?;
+            if let NodeKind::Task(task_data) = &node.kind {
+                task_data
+            } else {
+                return Err(BodoError::PluginError(
+                    "Registry points to non-task node".to_string(),
+                ));
+            }
+        } else {
+            // If not found in registry, try to find by name
+            self.get_task_by_name(task_name)
+                .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?
+        };
 
         // Create a task config from the task data
         let task_config = TaskConfig {
             description: task.description.clone(),
             command: task.command.clone(),
             cwd: task.working_dir.clone(),
-            pre_deps: Vec::new(),
+            pre_deps: Vec::new(), // TODO: Implement dependency resolution
             post_deps: Vec::new(),
             watch: None,
             timeout: None,
             env: task.env.clone(),
         };
 
-        // Create a task manager to execute the task
-        let mut task_manager = TaskManager::new(task_config, PluginManager::new());
-
-        // Run the task
+        let mut task_manager = TaskManager::new(task_config, &self.plugin_manager);
         task_manager.run_task(task_name).map_err(|e| {
             BodoError::PluginError(format!("Failed to run task {}: {}", task_name, e))
         })?;
