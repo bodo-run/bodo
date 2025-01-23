@@ -25,6 +25,7 @@ async fn test_path_plugin_task() -> Result<()> {
 
     let mut plugin = PathPlugin::new();
     let config = PluginConfig {
+        fail_fast: false,
         watch: false,
         list: false,
         options: Some(
@@ -67,6 +68,7 @@ async fn test_path_plugin_command() -> Result<()> {
 
     let mut plugin = PathPlugin::new();
     let config = PluginConfig {
+        fail_fast: false,
         watch: false,
         list: false,
         options: Some(

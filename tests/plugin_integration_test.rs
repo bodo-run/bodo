@@ -61,7 +61,6 @@ async fn test_prefix_and_path_plugin_integration() -> Result<()> {
     };
 
     prefix_plugin.on_init(&prefix_config).await?;
-    prefix_plugin.on_before_graph_build(&mut graph).await?;
     prefix_plugin.on_graph_build(&mut graph).await?;
 
     // Test path plugin
@@ -81,8 +80,24 @@ async fn test_prefix_and_path_plugin_integration() -> Result<()> {
     };
 
     path_plugin.on_init(&path_config).await?;
-    path_plugin.on_before_graph_build(&mut graph).await?;
     path_plugin.on_graph_build(&mut graph).await?;
+
+    // Run plugins to process metadata
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(TimeoutPlugin));
+    manager.register(Box::new(ExecutionPlugin));
+
+    manager
+        .run_lifecycle(
+            &mut graph,
+            Some(PluginConfig {
+                fail_fast: false,
+                watch: false,
+                list: false,
+                options: None,
+            }),
+        )
+        .await?;
 
     Ok(())
 }
@@ -133,7 +148,6 @@ async fn test_plugin_order_matters() -> Result<()> {
     };
 
     prefix_plugin.on_init(&prefix_config).await?;
-    prefix_plugin.on_before_graph_build(&mut graph).await?;
     prefix_plugin.on_graph_build(&mut graph).await?;
 
     // Then test path plugin
@@ -153,8 +167,24 @@ async fn test_plugin_order_matters() -> Result<()> {
     };
 
     path_plugin.on_init(&path_config).await?;
-    path_plugin.on_before_graph_build(&mut graph).await?;
     path_plugin.on_graph_build(&mut graph).await?;
+
+    // Run plugins to process metadata
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(TimeoutPlugin));
+    manager.register(Box::new(ExecutionPlugin));
+
+    manager
+        .run_lifecycle(
+            &mut graph,
+            Some(PluginConfig {
+                fail_fast: false,
+                watch: false,
+                list: false,
+                options: None,
+            }),
+        )
+        .await?;
 
     Ok(())
 }
@@ -189,17 +219,17 @@ async fn test_timeout_plugin() -> Result<()> {
     manager
         .run_lifecycle(
             &mut graph,
-            &PluginConfig {
+            Some(PluginConfig {
                 fail_fast: false,
                 watch: false,
                 list: false,
                 options: None,
-            },
+            }),
         )
         .await?;
 
     // Execute the graph
-    let result = execute_graph(&mut manager, &mut graph).await;
+    let result = execute_graph(&mut graph).await;
 
     // Verify timeout error
     assert!(result.is_err());

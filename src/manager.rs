@@ -55,7 +55,7 @@ impl GraphManager {
         let cfg = config.unwrap_or_default();
         self.plugin_manager.sort_plugins();
         self.plugin_manager
-            .run_lifecycle(&mut self.graph, &cfg)
+            .run_lifecycle(&mut self.graph, Some(cfg))
             .await?;
         Ok(())
     }

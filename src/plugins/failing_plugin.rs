@@ -3,12 +3,18 @@ use std::any::Any;
 
 use crate::{
     errors::BodoError,
-    graph::Graph,
-    plugin::{Plugin, PluginConfig},
+    graph::{Graph, NodeKind},
+    plugin::Plugin,
     Result,
 };
 
 pub struct FakeFailingPlugin;
+
+impl FakeFailingPlugin {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 #[async_trait]
 impl Plugin for FakeFailingPlugin {
@@ -16,17 +22,24 @@ impl Plugin for FakeFailingPlugin {
         "FakeFailingPlugin"
     }
 
-    async fn on_init(&mut self, _config: &PluginConfig) -> Result<()> {
-        Err(BodoError::PluginError("Simulated init failure".to_string()))
-    }
-
-    async fn on_graph_build(&mut self, _graph: &mut Graph) -> Result<()> {
-        Err(BodoError::PluginError(
-            "Simulated build failure".to_string(),
-        ))
+    fn priority(&self) -> i32 {
+        0
     }
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
+        for node in &graph.nodes {
+            if let NodeKind::Task(task_data) = &node.kind {
+                // Always fail for testing purposes
+                return Err(BodoError::PluginError(format!(
+                    "Fake failure for task: {}",
+                    task_data.name
+                )));
+            }
+        }
+        Ok(())
     }
 }

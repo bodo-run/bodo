@@ -47,7 +47,7 @@ async fn test_watch_basic() -> Result<()> {
 
     // Run plugins
     manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await?;
 
     // Modify file and wait for debounce
@@ -98,7 +98,7 @@ async fn test_watch_ignore_patterns() -> Result<()> {
 
     // Run plugins
     manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await?;
 
     // Modify both files and wait for debounce
@@ -148,7 +148,7 @@ async fn test_watch_debounce() -> Result<()> {
 
     // Run plugins
     manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await?;
 
     // Modify file multiple times within debounce period

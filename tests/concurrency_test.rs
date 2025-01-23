@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use bodo::{
+    errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
-    plugin::Plugin,
-    plugins::concurrency_plugin::ConcurrencyPlugin,
+    plugin::{Plugin, PluginConfig, PluginManager},
+    plugins::{concurrent_plugin::ConcurrentPlugin, execution_plugin::ExecutionPlugin},
     Result,
 };
 use serde_json::json;
@@ -81,7 +82,7 @@ async fn test_concurrent_graph_construction() -> Result<()> {
 
 #[tokio::test]
 async fn test_concurrent_plugin_transformation() -> Result<()> {
-    let mut plugin = ConcurrencyPlugin;
+    let mut plugin = ConcurrentPlugin::new();
     let mut graph = make_graph_with_concurrent_tasks(
         vec![
             ("task1".to_string(), "echo task1".to_string()),

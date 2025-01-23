@@ -27,7 +27,7 @@ async fn test_plugin_init_failure() -> Result<()> {
     manager.register(Box::new(FakeFailingPlugin));
 
     let config = PluginConfig::default();
-    let result = manager.run_lifecycle(&mut graph, &config).await;
+    let result = manager.run_lifecycle(&mut graph, Some(config)).await;
 
     assert!(matches!(result, Err(BodoError::PluginError(_))));
     Ok(())
@@ -50,7 +50,7 @@ async fn test_plugin_build_failure() -> Result<()> {
     manager.register(Box::new(FakeFailingPlugin));
 
     let config = PluginConfig::default();
-    let result = manager.run_lifecycle(&mut graph, &config).await;
+    let result = manager.run_lifecycle(&mut graph, Some(config)).await;
 
     assert!(matches!(result, Err(BodoError::PluginError(_))));
     Ok(())
@@ -75,7 +75,7 @@ async fn test_plugin_chain_failure() -> Result<()> {
     manager.register(Box::new(FakeFailingPlugin));
 
     let config = PluginConfig::default();
-    let result = manager.run_lifecycle(&mut graph, &config).await;
+    let result = manager.run_lifecycle(&mut graph, Some(config)).await;
 
     assert!(matches!(result, Err(BodoError::PluginError(_))));
     Ok(())

@@ -43,7 +43,7 @@ async fn test_watch_basic() -> Result<()> {
     manager.register(Box::new(ExecutionPlugin));
 
     manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await?;
 
     sleep(Duration::from_millis(200)).await;
@@ -88,7 +88,7 @@ async fn test_watch_ignore_patterns() -> Result<()> {
     manager.register(Box::new(ExecutionPlugin));
 
     manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await?;
 
     sleep(Duration::from_millis(200)).await;
@@ -132,7 +132,7 @@ async fn test_watch_debounce() -> Result<()> {
     manager.register(Box::new(ExecutionPlugin));
 
     manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await?;
 
     sleep(Duration::from_millis(200)).await;
@@ -205,7 +205,7 @@ async fn test_multiple_watchers() -> Result<()> {
     manager.register(Box::new(ExecutionPlugin));
 
     manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await?;
 
     // Wait for watchers to be set up
@@ -244,7 +244,9 @@ tasks:
     manager.register(Box::new(ExecutionPlugin));
 
     // Run lifecycle with default config
-    manager.run_lifecycle(&mut graph, None).await?;
+    manager
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
+        .await?;
 
     // Wait a bit for file changes to be detected
     sleep(Duration::from_millis(100)).await;

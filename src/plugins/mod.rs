@@ -2,9 +2,12 @@ use crate::{errors::BodoError, graph::Graph, Result};
 use serde_json::{Map, Value};
 use std::any::Any;
 
+pub mod concurrent_plugin;
 pub mod env_plugin;
 pub mod execution_plugin;
+pub mod failing_plugin;
 pub mod path_plugin;
+pub mod prefix_plugin;
 pub mod print_list_plugin;
 pub mod resolver_plugin;
 pub mod timeout_plugin;

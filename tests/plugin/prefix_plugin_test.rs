@@ -38,6 +38,7 @@ async fn test_prefix_plugin_default_config() -> Result<()> {
 async fn test_prefix_plugin_custom_config() -> Result<()> {
     let mut plugin = PrefixPlugin::new();
     let config = PluginConfig {
+        fail_fast: false,
         watch: false,
         list: false,
         options: Some(

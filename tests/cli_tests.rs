@@ -9,9 +9,9 @@ fn list_tasks() -> Result<(), Box<dyn std::error::Error>> {
         .current_dir("tests/fixtures/basic_project")
         .assert()
         .success()
-        .stdout(predicate::str::contains("build (from basic)"))
-        .stdout(predicate::str::contains("test (from basic)"))
-        .stdout(predicate::str::contains("check (from basic)"));
+        .stdout(predicate::str::contains("basic#build"))
+        .stdout(predicate::str::contains("basic#test"))
+        .stdout(predicate::str::contains("basic#check"));
 
     Ok(())
 }

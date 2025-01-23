@@ -7,22 +7,22 @@ use crate::{
 use async_trait::async_trait;
 use std::any::Any;
 
-pub struct ExecutionPlugin;
+pub struct ConcurrentPlugin;
 
-impl ExecutionPlugin {
+impl ConcurrentPlugin {
     pub fn new() -> Self {
         Self
     }
 }
 
 #[async_trait]
-impl Plugin for ExecutionPlugin {
+impl Plugin for ConcurrentPlugin {
     fn name(&self) -> &'static str {
-        "ExecutionPlugin"
+        "ConcurrentPlugin"
     }
 
     fn priority(&self) -> i32 {
-        50
+        100
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -30,16 +30,12 @@ impl Plugin for ExecutionPlugin {
     }
 
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
-        execute_graph(graph).await
-    }
-}
-
-pub async fn execute_graph(graph: &mut Graph) -> Result<()> {
-    for node in &graph.nodes {
-        if let NodeKind::Task(task_data) = &node.kind {
-            // TODO: Implement task execution
-            let _ = task_data;
+        for node in &graph.nodes {
+            if let NodeKind::Task(task_data) = &node.kind {
+                // TODO: Implement concurrent task handling
+                let _ = task_data;
+            }
         }
+        Ok(())
     }
-    Ok(())
 }

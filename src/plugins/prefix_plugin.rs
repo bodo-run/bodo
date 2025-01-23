@@ -7,13 +7,11 @@ use crate::{
     Result,
 };
 
-pub struct PrefixPlugin {
-    prefix: Option<String>,
-}
+pub struct PrefixPlugin;
 
 impl PrefixPlugin {
     pub fn new() -> Self {
-        Self { prefix: None }
+        Self
     }
 }
 
@@ -29,11 +27,20 @@ impl Plugin for PrefixPlugin {
         "PrefixPlugin"
     }
 
+    fn priority(&self) -> i32 {
+        50
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
         if let Some(options) = &config.options {
             if let Some(prefix) = options.get("prefix") {
                 if let Some(s) = prefix.as_str() {
-                    self.prefix = Some(s.to_string());
+                    // TODO: Implement prefix handling
+                    let _ = s;
                 }
             }
         }
@@ -41,27 +48,12 @@ impl Plugin for PrefixPlugin {
     }
 
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
-        if let Some(ref prefix) = self.prefix {
-            for node in &mut graph.nodes {
-                match &mut node.kind {
-                    NodeKind::Task(task_data) => {
-                        if let Some(desc) = &task_data.description {
-                            task_data.description = Some(format!("{}{}", prefix, desc));
-                        }
-                    }
-                    NodeKind::Command(cmd_data) => {
-                        if let Some(desc) = &cmd_data.description {
-                            cmd_data.description = Some(format!("{}{}", prefix, desc));
-                        }
-                    }
-                    _ => {}
-                }
+        for node in &graph.nodes {
+            if let NodeKind::Task(task_data) = &node.kind {
+                // TODO: Implement prefix handling
+                let _ = task_data;
             }
         }
         Ok(())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }

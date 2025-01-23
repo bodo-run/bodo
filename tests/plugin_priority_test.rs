@@ -57,7 +57,7 @@ async fn test_plugin_priority_order() -> Result<()> {
 
     let mut graph = Graph::new();
     manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await?;
 
     let order = execution_order.lock().await;
@@ -84,7 +84,7 @@ async fn test_plugin_same_priority() -> Result<()> {
 
     let mut graph = Graph::new();
     manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await?;
 
     let order = execution_order.lock().await;
@@ -113,7 +113,7 @@ async fn test_plugin_default_priority() -> Result<()> {
 
     let mut graph = Graph::new();
     manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await?;
 
     let order = execution_order.lock().await;

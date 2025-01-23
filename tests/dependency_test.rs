@@ -45,7 +45,7 @@ async fn test_pre_deps_resolution() -> Result<()> {
     let mut manager = PluginManager::new();
     manager.register(Box::new(ResolverPlugin));
     manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await?;
 
     // Verify edge was created
@@ -94,7 +94,7 @@ async fn test_post_deps_resolution() -> Result<()> {
     let mut manager = PluginManager::new();
     manager.register(Box::new(ResolverPlugin));
     manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await?;
 
     // Verify edge was created
@@ -136,7 +136,7 @@ async fn test_missing_dependency() -> Result<()> {
 
     // Should fail with dependency not found error
     let result = manager
-        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
         .await;
     assert!(result.is_err());
     if let Err(e) = result {
