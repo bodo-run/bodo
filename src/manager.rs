@@ -67,11 +67,7 @@ impl GraphManager {
     }
 
     pub fn get_task_script_name(&self, task_name: &str) -> Option<String> {
-        if let Some(t) = self.get_task_by_name(task_name) {
-            Some(t.name.clone())
-        } else {
-            None
-        }
+        self.get_task_by_name(task_name).map(|t| t.name.clone())
     }
 
     pub async fn run_task(&mut self, task_name: &str) -> Result<()> {
