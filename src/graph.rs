@@ -28,8 +28,10 @@ pub struct TaskData {
     pub env: HashMap<String, String>,
     /// Whether this is a default task
     pub is_default: bool,
-    /// The name of the script this task came from
-    pub script_name: Option<String>,
+    /// The identifier of the script this task came from
+    pub script_id: String,
+    /// The display name of the script this task came from
+    pub script_display_name: String,
 }
 
 /// Represents data for a Command node.

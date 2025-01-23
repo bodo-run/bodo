@@ -90,7 +90,7 @@ impl ScriptLoader {
         Ok(graph)
     }
 
-    fn load_script(&mut self, graph: &mut Graph, path: &Path, script_name: &str) -> Result<()> {
+    fn load_script(&mut self, graph: &mut Graph, path: &Path, script_id: &str) -> Result<()> {
         let contents = fs::read_to_string(path)?;
         let yaml = match serde_yaml::from_str::<serde_yaml::Value>(&contents) {
             Ok(yaml) => yaml,
@@ -104,6 +104,14 @@ impl ScriptLoader {
             }
         };
 
+        // Get script display name from yaml or fallback to script_id
+        let yaml_name = yaml.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        let script_display_name = if yaml_name.is_empty() {
+            script_id.to_string()
+        } else {
+            yaml_name.to_string()
+        };
+
         // Load default task if present
         if let Some(default_task) = yaml.get("default_task") {
             let task_config = match serde_yaml::from_value(default_task.clone()) {
@@ -113,8 +121,14 @@ impl ScriptLoader {
                     return Ok(());
                 }
             };
-            let default_id = self.create_task_node(graph, script_name, "default", &task_config);
-            self.register_task(script_name, "default", default_id, graph)?;
+            let default_id = self.create_task_node(
+                graph,
+                script_id,
+                &script_display_name,
+                "default",
+                &task_config,
+            );
+            self.register_task(script_id, "default", default_id, graph)?;
         }
 
         // Load tasks map
@@ -145,8 +159,9 @@ impl ScriptLoader {
 
         // Create nodes for each task
         for (name, task_config) in tasks_map {
-            let task_id = self.create_task_node(graph, script_name, &name, &task_config);
-            self.register_task(script_name, &name, task_id, graph)?;
+            let task_id =
+                self.create_task_node(graph, script_id, &script_display_name, &name, &task_config);
+            self.register_task(script_id, &name, task_id, graph)?;
 
             let node = &mut graph.nodes[task_id as usize];
             if !task_config.pre_deps.is_empty() {
@@ -169,7 +184,8 @@ impl ScriptLoader {
     fn create_task_node(
         &self,
         graph: &mut Graph,
-        script_name: &str,
+        script_id: &str,
+        script_display_name: &str,
         name: &str,
         cfg: &TaskConfig,
     ) -> u64 {
@@ -179,7 +195,8 @@ impl ScriptLoader {
             command: cfg.command.clone(),
             working_dir: cfg.cwd.clone(),
             is_default: name == "default",
-            script_name: Some(script_name.to_string()),
+            script_id: script_id.to_string(),
+            script_display_name: script_display_name.to_string(),
             env: cfg.env.clone(),
         };
 
@@ -188,13 +205,13 @@ impl ScriptLoader {
 
     fn register_task(
         &mut self,
-        script_name: &str,
+        script_id: &str,
         task_name: &str,
         node_id: u64,
         graph: &mut Graph,
     ) -> Result<()> {
         // Register with full key
-        let full_key = format!("{}#{}", script_name, task_name);
+        let full_key = format!("{}#{}", script_id, task_name);
         if graph.task_registry.contains_key(&full_key) {
             return Err(BodoError::PluginError(format!(
                 "Duplicate task name: {}",
@@ -206,17 +223,13 @@ impl ScriptLoader {
 
         // Register default task under script name
         if task_name == "default" {
-            let script_key = script_name.to_string();
-            if !graph.task_registry.contains_key(&script_key) {
-                graph.task_registry.insert(script_key, node_id);
-            }
+            let script_key = script_id.to_string();
+            graph.task_registry.entry(script_key).or_insert(node_id);
         }
 
         // Register task under its name if it doesn't conflict
         let task_key = task_name.to_string();
-        if !graph.task_registry.contains_key(&task_key) {
-            graph.task_registry.insert(task_key, node_id);
-        }
+        graph.task_registry.entry(task_key).or_insert(node_id);
 
         Ok(())
     }

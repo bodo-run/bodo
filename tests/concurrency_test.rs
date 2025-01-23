@@ -25,7 +25,8 @@ fn make_graph_with_concurrent_tasks(
             command: Some(command),
             working_dir: None,
             is_default: false,
-            script_name: Some("Test".to_string()),
+            script_id: "test_script".to_string(),
+            script_display_name: "Test".to_string(),
             env: HashMap::new(),
         });
         let id = graph.add_node(task);

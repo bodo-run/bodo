@@ -98,7 +98,7 @@ impl GraphManager {
 
     pub fn get_task_script_name(&self, task_name: &str) -> Option<String> {
         self.get_task_by_name(task_name)
-            .and_then(|t| t.script_name.clone())
+            .map(|t| t.script_id.clone())
     }
 
     pub async fn run_task(&self, task_name: &str) -> Result<()> {
