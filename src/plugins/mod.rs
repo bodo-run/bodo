@@ -60,7 +60,7 @@ impl PluginManager {
         graph: &mut Graph,
         config: Option<PluginConfig>,
     ) -> Result<()> {
-        let config = config.unwrap_or_default();
+        let _config = config.unwrap_or_default();
 
         // Sort plugins by priority
         self.plugins

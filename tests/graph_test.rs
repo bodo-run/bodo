@@ -70,7 +70,7 @@ fn test_add_edge() -> Result<()> {
         env: HashMap::new(),
     }));
 
-    graph.add_edge(node1, node2);
+    let _ = graph.add_edge(node1, node2);
 
     assert_eq!(graph.edges.len(), 1);
     assert!(graph.edges.iter().any(|e| e.from == node1 && e.to == node2));
@@ -159,8 +159,8 @@ fn test_cycle_detection() -> Result<()> {
         env: HashMap::new(),
     }));
 
-    graph.add_edge(node1, node2);
-    graph.add_edge(node2, node1);
+    let _ = graph.add_edge(node1, node2);
+    let _ = graph.add_edge(node2, node1);
 
     assert!(graph.has_cycle());
 

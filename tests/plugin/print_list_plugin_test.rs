@@ -38,7 +38,7 @@ async fn test_print_list_plugin() -> Result<()> {
     let script_id = graph.add_node(NodeKind::Task(script_task));
 
     // Add edge from root to script
-    graph.add_edge(root_id, script_id);
+    let _ = graph.add_edge(root_id, script_id);
 
     // Setup plugins
     let mut manager = PluginManager::new();

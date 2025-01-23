@@ -49,7 +49,7 @@ fn test_add_many_nodes_with_edges() -> Result<()> {
 
     // Add edges between consecutive nodes
     for i in 0..(num_nodes - 1) {
-        graph.add_edge(i as u64, (i + 1) as u64);
+        let _ = graph.add_edge(i as u64, (i + 1) as u64);
     }
 
     assert_eq!(graph.nodes.len(), num_nodes);
@@ -78,13 +78,13 @@ fn test_cycle_detection_performance() -> Result<()> {
 
     // Add edges to create a long chain
     for i in 0..(num_nodes - 1) {
-        graph.add_edge(i as u64, (i + 1) as u64);
+        let _ = graph.add_edge(i as u64, (i + 1) as u64);
     }
 
     assert!(!graph.has_cycle());
 
     // Add one edge to create a cycle
-    graph.add_edge((num_nodes - 1) as u64, 0);
+    let _ = graph.add_edge((num_nodes - 1) as u64, 0);
     assert!(graph.has_cycle());
 
     Ok(())
