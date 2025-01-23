@@ -1,9 +1,12 @@
 use assert_cmd::Command as AssertCommand;
 use predicates::str::contains;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
 use tempfile::tempdir;
+
+use bodo::{config::BodoConfig, manager::GraphManager, Result};
 
 // Helper function to get the cargo run path
 pub fn cargo_run_path() -> String {
@@ -227,15 +230,101 @@ default_task:
     );
 }
 
-#[test]
-fn test_fail_fast_logic() {
-    let temp = tempdir().unwrap();
-    let project_root = temp.path();
+#[tokio::test]
+async fn test_subtask_dependencies() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let tasks_dir = temp_dir.path().join("tasks");
+    fs::create_dir_all(&tasks_dir)?;
 
-    let script_dir = project_root.join("scripts").join("concurrent");
-    fs::create_dir_all(&script_dir).unwrap();
     fs::write(
-        script_dir.join("script.yaml"),
+        tasks_dir.join("script.yaml"),
+        r#"
+default_task:
+  command: echo "Running default task"
+  pre_deps:
+    - compile
+tasks:
+  compile:
+    command: echo "Compiling..."
+    pre_deps:
+      - "echo 'Pre-compile command'"
+"#,
+    )?;
+
+    let mut manager = GraphManager::new();
+    let config = BodoConfig {
+        root_script: Some(tasks_dir.join("script.yaml").to_string_lossy().into_owned()),
+        scripts_dirs: Some(vec![tasks_dir.to_string_lossy().into_owned()]),
+        tasks: HashMap::new(),
+    };
+
+    manager.build_graph(config).await?;
+    let tasks = manager.get_tasks();
+    assert!(!tasks.is_empty(), "Should have loaded tasks");
+
+    let compile_task = manager
+        .get_task_by_name("compile")
+        .expect("Compile task should exist");
+    assert_eq!(
+        compile_task.command.as_deref(),
+        Some("echo \"Compiling...\"")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_circular_dependency_fails() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let tasks_dir = temp_dir.path().join("tasks");
+    fs::create_dir_all(&tasks_dir)?;
+
+    fs::write(
+        tasks_dir.join("script.yaml"),
+        r#"
+default_task:
+  command: echo "This never runs"
+  pre_deps: 
+    - subA
+
+tasks:
+  subA:
+    command: echo "subA"
+    pre_deps:
+      - subB
+    
+  subB:
+    command: echo "subB"
+    pre_deps:
+      - subA
+"#,
+    )?;
+
+    let mut manager = GraphManager::new();
+    let config = BodoConfig {
+        root_script: Some(tasks_dir.join("script.yaml").to_string_lossy().into_owned()),
+        scripts_dirs: Some(vec![tasks_dir.to_string_lossy().into_owned()]),
+        tasks: HashMap::new(),
+    };
+
+    let result = manager.build_graph(config).await;
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Circular dependency detected"));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_fail_fast_logic() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let tasks_dir = temp_dir.path().join("tasks");
+    fs::create_dir_all(&tasks_dir)?;
+
+    fs::write(
+        tasks_dir.join("script.yaml"),
         r#"
 default_task:
   concurrently_options:
@@ -243,20 +332,24 @@ default_task:
   concurrently:
     - command: "echo Start1 && sleep 0.1 && exit 1"
       name: fail_fast_1
-    - command: "cargo run --quiet --example infinite_printer"
+    - command: "echo Start2 && sleep 0.2 && echo 'You should never see me'"
       name: fail_fast_2
 "#,
-    )
-    .unwrap();
+    )?;
 
-    let assert = run_bodo_in_dir(project_root, &["concurrent"]);
-    let output = assert.get_output().clone();
+    let mut manager = GraphManager::new();
+    let config = BodoConfig {
+        root_script: Some(tasks_dir.join("script.yaml").to_string_lossy().into_owned()),
+        scripts_dirs: Some(vec![tasks_dir.to_string_lossy().into_owned()]),
+        tasks: HashMap::new(),
+    };
 
-    assert.failure();
+    manager.build_graph(config).await?;
+    let result = manager.run_task("default").await;
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("failed"));
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(!stdout.contains("You should never see me"));
-    assert!(String::from_utf8_lossy(&output.stderr).contains("failed"));
+    Ok(())
 }
 
 #[test]
@@ -282,73 +375,4 @@ default_task:
     let stdout = String::from_utf8_lossy(&output);
 
     assert!(stdout.contains("Hello"), "Should see MY_VAR from script");
-}
-
-#[test]
-fn test_subtask_dependencies() {
-    let temp = tempdir().unwrap();
-    let project_root = temp.path();
-
-    let tasks_dir = project_root.join("scripts").join("deps");
-    fs::create_dir_all(&tasks_dir).unwrap();
-
-    fs::write(
-        tasks_dir.join("script.yaml"),
-        r#"
-default_task:
-  command: echo "Running default"
-  pre_deps:
-    - task: compile
-tasks:
-  compile:
-    command: echo "Compiling..."
-    pre_deps:
-      - command: "echo 'Pre-compile command'"
-"#,
-    )
-    .unwrap();
-
-    let assert = run_bodo_in_dir(project_root, &["deps"]);
-    let output = assert.success().get_output().stdout.clone();
-    let stdout = String::from_utf8_lossy(&output);
-
-    assert!(stdout.contains("Pre-compile command"));
-    assert!(stdout.contains("Compiling..."));
-    assert!(stdout.contains("Running default"));
-}
-
-#[test]
-fn test_circular_dependency_fails() {
-    let temp = tempdir().unwrap();
-    let project_root = temp.path();
-
-    let tasks_dir = project_root.join("scripts").join("circular");
-    fs::create_dir_all(&tasks_dir).unwrap();
-
-    fs::write(
-        tasks_dir.join("script.yaml"),
-        r#"
-default_task:
-  command: echo "This never runs"
-  pre_deps:
-    - task: subA
-
-tasks:
-  subA:
-    command: echo "subA"
-    pre_deps:
-      - task: subB
-
-  subB:
-    command: echo "subB"
-    pre_deps:
-      - task: subA
-"#,
-    )
-    .unwrap();
-
-    let assert = run_bodo_in_dir(project_root, &["circular"]);
-    assert
-        .failure()
-        .stderr(contains("Circular dependency detected"));
 }

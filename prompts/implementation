@@ -20,5 +20,4 @@ We want simple commands to work. Do not implement any features that are not part
 
 Task at hand:
 implement the GraphManager and confirm it is working good by also implementing the list plugin.
-Add lots of examples in our own `scripts/` directory and also add tests for the GraphManager.
 At this point if we build and run `bodo --list` we should see the list of tasks.

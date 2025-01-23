@@ -41,8 +41,19 @@ impl GraphManager {
         Ok(&self.graph)
     }
 
+    pub async fn initialize(&mut self) -> Result<()> {
+        let config = BodoConfig {
+            root_script: Some("scripts/main.yaml".into()),
+            scripts_dirs: Some(vec!["scripts/".into()]),
+            tasks: Default::default(),
+        };
+        self.build_graph(config).await?;
+        Ok(())
+    }
+
     pub async fn run_plugins(&mut self, config: Option<PluginConfig>) -> Result<()> {
         let cfg = config.unwrap_or_default();
+        self.plugin_manager.sort_plugins();
         self.plugin_manager
             .run_lifecycle(&mut self.graph, &cfg)
             .await?;
