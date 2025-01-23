@@ -145,4 +145,8 @@ impl GraphManager {
     pub fn get_task_name_by_name(&self, task_name: &str) -> Option<String> {
         self.get_task_by_name(task_name).map(|t| t.name.clone())
     }
+
+    pub fn task_exists(&self, task_name: &str) -> bool {
+        self.graph.task_registry.contains_key(task_name)
+    }
 }

@@ -13,6 +13,7 @@ use bodo::{
     Result,
 };
 use serde_json::json;
+use tempfile::tempdir;
 
 #[tokio::test]
 async fn test_prefix_and_path_plugin_integration() -> Result<()> {
@@ -46,6 +47,7 @@ async fn test_prefix_and_path_plugin_integration() -> Result<()> {
     // Test prefix plugin
     let mut prefix_plugin = PrefixPlugin::new();
     let prefix_config = PluginConfig {
+        fail_fast: false,
         watch: false,
         list: false,
         options: Some(
@@ -65,6 +67,7 @@ async fn test_prefix_and_path_plugin_integration() -> Result<()> {
     // Test path plugin
     let mut path_plugin = PathPlugin::new();
     let path_config = PluginConfig {
+        fail_fast: false,
         watch: false,
         list: false,
         options: Some(
@@ -116,6 +119,7 @@ async fn test_plugin_order_matters() -> Result<()> {
     // Test prefix plugin first
     let mut prefix_plugin = PrefixPlugin::new();
     let prefix_config = PluginConfig {
+        fail_fast: false,
         watch: false,
         list: false,
         options: Some(
@@ -135,6 +139,7 @@ async fn test_plugin_order_matters() -> Result<()> {
     // Then test path plugin
     let mut path_plugin = PathPlugin::new();
     let path_config = PluginConfig {
+        fail_fast: false,
         watch: false,
         list: false,
         options: Some(
@@ -185,6 +190,7 @@ async fn test_timeout_plugin() -> Result<()> {
         .run_lifecycle(
             &mut graph,
             &PluginConfig {
+                fail_fast: false,
                 watch: false,
                 list: false,
                 options: None,
@@ -198,6 +204,34 @@ async fn test_timeout_plugin() -> Result<()> {
     // Verify timeout error
     assert!(result.is_err());
     assert!(matches!(result, Err(BodoError::PluginError(_))));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_plugin_lifecycle() -> Result<()> {
+    let mut manager = PluginManager::new();
+    let mut graph = Graph::new();
+
+    // Register plugins
+    manager.register(Box::new(ExecutionPlugin));
+
+    // Run lifecycle with default config
+    manager.run_lifecycle(&mut graph, None).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_plugin_execution() -> Result<()> {
+    let mut manager = PluginManager::new();
+    let mut graph = Graph::new();
+
+    // Register plugins
+    manager.register(Box::new(ExecutionPlugin));
+
+    // Run lifecycle with default config
+    manager.run_lifecycle(&mut graph, None).await?;
 
     Ok(())
 }

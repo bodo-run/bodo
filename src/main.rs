@@ -1,5 +1,6 @@
 use bodo::{
-    config::BodoConfig, manager::GraphManager, plugins::print_list_plugin::PrintListPlugin, Result,
+    config::BodoConfig, errors::BodoError, manager::GraphManager,
+    plugins::print_list_plugin::PrintListPlugin, Result,
 };
 use clap::Parser;
 use std::collections::HashMap;
@@ -25,7 +26,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    let mut args = Args::parse();
 
     // Load configuration
     let config = BodoConfig {
@@ -45,13 +46,23 @@ async fn main() -> Result<()> {
 
     // Parse task name and subtask
     let task_name = if let Some(task) = args.task {
-        if task.contains(':') {
+        if task.contains('#') {
             task
         } else if !args.args.is_empty() {
             // Check if the first argument is a subtask
-            let subtask = &args.args[0];
-            if !subtask.starts_with('-') {
-                format!("{}:{}", task, subtask)
+            let subtask = args.args[0].clone();
+            if !subtask.starts_with('-') && !subtask.starts_with('/') {
+                // Remove the subtask from args
+                args.args.remove(0);
+                // Try both formats to find the task
+                let task_with_hash = format!("{}#{}", task, subtask);
+                if graph_manager.task_exists(&task_with_hash) {
+                    task_with_hash
+                } else {
+                    // If task not found, restore the arg and return original task
+                    args.args.insert(0, subtask);
+                    task
+                }
             } else {
                 task
             }
@@ -59,6 +70,10 @@ async fn main() -> Result<()> {
             task
         }
     } else {
+        // Check if default task exists
+        if !graph_manager.task_exists("default") {
+            return Err(BodoError::NoTaskSpecified);
+        }
         "default".to_string()
     };
 

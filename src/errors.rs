@@ -8,6 +8,7 @@ pub enum BodoError {
     PluginError(String),
     SerdeError(serde_json::Error),
     YamlError(serde_yaml::Error),
+    NoTaskSpecified,
 }
 
 impl fmt::Display for BodoError {
@@ -19,6 +20,7 @@ impl fmt::Display for BodoError {
             BodoError::PluginError(err) => write!(f, "Plugin error: {}", err),
             BodoError::SerdeError(err) => write!(f, "JSON error: {}", err),
             BodoError::YamlError(err) => write!(f, "YAML error: {}", err),
+            BodoError::NoTaskSpecified => write!(f, "No task specified and no default task found"),
         }
     }
 }

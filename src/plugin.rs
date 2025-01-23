@@ -6,56 +6,35 @@ use crate::errors::BodoError;
 use crate::graph::{Graph, NodeId};
 use crate::Result;
 
-#[derive(Default, Clone)]
-pub struct PluginConfig {
-    pub watch: bool,
-    pub list: bool,
-    pub options: Option<serde_json::Map<String, serde_json::Value>>,
-}
-
-#[async_trait]
-pub trait Plugin: Send + Any + Sync {
-    /// Returns the execution priority for this plugin. Plugins with higher
-    /// priority values execute earlier in the lifecycle phases. The default
-    /// priority is 0.
-    fn priority(&self) -> i32 {
-        0
-    }
-
+#[async_trait::async_trait]
+pub trait Plugin: Send {
     fn name(&self) -> &'static str;
-
-    /// Called first to load or parse plugin config
+    fn priority(&self) -> i32;
+    fn as_any(&self) -> &dyn Any;
     async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
         let _ = config;
         Ok(())
     }
-
-    /// Called after the scripts or config have been loaded into a Graph, but before plugins mutate it
-    async fn on_before_graph_build(&mut self, _graph: &mut Graph) -> Result<()> {
+    async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
+        let _ = graph;
         Ok(())
     }
-
-    /// Called to transform or annotate the Graph (resolving tasks, concurrency, watchers, etc.)
-    async fn on_graph_build(&mut self, _graph: &mut Graph) -> Result<()> {
+    async fn on_after_run(&mut self, graph: &mut Graph) -> Result<()> {
+        let _ = graph;
         Ok(())
     }
-
-    /// Called just before execution starts, after the graph transformations are done
-    async fn on_before_run(&mut self, _graph: &mut Graph) -> Result<()> {
+    async fn on_run(&mut self, node_id: NodeId, graph: &mut Graph) -> Result<()> {
+        let _ = (node_id, graph);
         Ok(())
     }
+}
 
-    /// Called for each node that is about to run (or as it runs)
-    async fn on_run(&mut self, _node_id: NodeId, _graph: &mut Graph) -> Result<()> {
-        Ok(())
-    }
-
-    /// Called after all tasks have completed
-    async fn on_after_run(&mut self, _graph: &mut Graph) -> Result<()> {
-        Ok(())
-    }
-
-    fn as_any(&self) -> &dyn Any;
+#[derive(Default)]
+pub struct PluginConfig {
+    pub fail_fast: bool,
+    pub watch: bool,
+    pub list: bool,
+    pub options: Option<Map<String, Value>>,
 }
 
 pub struct PluginManager {
@@ -77,40 +56,36 @@ impl PluginManager {
         self.plugins.iter().map(|p| p.name().to_string()).collect()
     }
 
-    pub async fn run_lifecycle(&mut self, graph: &mut Graph, config: &PluginConfig) -> Result<()> {
+    pub async fn run_lifecycle(
+        &mut self,
+        graph: &mut Graph,
+        config: Option<PluginConfig>,
+    ) -> Result<()> {
+        let config = config.unwrap_or_default();
+
+        // Sort plugins by priority
         self.plugins
-            .sort_by_key(|b| std::cmp::Reverse(b.priority()));
+            .sort_by_key(|p| std::cmp::Reverse(p.priority()));
+
         // Phase 1: on_init
-        for plugin in self.plugins.iter_mut() {
-            plugin.on_init(config).await?;
+        for plugin in &mut self.plugins {
+            plugin.on_init(&config).await?;
         }
 
-        // Phase 2: on_before_graph_build
-        for plugin in self.plugins.iter_mut() {
-            plugin.on_before_graph_build(graph).await?;
-        }
-
-        // Phase 3: on_graph_build
-        for plugin in self.plugins.iter_mut() {
+        // Phase 2: on_graph_build
+        for plugin in &mut self.plugins {
             plugin.on_graph_build(graph).await?;
         }
 
         // Check for cycles after graph transformations
         if graph.has_cycle() {
             return Err(BodoError::PluginError(
-                "Cycle detected in graph".to_string(),
+                "Circular dependency detected in task graph".to_string(),
             ));
         }
 
-        // Phase 4: on_before_run
-        for plugin in self.plugins.iter_mut() {
-            plugin.on_before_run(graph).await?;
-        }
-
-        // Phase 5: on_run is called by the execution plugin for each node
-
-        // Phase 6: on_after_run
-        for plugin in self.plugins.iter_mut() {
+        // Phase 3: on_after_run
+        for plugin in &mut self.plugins {
             plugin.on_after_run(graph).await?;
         }
 

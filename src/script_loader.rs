@@ -195,7 +195,7 @@ impl ScriptLoader {
     ) -> Result<()> {
         // Register with full key
         let full_key = format!("{}#{}", script_name, task_name);
-        if self.name_to_id.contains_key(&full_key) {
+        if graph.task_registry.contains_key(&full_key) {
             return Err(BodoError::PluginError(format!(
                 "Duplicate task name: {}",
                 task_name

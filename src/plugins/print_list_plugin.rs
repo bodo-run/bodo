@@ -15,30 +15,32 @@ impl Plugin for PrintListPlugin {
         "PrintListPlugin"
     }
 
-    async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
-        println!("\nAvailable tasks:");
-        for node in &graph.nodes {
-            if let NodeKind::Task(task_data) = &node.kind {
-                let script_info = task_data
-                    .script_name
-                    .as_ref()
-                    .map(|s| format!(" (from {})", s))
-                    .unwrap_or_default();
-
-                let desc = task_data
-                    .description
-                    .as_ref()
-                    .map(|s| format!(" - {}", s))
-                    .unwrap_or_default();
-
-                println!("  {}{}{}", task_data.name, script_info, desc);
-            }
-        }
-        println!();
-        Ok(())
+    fn priority(&self) -> i32 {
+        0
     }
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
+        println!("\nAvailable tasks:");
+        for node in &graph.nodes {
+            if let NodeKind::Task(task_data) = &node.kind {
+                let name = if let Some(ref script_name) = task_data.script_name {
+                    format!("{}#{}", script_name, task_data.name)
+                } else {
+                    task_data.name.clone()
+                };
+
+                if let Some(ref desc) = task_data.description {
+                    println!("  {} - {}", name, desc);
+                } else {
+                    println!("  {}", name);
+                }
+            }
+        }
+        println!();
+        Ok(())
     }
 }

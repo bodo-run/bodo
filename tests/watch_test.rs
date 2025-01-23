@@ -1,6 +1,7 @@
 use bodo::{
+    config::BodoConfig,
     graph::{Graph, NodeKind, TaskData},
-    plugin::{PluginConfig, PluginManager},
+    plugin::{Plugin, PluginConfig, PluginManager},
     plugins::{execution_plugin::ExecutionPlugin, watch_plugin::WatchPlugin},
     Result,
 };
@@ -216,6 +217,37 @@ async fn test_multiple_watchers() -> Result<()> {
 
     // Wait for both watchers to trigger
     sleep(Duration::from_millis(300)).await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_watch_plugin() -> Result<()> {
+    let temp = tempdir()?;
+    let project_root = temp.path();
+
+    // Create test files
+    fs::create_dir_all(project_root.join("scripts"))?;
+    fs::write(
+        project_root.join("scripts/script.yaml"),
+        r#"
+tasks:
+  test:
+    command: "echo 'test'"
+"#,
+    )?;
+
+    let mut manager = PluginManager::new();
+    let mut graph = Graph::new();
+
+    // Register plugins
+    manager.register(Box::new(ExecutionPlugin));
+
+    // Run lifecycle with default config
+    manager.run_lifecycle(&mut graph, None).await?;
+
+    // Wait a bit for file changes to be detected
+    sleep(Duration::from_millis(100)).await;
 
     Ok(())
 }
