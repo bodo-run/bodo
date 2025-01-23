@@ -19,15 +19,36 @@ async fn test_load_tasks() -> Result<()> {
 
     let build_task = manager
         .get_task_by_name("build")
-        .expect("build task should exist");
-    assert_eq!(build_task.description.as_ref().unwrap(), "Build project");
-    assert_eq!(build_task.command.as_ref().unwrap(), "cargo build");
+        .expect("Build task should exist");
+    assert_eq!(
+        build_task.description.as_deref(),
+        Some("Build release binary")
+    );
+    assert_eq!(build_task.command.as_deref(), Some("cargo build --release"));
 
     let test_task = manager
         .get_task_by_name("test")
-        .expect("test task should exist");
-    assert_eq!(test_task.description.as_ref().unwrap(), "Run tests");
-    assert_eq!(test_task.command.as_ref().unwrap(), "cargo test");
+        .expect("Test task should exist");
+    assert_eq!(test_task.description.as_deref(), Some("Run all tests"));
+    assert_eq!(test_task.command.as_deref(), Some("cargo test --verbose"));
+
+    let check_task = manager
+        .get_task_by_name("check")
+        .expect("Check task should exist");
+    assert_eq!(check_task.description.as_deref(), Some("Run clippy checks"));
+    assert_eq!(check_task.command.as_deref(), Some("cargo clippy"));
+
+    let default_task = manager
+        .get_default_task()
+        .expect("Default task should exist");
+    assert_eq!(
+        default_task.description.as_deref(),
+        Some("Default task example")
+    );
+    assert_eq!(
+        default_task.command.as_deref(),
+        Some("echo \"Running default task\"")
+    );
 
     Ok(())
 }
