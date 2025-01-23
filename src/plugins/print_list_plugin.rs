@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use std::any::Any;
+use std::{any::Any, collections::HashMap};
 
 use crate::{
     graph::{Graph, NodeKind},
@@ -24,19 +24,41 @@ impl Plugin for PrintListPlugin {
     }
 
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
-        println!("\nAvailable tasks:");
+        let mut tasks_by_script: HashMap<String, Vec<(&str, Option<String>)>> = HashMap::new();
+
+        // Group tasks by script
         for node in &graph.nodes {
             if let NodeKind::Task(task_data) = &node.kind {
-                let name = if let Some(ref script_name) = task_data.script_name {
-                    format!("{}#{}", script_name, task_data.name)
-                } else {
-                    task_data.name.clone()
-                };
+                let script_name = task_data
+                    .script_name
+                    .clone()
+                    .unwrap_or_else(|| "Root Script".to_string());
+                let entry = tasks_by_script.entry(script_name).or_default();
+                entry.push((&task_data.name, task_data.description.clone()));
+            }
+        }
 
-                if let Some(ref desc) = task_data.description {
-                    println!("  {} - {}", name, desc);
+        // Print tasks grouped by script
+        for (script_name, tasks) in tasks_by_script {
+            // Print script header
+            println!("\n{}", script_name);
+
+            // Print tasks
+            for (name, desc) in tasks {
+                if name == "default_task" {
+                    println!("  (default_task)   {}", desc.unwrap_or_default());
                 } else {
-                    println!("  {}", name);
+                    let task_name = if script_name == "Root Script" {
+                        name.to_string()
+                    } else {
+                        format!("{} {}", script_name.split('/').next().unwrap_or(""), name)
+                    };
+
+                    if let Some(desc) = desc {
+                        println!("  {:<15} {}", task_name, desc);
+                    } else {
+                        println!("  {}", task_name);
+                    }
                 }
             }
         }
