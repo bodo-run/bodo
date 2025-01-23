@@ -1,7 +1,6 @@
 use crate::config::TaskConfig;
 use crate::plugin::PluginManager;
 use colored::{ColoredString, Colorize};
-use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::io::{BufRead, BufReader};
@@ -148,8 +147,8 @@ struct PrefixSettings {
 
 pub struct TaskManager<'a> {
     pub config: TaskConfig,
-    /// Plugin manager is kept for future extensibility to allow tasks to interact with plugins
-    /// during their execution. Currently not used but planned for future features.
+    // allow dead code for now
+    #[allow(dead_code)]
     pub(crate) plugin_manager: &'a PluginManager,
 }
 
@@ -334,6 +333,7 @@ impl<'a> TaskManager<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_task_manager_creation() {
