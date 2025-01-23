@@ -3,9 +3,8 @@ name = "bodo"
 version = "0.1.0"
 edition = "2021"
 description = "A modern task runner and build tool"
-authors = ["Mohsen Alizadeh <mohsen@alizadeh.us>"]
 license = "MIT"
-repository = "https://github.com/mohsen-alizadeh/bodo"
+repository = "https://github.com/bodo-run/bodo"
 
 [dependencies]
 serde = { version = "1.0.195", features = ["derive"] }
@@ -25,6 +24,13 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 clap = { version = "4.4.12", features = ["derive"] }
 humantime = "2.1.0"
+chrono = "0.4.31"
+rayon = "1.7"
+dialoguer = "0.11"
+petgraph = "0.6"
+libc = "0.2.151"
+nix = "0.27.1"
+ctrlc = "3.4.1"
 
 [dev-dependencies]
 tempfile = "3.9.0"

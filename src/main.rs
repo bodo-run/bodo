@@ -11,6 +11,10 @@ struct Args {
     #[arg(short, long)]
     list: bool,
 
+    /// Watch mode - rerun task on file changes
+    #[arg(short, long)]
+    watch: bool,
+
     /// Task to run (defaults to default_task)
     task: Option<String>,
 
@@ -25,7 +29,7 @@ async fn main() -> Result<()> {
 
     // Load configuration
     let config = BodoConfig {
-        root_script: Some("scripts/basic.yaml".into()),
+        root_script: None,
         scripts_dirs: Some(vec!["scripts/".into()]),
         tasks: HashMap::new(),
     };
@@ -39,8 +43,26 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Run specified task
-    let task_name = args.task.unwrap_or_else(|| "default".to_string());
+    // Parse task name and subtask
+    let task_name = if let Some(task) = args.task {
+        if task.contains(':') {
+            task
+        } else if !args.args.is_empty() {
+            // Check if the first argument is a subtask
+            let subtask = &args.args[0];
+            if !subtask.starts_with('-') {
+                format!("{}:{}", task, subtask)
+            } else {
+                task
+            }
+        } else {
+            task
+        }
+    } else {
+        "default".to_string()
+    };
+
+    // Run the task
     graph_manager.run_task(&task_name).await?;
 
     Ok(())

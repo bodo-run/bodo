@@ -1,9 +1,10 @@
 use crate::{
-    config::BodoConfig,
+    config::{BodoConfig, TaskConfig},
     errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
     plugin::{PluginConfig, PluginManager},
     script_loader::ScriptLoader,
+    task::TaskManager,
     Result,
 };
 
@@ -76,14 +77,17 @@ impl GraphManager {
     pub fn get_default_task(&self) -> Option<&TaskData> {
         for node in &self.graph.nodes {
             if let NodeKind::Task(t) = &node.kind {
-                return Some(t);
+                if t.is_default {
+                    return Some(t);
+                }
             }
         }
         None
     }
 
     pub fn get_task_script_name(&self, task_name: &str) -> Option<String> {
-        self.get_task_by_name(task_name).map(|t| t.name.clone())
+        self.get_task_by_name(task_name)
+            .and_then(|t| t.script_name.clone())
     }
 
     pub async fn run_task(&mut self, task_name: &str) -> Result<()> {
@@ -91,12 +95,25 @@ impl GraphManager {
             .get_task_by_name(task_name)
             .ok_or_else(|| BodoError::PluginError(format!("Task not found: {}", task_name)))?;
 
-        if let Some(cmd) = &task.command {
-            println!("Running task: {}", task_name);
-            println!("Command: {}", cmd);
-            // Here we'd use tokio::process::Command to actually run the command
-            // For now we just print
-        }
+        // Create a task config from the task data
+        let task_config = TaskConfig {
+            description: task.description.clone(),
+            command: task.command.clone(),
+            cwd: task.working_dir.clone(),
+            pre_deps: Vec::new(),
+            post_deps: Vec::new(),
+            watch: None,
+            timeout: None,
+            env: task.env.clone(),
+        };
+
+        // Create a task manager to execute the task
+        let mut task_manager = TaskManager::new(task_config, PluginManager::new());
+
+        // Run the task
+        task_manager.run_task(task_name).map_err(|e| {
+            BodoError::PluginError(format!("Failed to run task {}: {}", task_name, e))
+        })?;
 
         Ok(())
     }
