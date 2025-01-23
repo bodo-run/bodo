@@ -65,14 +65,26 @@ impl ScriptLoader {
 
     fn register_task(
         &mut self,
-        file_label: &str,
+        _file_label: &str,
         task_name: &str,
         node_id: u64,
         graph: &mut Graph,
-    ) {
-        let key = format!("{}#{}", file_label, task_name);
+    ) -> Result<()> {
+        // Use simple task name as registry key
+        let key = task_name.to_string();
+
+        // Check for name collisions
+        if graph.task_registry.contains_key(&key) {
+            return Err(BodoError::PluginError(format!(
+                "Task name collision: {}",
+                key
+            )));
+        }
+
         self.name_to_id.insert(key.clone(), node_id);
         graph.task_registry.insert(key, node_id);
+
+        Ok(())
     }
 
     fn load_one_file(&mut self, path: &Path, graph: &mut Graph) -> Result<()> {
@@ -109,11 +121,11 @@ impl ScriptLoader {
 
         // Create nodes for each task
         let default_id = self.create_task_node(graph, &file_stem, "default", &default_task);
-        self.register_task(&file_stem, "default", default_id, graph);
+        self.register_task(&file_stem, "default", default_id, graph)?;
 
         for (name, task_config) in tasks_map {
             let task_id = self.create_task_node(graph, &file_stem, &name, &task_config);
-            self.register_task(&file_stem, &name, task_id, graph);
+            self.register_task(&file_stem, &name, task_id, graph)?;
 
             let node = &mut graph.nodes[task_id as usize];
             if !task_config.pre_deps.is_empty() {
@@ -136,7 +148,7 @@ impl ScriptLoader {
     fn create_task_node(
         &self,
         graph: &mut Graph,
-        _file_label: &str,
+        file_label: &str,
         name: &str,
         cfg: &TaskConfig,
     ) -> u64 {
@@ -145,9 +157,9 @@ impl ScriptLoader {
             description: cfg.description.clone(),
             command: cfg.command.clone(),
             working_dir: cfg.cwd.clone(),
-            env: HashMap::new(),
+            env: cfg.env.clone(),
             is_default: false,
-            script_name: None,
+            script_name: Some(file_label.to_string()),
         };
         let node_id = graph.add_node(NodeKind::Task(task_data));
 

@@ -1,83 +1,47 @@
 use bodo::{
-    graph::{Graph, NodeKind, TaskData},
-    plugin::{PluginConfig, PluginManager},
-    plugins::{
-        concurrency_plugin::ConcurrencyPlugin,
-        env_plugin::EnvPlugin,
-        execution_plugin::{execute_graph, ExecutionPlugin},
-        resolver_plugin::ResolverPlugin,
-        watch_plugin::WatchPlugin,
-    },
-    Result,
+    config::BodoConfig, manager::GraphManager, plugins::print_list_plugin::PrintListPlugin, Result,
 };
-use serde_json::json;
+use clap::Parser;
 use std::collections::HashMap;
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// List all available tasks
+    #[arg(short, long)]
+    list: bool,
+
+    /// Task to run (defaults to default_task)
+    task: Option<String>,
+
+    /// Additional arguments passed to the task
+    #[arg(last = true)]
+    args: Vec<String>,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Create a simple graph with two tasks
-    let mut graph = Graph::new();
+    let args = Args::parse();
 
-    // Add a "build" task
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "build".into(),
-        description: Some("Build the project".into()),
-        command: Some("echo Building".into()),
-        working_dir: None,
-        env: HashMap::new(),
-        is_default: false,
-        script_name: None,
-    }));
-
-    // Add a "test" task
-    let test_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "test".into(),
-        description: Some("Run tests".into()),
-        command: Some("echo Testing".into()),
-        working_dir: None,
-        env: HashMap::new(),
-        is_default: false,
-        script_name: None,
-    }));
-
-    // Register tasks in registry
-    graph.task_registry.insert("build".to_string(), task_id);
-    graph.task_registry.insert("test".to_string(), test_id);
-
-    // Add dependency metadata to the test task
-    {
-        let node = &mut graph.nodes[test_id as usize];
-        node.metadata
-            .insert("pre_deps".to_string(), json!(["build"]).to_string());
-    }
-
-    // Create and configure plugins
-    let mut manager = PluginManager::new();
-    manager.register(Box::new(ResolverPlugin));
-    manager.register(Box::new(ConcurrencyPlugin));
-    manager.register(Box::new(EnvPlugin::new()));
-    manager.register(Box::new(WatchPlugin::new()));
-    manager.register(Box::new(ExecutionPlugin));
-
-    // Configure global environment variables
-    let plugin_config = PluginConfig {
-        options: Some(
-            json!({
-                "env": {
-                    "RUST_LOG": "info"
-                }
-            })
-            .as_object()
-            .cloned()
-            .unwrap(),
-        ),
+    // Load configuration
+    let config = BodoConfig {
+        root_script: Some("scripts/basic.yaml".into()),
+        scripts_dirs: Some(vec!["scripts/".into()]),
+        tasks: HashMap::new(),
     };
 
-    // Run plugin lifecycle
-    manager.run_lifecycle(&mut graph, &plugin_config).await?;
+    let mut graph_manager = GraphManager::new();
+    graph_manager.build_graph(config).await?;
 
-    // Execute the graph
-    execute_graph(&mut manager, &mut graph).await?;
+    if args.list {
+        graph_manager.register_plugin(Box::new(PrintListPlugin));
+        graph_manager.run_plugins(None).await?;
+        return Ok(());
+    }
+
+    // Run specified task
+    let task_name = args.task.unwrap_or_else(|| "default".to_string());
+    graph_manager.run_task(&task_name).await?;
 
     Ok(())
 }
