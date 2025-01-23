@@ -283,3 +283,302 @@ These variables can be set in:
 - Environment
 - `bodo.toml` configuration
 - Task-specific `env` section
+
+## 14. Graph
+
+The graph is a directed acyclic graph (DAG) that represents the task dependencies and commands.
+
+To illustrate the graph, consider the following example:
+
+```
+scripts/
+├── script.yaml      <== ROOT SCRIPT
+├── build
+│   └── script.yaml
+├── check
+│   └── script.yaml
+├── fail-fast
+│   └── script.yaml
+├── ks
+│   └── script.yaml
+└── script.yaml
+```
+
+And script contents
+
+```
+==> scripts/script.yaml <==
+description: Root level tasks
+
+default_task:
+  command: "echo 'Hello from bodo!'"
+  description: "Default greeting"
+
+tasks:
+  echo:
+    command: "echo 'Hello from `bodo echo`!'"
+    description: "echo task"
+  echo2:
+    command: "echo 'Hello from `bodo echo2`!'"
+    description: "echo2 task"
+
+==> scripts/build/script.yaml <==
+name: Build Script
+description: Build tasks for the project
+
+# Add paths to the script's execution context
+exec_paths:
+  - target/debug
+  - target/release
+
+# Set environment variables for this script
+env:
+  RUST_BACKTRACE: "1"
+
+# The default task is invoked by simply running `bodo build`
+default_task:
+  command: cargo build
+
+# tasks
+tasks:
+  release:
+    description: Build the project in release mode
+    command: cargo build --release
+
+  check:
+    description: Check the project
+    command: cargo check
+
+  clippy:
+    description: Run clippy
+    command: cargo clippy
+    silent: true
+
+  fmt:
+    description: Format the project
+    command: cargo fmt
+==> scripts/check/script.yaml <==
+name: check
+description: Run all checks for the project, including clippy
+
+default_task:
+  command: echo "All checks completed"
+  pre_deps:
+    - command: echo "Running checks..."
+    - task: clean
+    - task: check
+    - task: clippy
+    - task: test
+    - task: fmt-check
+  concurrently:
+    - command: cargo clippy
+    - task: test
+    - task: fmt-check
+  env:
+    RUST_BACKTRACE: "1"
+
+tasks:
+  check:
+    command: cargo check
+
+  clean:
+    command: cargo clean
+
+  clippy:
+    command: cargo clippy
+
+  test:
+    command: cargo test
+
+  fmt-check:
+    description: Check code formatting
+    command: cargo fmt --check
+==> scripts/fail-fast/script.yaml <==
+name: "Fail Fast Demo"
+description: "Demonstrate fail-fast behavior with concurrent tasks"
+
+default_task:
+  description: "Run concurrent tasks with fail-fast behavior"
+  concurrently_options:
+    fail_fast: true
+  concurrently:
+    - command: 'echo "First output"'
+      name: first
+    - command: 'echo "Second output"' # no name given (should be named "command1")
+    - command: 'sleep 1 && echo "Failing..." && exit 1'
+      name: failing
+    - command: 'echo "Third output"'
+      name: third
+    - command: 'sleep 2 && echo "Should not be run"'
+      name: should_not_be_run
+==> scripts/ks/script.yaml <==
+name: Kitchen Sink
+
+default_task:
+  description: "Run all tasks in parallel"
+
+  concurrently:
+    - command: 'echo "A command"'
+    - task: hello
+    - task: world
+    - task: slow
+    - task: fast
+
+tasks:
+  hello:
+    command: 'echo "Hello task"'
+
+  world:
+    command: 'echo "World task"'
+
+  slow:
+    command: |
+      sleep $((RANDOM % 5)) && echo "Slow task output 1" && \
+      sleep $((RANDOM % 5)) && echo "Slow task output 2"
+
+  fast:
+    command: |
+      sleep $((RANDOM % 2)) && echo "Fast task output 1" && \
+      sleep $((RANDOM % 2)) && echo "Fast task output 2"
+
+  fail-fast:
+    description: "Fail fast concurrently"
+    concurrently_options:
+      fail_fast: true
+    concurrently:
+      - command: 'echo "First output"'
+      - command: 'sleep 1 && echo "Failing..." && exit 1'
+      - command: 'echo "Third output"'
+      - command: 'sleep 2 && echo "Should not be run"'
+```
+
+Running `bodo --list` will show the following:
+
+```
+Root Script (scripts/script.yaml)
+Root level tasks
+
+  (default_task)   Default greeting
+  echo             echo task
+  echo2            echo2 task
+
+Build Script (scripts/build/script.yaml)
+Build tasks for the project
+
+  build
+  build release   Build the project in release mode
+  build check     Check the project
+  build clippy    Run clippy
+  build fmt       Format the project
+
+check (scripts/check/script.yaml)
+Run all checks for the project, including clippy
+
+  check
+  check check     Run all checks for the project, including clippy
+  check clean     Clean the project
+  check clippy    Run clippy
+  check test      Run tests
+  check fmt-check Check code formatting
+
+fail-fast (scripts/fail-fast/script.yaml)
+Fail Fast Demo
+
+  fail-fast       Demonstrate fail-fast behavior with concurrent tasks
+
+Kitchen Sink (scripts/ks/script.yaml)
+Kitchen Sink
+
+  ks               Run all tasks in parallel
+  ks hello         Hello task
+  ks world         World task
+  ks slow          Slow task
+  ks fast          Fast task
+  ks fail-fast     Fail fast concurrently
+```
+
+The graph is visualized as follows:
+
+```
+📦 ROOT (default_task)
+└── 📦 scripts/script.yaml/default_task
+    └── 🚀 "echo 'Hello from bodo!'"
+
+📦 scripts/build.yaml
+├── 📦 build
+│   └── 🚀 "cargo build"
+├── 📦 release
+│   └── 🚀 "cargo build --release"
+├── 📦 check
+│   └── 🚀 "cargo check"
+├── 📦 clippy
+│   └── 🚀 "cargo clippy" (silent)
+└── 📦 fmt
+    └── 🚀 "cargo fmt"
+
+📦 scripts/check.yaml
+└── 📦 default_task
+    ├── 📦 pre_deps_chain
+    │   ├── 🚀 "echo 'Running checks...'"
+    │   ├── 📦 clean
+    │   │   └── 🚀 "cargo clean"
+    │   ├── 📦 check
+    │   │   └── 🚀 "cargo check"
+    │   ├── 🌐 ../build.yaml/clippy
+    │   │   └── 📦 clippy
+    │   │       └── 🚀 "cargo clippy"
+    │   ├── 📦 test
+    │   │   └── 🚀 "cargo test"
+    │   └── 📦 fmt-check
+    │       └── 🚀 "cargo fmt --check"
+    └── 🔀 concurrent_group
+        ├── 🚀 "cargo clippy"
+        ├── 📦 test
+        │   └── 🚀 "cargo test"
+        └── 📦 fmt-check
+            └── 🚀 "cargo fmt --check"
+
+📦 scripts/fail-fast.yaml
+└── 📦 default_task
+    └── 🔀 concurrent_group (fail_fast: true)
+        ├── 🚀 "echo 'First output'" (first)
+        ├── 🚀 "echo 'Second output'"
+        ├── 🚀 "sleep 1 && echo 'Failing...' && exit 1" (failing)
+        ├── 🚀 "echo 'Third output'" (third)
+        └── 🚀 "sleep 2 && echo 'Should not be run'"
+
+📦 scripts/ks.yaml
+└── 📦 default_task
+    └── 🔀 concurrent_group
+        ├── 🚀 "echo 'A command'"
+        ├── 📦 hello
+        │   └── 🚀 "echo 'Hello task'"
+        ├── 📦 world
+        │   └── 🚀 "echo 'World task'"
+        ├── 📦 slow
+        │   └── 🚀 "sleep RANDOM && echo..."
+        ├── 📦 fast
+        │   └── 🚀 "sleep RANDOM && echo..."
+        └── 🌐 ../fail-fast.yaml/default_task
+            └── 🔀 concurrent_group (fail_fast)
+                ├── 🚀 "echo 'First output'"
+                ├── 🚀 "sleep 1 && fail..."
+                ├── 🚀 "echo 'Third output'"
+                └── 🚀 "sleep 2 && echo..."
+```
+
+KEY:
+
+- 📦 = Task node
+- 🔀 = Concurrent group
+- 🚀 = Command node
+- 🌐 = Cross-file reference
+
+NOTES:
+
+1. All paths terminate at 🚀 command nodes
+2. Silent commands marked with "(silent)"
+3. Named concurrent tasks show (name)
+4. Fail-fast groups marked with (fail_fast)
+5. Random delays shown as RANDOM
+6. Cross-file references use 🌐 emoji
