@@ -157,4 +157,15 @@ impl GraphManager {
     pub fn task_exists(&self, task_name: &str) -> bool {
         self.graph.task_registry.contains_key(task_name)
     }
+
+    pub fn get_all_tasks(&self) -> Vec<&TaskData> {
+        self.graph
+            .nodes
+            .iter()
+            .filter_map(|n| match &n.kind {
+                NodeKind::Task(t) => Some(t),
+                _ => None,
+            })
+            .collect()
+    }
 }
