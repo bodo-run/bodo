@@ -95,6 +95,7 @@ impl ProcessManager {
                 let mc_name = locked[idx].name.clone();
                 let mc_color = locked[idx].color.clone();
                 let mut child_orig = std::mem::replace(&mut locked[idx].child, dummy_child()?);
+
                 // Wait for the child process to avoid zombie processes
                 child_orig.wait()?;
 
@@ -106,7 +107,7 @@ impl ProcessManager {
                 if let Some(stdout) = child_orig.stdout.take() {
                     let name = mc_name.clone();
                     let color = mc_color.clone();
-                    let stop_signal = Arc::clone(&c_stop_signal);
+                    let stop_signal = Arc::clone(&stop_for_threads);
                     thread::spawn(move || {
                         let reader = BufReader::new(stdout);
                         for line in reader.lines() {
@@ -129,7 +130,7 @@ impl ProcessManager {
                 if let Some(stderr) = child_orig.stderr.take() {
                     let name = mc_name.clone();
                     let color = mc_color.clone();
-                    let stop_signal = Arc::clone(&c_stop_signal);
+                    let stop_signal = Arc::clone(&stop_for_threads);
                     thread::spawn(move || {
                         let reader = BufReader::new(stderr);
                         for line in reader.lines() {
@@ -149,50 +150,22 @@ impl ProcessManager {
                     });
                 }
 
-                // Create a dedicated waiter thread that handles both waiting and killing
-                let handle = thread::spawn(move || {
-                    let status_res = child_orig.wait();
-                    match status_res {
-                        Ok(status) => {
-                            if !status.success() {
-                                let mut w = c_any_failure.write().unwrap();
-                                if w.is_none() {
-                                    *w = Some(format!(
-                                        "'{}' failed with code {:?}",
-                                        mc_name,
-                                        status.code().unwrap_or(1)
-                                    ));
-                                }
-                                if fail_fast {
-                                    // Signal stop immediately
-                                    c_stop_signal.store(true, Ordering::SeqCst);
-                                    // Kill all other processes
-                                    let mut locked_ch = c_children.lock().unwrap();
-                                    for c in locked_ch.iter_mut() {
-                                        let _ = kill_child(&mut c.child);
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            let mut w = c_any_failure.write().unwrap();
-                            if w.is_none() {
-                                *w = Some(format!("Error waiting on '{}': {}", mc_name, e));
-                            }
-                            if fail_fast {
-                                // Signal stop immediately
-                                c_stop_signal.store(true, Ordering::SeqCst);
-                                // Kill all other processes
-                                let mut locked_ch = c_children.lock().unwrap();
-                                for c in locked_ch.iter_mut() {
-                                    let _ = kill_child(&mut c.child);
-                                }
-                            }
+                // Wait for the child process to avoid zombie processes
+                if let Err(e) = child_orig.wait() {
+                    let mut w = c_any_failure.write().unwrap();
+                    if w.is_none() {
+                        *w = Some(format!("Error waiting on '{}': {}", mc_name, e));
+                    }
+                    if fail_fast {
+                        // Signal stop immediately
+                        c_stop_signal.store(true, Ordering::SeqCst);
+                        // Kill all other processes
+                        let mut locked_ch = c_children.lock().unwrap();
+                        for c in locked_ch.iter_mut() {
+                            let _ = kill_child(&mut c.child);
                         }
                     }
-                });
-
-                self.threads.push(handle);
+                }
             }
         }
 
@@ -202,7 +175,7 @@ impl ProcessManager {
         }
 
         // If we have an error, return it
-        let error_opt = &*self.any_failure.read().unwrap();
+        let error_opt = &*any_failure_for_threads.read().unwrap();
         if let Some(msg) = error_opt {
             return Err(BodoError::PluginError(msg.clone()));
         }

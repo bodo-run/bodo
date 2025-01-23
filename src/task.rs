@@ -148,6 +148,8 @@ struct PrefixSettings {
 
 pub struct TaskManager<'a> {
     pub config: TaskConfig,
+    /// Plugin manager is kept for future extensibility to allow tasks to interact with plugins
+    /// during their execution. Currently not used but planned for future features.
     pub(crate) plugin_manager: &'a PluginManager,
 }
 
