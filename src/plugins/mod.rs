@@ -1,7 +1,6 @@
 use crate::{errors::BodoError, graph::Graph, Result};
 use serde_json::{Map, Value};
 use std::any::Any;
-use std::error::Error;
 
 pub mod concurrent_plugin;
 pub mod env_plugin;

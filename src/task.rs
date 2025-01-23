@@ -1,12 +1,10 @@
 use crate::config::TaskConfig;
 use crate::plugin::PluginManager;
 use colored::{ColoredString, Colorize};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
