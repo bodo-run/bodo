@@ -3,6 +3,7 @@ use crate::{
     errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
     plugin::{PluginConfig, PluginManager},
+    script_loader::ScriptLoader,
     Result,
 };
 
@@ -32,9 +33,10 @@ impl GraphManager {
         self.plugin_manager.register(plugin);
     }
 
-    /// If you actually need to build the graph from script files, re-implement here.
     pub async fn build_graph(&mut self, config: BodoConfig) -> Result<()> {
-        self.config = config;
+        self.config = config.clone();
+        let mut loader = ScriptLoader::new();
+        self.graph = loader.build_graph(config).await?;
         Ok(())
     }
 
@@ -44,6 +46,20 @@ impl GraphManager {
             .run_lifecycle(&mut self.graph, &cfg)
             .await?;
         Ok(())
+    }
+
+    pub fn get_tasks(&self) -> Vec<&TaskData> {
+        self.graph
+            .nodes
+            .iter()
+            .filter_map(|n| {
+                if let NodeKind::Task(t) = &n.kind {
+                    Some(t)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     pub fn get_task_by_name(&self, task_name: &str) -> Option<&TaskData> {

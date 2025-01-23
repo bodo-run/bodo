@@ -1,0 +1,9 @@
+tasks:
+  build:
+    description: "Build project"
+    command: "cargo build"
+  test:
+    description: "Run tests"
+    command: "cargo test"
+    pre_deps:
+      - build
