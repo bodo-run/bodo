@@ -24,7 +24,8 @@ impl Plugin for PrintListPlugin {
     }
 
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
-        let mut tasks_by_script: HashMap<String, Vec<(&str, Option<String>)>> = HashMap::new();
+        let mut tasks_by_script: HashMap<String, Vec<(&str, Option<String>, &str)>> =
+            HashMap::new();
 
         // Group tasks by script display name
         for node in &graph.nodes {
@@ -32,7 +33,11 @@ impl Plugin for PrintListPlugin {
                 let entry = tasks_by_script
                     .entry(task_data.script_display_name.clone())
                     .or_default();
-                entry.push((&task_data.name, task_data.description.clone()));
+                entry.push((
+                    &task_data.name,
+                    task_data.description.clone(),
+                    &task_data.script_id,
+                ));
             }
         }
 
@@ -41,7 +46,8 @@ impl Plugin for PrintListPlugin {
             println!("\n{}", script_name);
 
             // Print tasks
-            for (name, desc) in tasks {
+            for (name, desc, script_id) in tasks {
+                let task_name = format!("{}#{}", script_id, name);
                 if name == "default" {
                     if let Some(desc) = desc {
                         println!("  (default)   {}", desc);
@@ -49,9 +55,9 @@ impl Plugin for PrintListPlugin {
                         println!("  (default)");
                     }
                 } else if let Some(desc) = desc {
-                    println!("  {:<15} {}", name, desc);
+                    println!("  {:<25} {}", task_name, desc);
                 } else {
-                    println!("  {}", name);
+                    println!("  {}", task_name);
                 }
             }
         }

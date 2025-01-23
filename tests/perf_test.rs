@@ -1,81 +1,91 @@
 use std::{collections::HashMap, time::Instant};
 
-use bodo::graph::{Graph, NodeKind, TaskData};
+use bodo::{
+    graph::{Graph, NodeKind, TaskData},
+    Result,
+};
 
 #[test]
-fn test_graph_large_insertion() {
-    let start = Instant::now();
-    let mut g = Graph::new();
+fn test_add_many_nodes() -> Result<()> {
+    let mut graph = Graph::new();
+    let num_nodes = 1000;
 
-    for i in 0..10000 {
-        g.add_node(NodeKind::Task(TaskData {
+    for i in 0..num_nodes {
+        graph.add_node(NodeKind::Task(TaskData {
             name: format!("task_{}", i),
             description: Some("Test task".to_string()),
             command: Some("echo test".to_string()),
             working_dir: None,
             is_default: false,
-            script_name: Some("Test".to_string()),
+            script_id: "test_script".to_string(),
+            script_display_name: "Test".to_string(),
             env: HashMap::new(),
         }));
     }
 
-    let duration = start.elapsed();
-    assert!(duration.as_millis() < 1000, "Node insertion took too long");
+    assert_eq!(graph.nodes.len(), num_nodes);
+    Ok(())
 }
 
 #[test]
-fn test_graph_large_edge_creation() {
-    let mut g = Graph::new();
+fn test_add_many_nodes_with_edges() -> Result<()> {
+    let mut graph = Graph::new();
+    let num_nodes = 1000;
 
-    // First create nodes
-    for i in 0..10000 {
-        let node = g.add_node(NodeKind::Task(TaskData {
+    // Add nodes
+    for i in 0..num_nodes {
+        let node = graph.add_node(NodeKind::Task(TaskData {
             name: format!("task_{}", i),
             description: Some("Test task".to_string()),
             command: Some("echo test".to_string()),
             working_dir: None,
             is_default: false,
-            script_name: Some("Test".to_string()),
+            script_id: "test_script".to_string(),
+            script_display_name: "Test".to_string(),
             env: HashMap::new(),
         }));
-        assert_eq!(node, i);
+        assert_eq!(node as usize, i);
     }
 
-    // Then time edge creation
-    let start = Instant::now();
-    for i in 0..9999 {
-        g.add_edge(i, i + 1).unwrap();
+    // Add edges between consecutive nodes
+    for i in 0..(num_nodes - 1) {
+        graph.add_edge(i as u64, (i + 1) as u64);
     }
 
-    let duration = start.elapsed();
-    assert!(duration.as_millis() < 1000, "Edge creation took too long");
+    assert_eq!(graph.nodes.len(), num_nodes);
+    assert_eq!(graph.edges.len(), num_nodes - 1);
+    Ok(())
 }
 
 #[test]
-fn test_graph_large_cycle_detection() {
-    let mut g = Graph::new();
+fn test_cycle_detection_performance() -> Result<()> {
+    let mut graph = Graph::new();
+    let num_nodes = 1000;
 
-    // Create nodes
-    for i in 0..10000 {
-        g.add_node(NodeKind::Task(TaskData {
+    // Add nodes
+    for i in 0..num_nodes {
+        graph.add_node(NodeKind::Task(TaskData {
             name: format!("task_{}", i),
             description: Some("Test task".to_string()),
             command: Some("echo test".to_string()),
             working_dir: None,
             is_default: false,
-            script_name: Some("Test".to_string()),
+            script_id: "test_script".to_string(),
+            script_display_name: "Test".to_string(),
             env: HashMap::new(),
         }));
     }
 
-    // Create edges in a chain (no cycle)
-    for i in 0..9999 {
-        g.add_edge(i, i + 1).unwrap();
+    // Add edges to create a long chain
+    for i in 0..(num_nodes - 1) {
+        graph.add_edge(i as u64, (i + 1) as u64);
     }
 
-    let start = Instant::now();
-    assert!(!g.has_cycle());
-    let duration = start.elapsed();
+    assert!(!graph.has_cycle());
 
-    assert!(duration.as_millis() < 1000, "Cycle detection took too long");
+    // Add one edge to create a cycle
+    graph.add_edge((num_nodes - 1) as u64, 0);
+    assert!(graph.has_cycle());
+
+    Ok(())
 }

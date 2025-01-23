@@ -1,5 +1,6 @@
 output_dir = "./repo-serialized"
 
+
 # Add patterns to ignore (in addition to .gitignore)
 ignore_patterns = [
     "docs/",

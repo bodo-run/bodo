@@ -1,5 +1,6 @@
 use bodo::{
     config::BodoConfig,
+    errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
     plugin::{Plugin, PluginConfig, PluginManager},
     plugins::{execution_plugin::ExecutionPlugin, watch_plugin::WatchPlugin},
@@ -24,7 +25,8 @@ async fn test_watch_basic() -> Result<()> {
         working_dir: None,
         env: HashMap::new(),
         is_default: false,
-        script_name: None,
+        script_id: "test_script".to_string(),
+        script_display_name: "Test".to_string(),
     }));
 
     let node = &mut graph.nodes[task_id as usize];
@@ -69,7 +71,8 @@ async fn test_watch_ignore_patterns() -> Result<()> {
         working_dir: None,
         env: HashMap::new(),
         is_default: false,
-        script_name: None,
+        script_id: "test_script".to_string(),
+        script_display_name: "Test".to_string(),
     }));
 
     let node = &mut graph.nodes[task_id as usize];
@@ -113,7 +116,8 @@ async fn test_watch_debounce() -> Result<()> {
         working_dir: None,
         env: HashMap::new(),
         is_default: false,
-        script_name: None,
+        script_id: "test_script".to_string(),
+        script_display_name: "Test".to_string(),
     }));
 
     let node = &mut graph.nodes[task_id as usize];
@@ -163,7 +167,8 @@ async fn test_multiple_watchers() -> Result<()> {
         working_dir: None,
         env: HashMap::new(),
         is_default: false,
-        script_name: None,
+        script_id: "test_script_1".to_string(),
+        script_display_name: "Test 1".to_string(),
     }));
 
     // Task 2 watching file2
@@ -174,7 +179,8 @@ async fn test_multiple_watchers() -> Result<()> {
         working_dir: None,
         env: HashMap::new(),
         is_default: false,
-        script_name: None,
+        script_id: "test_script_2".to_string(),
+        script_display_name: "Test 2".to_string(),
     }));
 
     // Configure watchers
@@ -250,6 +256,51 @@ tasks:
 
     // Wait a bit for file changes to be detected
     sleep(Duration::from_millis(100)).await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_watch_plugin_invalid_config() -> Result<()> {
+    let mut graph = Graph::new();
+
+    // Create a task
+    let task = TaskData {
+        name: "test".to_string(),
+        description: Some("Test task".to_string()),
+        command: Some("echo test".to_string()),
+        working_dir: None,
+        is_default: false,
+        script_id: "test_script".to_string(),
+        script_display_name: "Test".to_string(),
+        env: HashMap::new(),
+    };
+    let task_id = graph.add_node(NodeKind::Task(task));
+
+    // Add invalid watch metadata
+    let node = &mut graph.nodes[task_id as usize];
+    node.metadata
+        .insert("watch".to_string(), "invalid json".to_string());
+
+    // Setup plugins
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(WatchPlugin::new()));
+
+    // Run plugins to process metadata
+    let result = manager
+        .run_lifecycle(
+            &mut graph,
+            Some(PluginConfig {
+                fail_fast: false,
+                watch: true,
+                list: false,
+                options: None,
+            }),
+        )
+        .await;
+
+    assert!(result.is_err());
+    assert!(matches!(result, Err(BodoError::PluginError(_))));
 
     Ok(())
 }

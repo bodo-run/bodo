@@ -98,9 +98,12 @@ async fn test_concurrent_plugin_transformation() -> Result<()> {
     // After plugin transformation:
     // - Original 2 task nodes remain
     // - 1 new concurrent group node is added
-    // - 1 edge from task1 to concurrent group
     assert_eq!(graph.nodes.len(), 3);
-    assert_eq!(graph.edges.len(), 1);
+
+    // Verify edges:
+    // - Edge from task1 to concurrent group
+    // - Edge from concurrent group to task2
+    assert_eq!(graph.edges.len(), 2);
 
     // Verify the concurrent group was created correctly
     let group_node = graph

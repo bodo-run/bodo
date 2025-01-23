@@ -247,7 +247,9 @@ tasks:
   compile:
     command: echo "Compiling..."
     pre_deps:
-      - "echo 'Pre-compile command'"
+      - pre_compile
+  pre_compile:
+    command: echo 'Pre-compile command'
 "#,
     )?;
 
@@ -347,7 +349,7 @@ default_task:
     manager.build_graph(config).await?;
     let result = manager.run_task("default").await;
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("failed"));
+    assert!(result.unwrap_err().to_string().contains("Plugin error"));
 
     Ok(())
 }

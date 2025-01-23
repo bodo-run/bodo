@@ -25,7 +25,8 @@ async fn test_watch_basic() -> Result<()> {
         working_dir: None,
         env: HashMap::new(),
         is_default: false,
-        script_name: None,
+        script_id: "test_script".to_string(),
+        script_display_name: "Test".to_string(),
     }));
 
     // Add watch config
@@ -76,7 +77,8 @@ async fn test_watch_ignore_patterns() -> Result<()> {
         working_dir: None,
         env: HashMap::new(),
         is_default: false,
-        script_name: None,
+        script_id: "test_script".to_string(),
+        script_display_name: "Test".to_string(),
     }));
 
     // Add watch config with ignore pattern
@@ -126,7 +128,8 @@ async fn test_watch_debounce() -> Result<()> {
         working_dir: None,
         env: HashMap::new(),
         is_default: false,
-        script_name: None,
+        script_id: "test_script".to_string(),
+        script_display_name: "Test".to_string(),
     }));
 
     // Add watch config with long debounce

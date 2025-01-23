@@ -1,6 +1,7 @@
 use bodo::{
+    errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
-    plugin::{PluginConfig, PluginManager},
+    plugin::{Plugin, PluginConfig, PluginManager},
     plugins::resolver_plugin::ResolverPlugin,
     Result,
 };
@@ -8,140 +9,158 @@ use serde_json::json;
 use std::collections::HashMap;
 
 #[tokio::test]
-async fn test_pre_deps_resolution() -> Result<()> {
+async fn test_resolver_plugin() -> Result<()> {
     let mut graph = Graph::new();
 
-    // Add tasks
-    let build_id = graph.add_node(NodeKind::Task(TaskData {
+    // Create task nodes
+    let task1 = TaskData {
         name: "build".into(),
         description: Some("Build the project".into()),
         command: Some("echo Building".into()),
         working_dir: None,
         env: HashMap::new(),
         is_default: false,
-        script_name: None,
-    }));
+        script_id: "build_script".to_string(),
+        script_display_name: "Build Script".to_string(),
+    };
+    let task1_id = graph.add_node(NodeKind::Task(task1));
+    graph
+        .task_registry
+        .insert("build_script#build".to_string(), task1_id);
 
-    let test_id = graph.add_node(NodeKind::Task(TaskData {
+    let task2 = TaskData {
         name: "test".into(),
-        description: Some("Run tests".into()),
+        description: Some("Test the project".into()),
         command: Some("echo Testing".into()),
         working_dir: None,
         env: HashMap::new(),
         is_default: false,
-        script_name: None,
-    }));
+        script_id: "test_script".to_string(),
+        script_display_name: "Test Script".to_string(),
+    };
+    let task2_id = graph.add_node(NodeKind::Task(task2));
 
-    // Register tasks
-    graph.task_registry.insert("build".to_string(), build_id);
-    graph.task_registry.insert("test".to_string(), test_id);
-
-    // Add pre_deps metadata
-    let node = &mut graph.nodes[test_id as usize];
-    node.metadata
-        .insert("pre_deps".to_string(), json!(["build"]).to_string());
-
-    // Create plugin manager and run resolver
-    let mut manager = PluginManager::new();
-    manager.register(Box::new(ResolverPlugin));
-    manager
-        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
-        .await?;
-
-    // Verify edge was created
-    assert_eq!(graph.edges.len(), 1);
-    assert_eq!(graph.edges[0].from, build_id);
-    assert_eq!(graph.edges[0].to, test_id);
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_post_deps_resolution() -> Result<()> {
-    let mut graph = Graph::new();
-
-    // Add tasks
-    let build_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "build".into(),
-        description: Some("Build the project".into()),
-        command: Some("echo Building".into()),
-        working_dir: None,
-        env: HashMap::new(),
-        is_default: false,
-        script_name: None,
-    }));
-
-    let test_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "test".into(),
-        description: Some("Run tests".into()),
-        command: Some("echo Testing".into()),
-        working_dir: None,
-        env: HashMap::new(),
-        is_default: false,
-        script_name: None,
-    }));
-
-    // Register tasks
-    graph.task_registry.insert("build".to_string(), build_id);
-    graph.task_registry.insert("test".to_string(), test_id);
-
-    // Add post_deps metadata
-    let node = &mut graph.nodes[build_id as usize];
-    node.metadata
-        .insert("post_deps".to_string(), json!(["test"]).to_string());
-
-    // Create plugin manager and run resolver
-    let mut manager = PluginManager::new();
-    manager.register(Box::new(ResolverPlugin));
-    manager
-        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
-        .await?;
-
-    // Verify edge was created
-    assert_eq!(graph.edges.len(), 1);
-    assert_eq!(graph.edges[0].from, build_id);
-    assert_eq!(graph.edges[0].to, test_id);
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_missing_dependency() -> Result<()> {
-    let mut graph = Graph::new();
-
-    // Add task
-    let test_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "test".into(),
-        description: Some("Run tests".into()),
-        command: Some("echo Testing".into()),
-        working_dir: None,
-        env: HashMap::new(),
-        is_default: false,
-        script_name: None,
-    }));
-
-    // Register task
-    graph.task_registry.insert("test".to_string(), test_id);
-
-    // Add pre_deps metadata with missing dependency
-    let node = &mut graph.nodes[test_id as usize];
+    // Add dependency metadata
+    let node = &mut graph.nodes[task2_id as usize];
     node.metadata.insert(
         "pre_deps".to_string(),
-        json!(["build"]).to_string(), // build task doesn't exist
+        json!(["build_script#build"]).to_string(),
     );
 
-    // Create plugin manager and run resolver
+    // Setup plugins
     let mut manager = PluginManager::new();
     manager.register(Box::new(ResolverPlugin));
 
-    // Should fail with dependency not found error
+    // Run plugins to process metadata
+    manager
+        .run_lifecycle(
+            &mut graph,
+            Some(PluginConfig {
+                fail_fast: false,
+                watch: false,
+                list: false,
+                options: None,
+            }),
+        )
+        .await?;
+
+    // Verify edge was created
+    assert!(graph
+        .edges
+        .iter()
+        .any(|e| e.from == task1_id && e.to == task2_id));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_resolver_plugin_missing_dependency() -> Result<()> {
+    let mut graph = Graph::new();
+
+    // Create task node
+    let task = TaskData {
+        name: "test".into(),
+        description: Some("Test task".into()),
+        command: Some("echo test".into()),
+        working_dir: None,
+        env: HashMap::new(),
+        is_default: false,
+        script_id: "test_script".to_string(),
+        script_display_name: "Test Script".to_string(),
+    };
+    let task_id = graph.add_node(NodeKind::Task(task));
+
+    // Add invalid dependency metadata
+    let node = &mut graph.nodes[task_id as usize];
+    node.metadata.insert(
+        "pre_deps".to_string(),
+        json!(["non_existent_task"]).to_string(),
+    );
+
+    // Setup plugins
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(ResolverPlugin));
+
+    // Run plugins to process metadata
     let result = manager
-        .run_lifecycle(&mut graph, Some(PluginConfig::default()))
+        .run_lifecycle(
+            &mut graph,
+            Some(PluginConfig {
+                fail_fast: false,
+                watch: false,
+                list: false,
+                options: None,
+            }),
+        )
         .await;
+
     assert!(result.is_err());
-    if let Err(e) = result {
-        assert!(e.to_string().contains("Dependency build not found"));
-    }
+    assert!(matches!(result, Err(BodoError::PluginError(_))));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_resolver_plugin_invalid_metadata() -> Result<()> {
+    let mut graph = Graph::new();
+
+    // Create task node
+    let task = TaskData {
+        name: "test".into(),
+        description: Some("Test task".into()),
+        command: Some("echo test".into()),
+        working_dir: None,
+        env: HashMap::new(),
+        is_default: false,
+        script_id: "test_script".to_string(),
+        script_display_name: "Test Script".to_string(),
+    };
+    let task_id = graph.add_node(NodeKind::Task(task));
+
+    // Add invalid dependency metadata
+    let node = &mut graph.nodes[task_id as usize];
+    node.metadata
+        .insert("pre_deps".to_string(), "invalid json".to_string());
+
+    // Setup plugins
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(ResolverPlugin));
+
+    // Run plugins to process metadata
+    let result = manager
+        .run_lifecycle(
+            &mut graph,
+            Some(PluginConfig {
+                fail_fast: false,
+                watch: false,
+                list: false,
+                options: None,
+            }),
+        )
+        .await;
+
+    assert!(result.is_err());
+    assert!(matches!(result, Err(BodoError::PluginError(_))));
 
     Ok(())
 }

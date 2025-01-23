@@ -38,6 +38,14 @@ impl GraphManager {
         self.config = config.clone();
         let mut loader = ScriptLoader::new();
         self.graph = loader.build_graph(config).await?;
+
+        // Check for cycles after building the graph
+        if self.graph.has_cycle() {
+            return Err(BodoError::PluginError(
+                "Circular dependency detected in task graph".to_string(),
+            ));
+        }
+
         Ok(&self.graph)
     }
 

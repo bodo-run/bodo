@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use glob::glob;
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde_json::from_str;
 use std::{
@@ -57,12 +58,32 @@ impl WatchPlugin {
 
         // Watch all patterns
         for pattern in config.patterns {
-            let path = PathBuf::from(pattern);
-            watcher
-                .watch(&path, RecursiveMode::Recursive)
+            // Resolve glob pattern
+            let paths: Vec<PathBuf> = glob(&pattern)
                 .map_err(|e| {
-                    BodoError::PluginError(format!("Failed to watch {}: {}", path.display(), e))
-                })?;
+                    BodoError::PluginError(format!(
+                        "Failed to parse glob pattern {}: {}",
+                        pattern, e
+                    ))
+                })?
+                .filter_map(|r| r.ok())
+                .collect();
+
+            if paths.is_empty() {
+                return Err(BodoError::PluginError(format!(
+                    "No paths found matching pattern: {}",
+                    pattern
+                )));
+            }
+
+            // Watch each resolved path
+            for path in paths {
+                watcher
+                    .watch(&path, RecursiveMode::Recursive)
+                    .map_err(|e| {
+                        BodoError::PluginError(format!("Failed to watch {}: {}", path.display(), e))
+                    })?;
+            }
         }
 
         // Store watcher

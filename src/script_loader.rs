@@ -113,6 +113,7 @@ impl ScriptLoader {
         };
 
         // Load default task if present
+        let mut task_ids = Vec::new();
         if let Some(default_task) = yaml.get("default_task") {
             let task_config = match serde_yaml::from_value(default_task.clone()) {
                 Ok(config) => config,
@@ -129,6 +130,7 @@ impl ScriptLoader {
                 &task_config,
             );
             self.register_task(script_id, "default", default_id, graph)?;
+            task_ids.push((default_id, task_config));
         }
 
         // Load tasks map
@@ -162,19 +164,21 @@ impl ScriptLoader {
             let task_id =
                 self.create_task_node(graph, script_id, &script_display_name, &name, &task_config);
             self.register_task(script_id, &name, task_id, graph)?;
+            task_ids.push((task_id, task_config));
+        }
 
-            let node = &mut graph.nodes[task_id as usize];
-            if !task_config.pre_deps.is_empty() {
-                node.metadata.insert(
-                    "pre_deps".to_string(),
-                    serde_json::to_string(&task_config.pre_deps).unwrap(),
-                );
+        // Create edges for dependencies
+        for (task_id, task_config) in task_ids {
+            // Add pre-dependencies
+            for dep in task_config.pre_deps {
+                let dep_id = self.resolve_dependency(&dep, script_id, graph)?;
+                graph.add_edge(dep_id, task_id)?;
             }
-            if !task_config.post_deps.is_empty() {
-                node.metadata.insert(
-                    "post_deps".to_string(),
-                    serde_json::to_string(&task_config.post_deps).unwrap(),
-                );
+
+            // Add post-dependencies
+            for dep in task_config.post_deps {
+                let dep_id = self.resolve_dependency(&dep, script_id, graph)?;
+                graph.add_edge(task_id, dep_id)?;
             }
         }
 
@@ -232,5 +236,28 @@ impl ScriptLoader {
         graph.task_registry.entry(task_key).or_insert(node_id);
 
         Ok(())
+    }
+
+    fn resolve_dependency(&self, dep: &str, script_id: &str, graph: &Graph) -> Result<u64> {
+        // First try with full key (script_id#task_name)
+        if let Some(&id) = graph.task_registry.get(dep) {
+            return Ok(id);
+        }
+
+        // Then try with current script_id
+        let full_key = format!("{}#{}", script_id, dep);
+        if let Some(&id) = graph.task_registry.get(&full_key) {
+            return Ok(id);
+        }
+
+        // Finally try with just the task name
+        if let Some(&id) = graph.task_registry.get(dep) {
+            return Ok(id);
+        }
+
+        Err(BodoError::PluginError(format!(
+            "Dependency not found: {}",
+            dep
+        )))
     }
 }
