@@ -51,7 +51,7 @@ async fn main() {
         // Parse task name and subtask
         let task_name = if let Some(task) = args.task {
             if let Some(subtask) = args.subtask {
-                format!("{}#{}", task, subtask)
+                format!("{} {}", task, subtask)
             } else {
                 task
             }

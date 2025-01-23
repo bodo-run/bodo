@@ -26,7 +26,7 @@ async fn test_resolver_plugin() -> Result<()> {
     let task1_id = graph.add_node(NodeKind::Task(task1));
     graph
         .task_registry
-        .insert("build_script#build".to_string(), task1_id);
+        .insert("build_script build".to_string(), task1_id);
 
     let task2 = TaskData {
         name: "test".into(),
@@ -44,7 +44,7 @@ async fn test_resolver_plugin() -> Result<()> {
     let node = &mut graph.nodes[task2_id as usize];
     node.metadata.insert(
         "pre_deps".to_string(),
-        json!(["build_script#build"]).to_string(),
+        json!(["build_script build"]).to_string(),
     );
 
     // Setup plugins
