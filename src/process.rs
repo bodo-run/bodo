@@ -13,7 +13,7 @@ use colored::Colorize;
 /// Holds a single child process plus some metadata.
 struct ManagedChild {
     name: String,
-    child: Child,
+    child: Option<Child>,
     color: Option<ColorSpec>,
 }
 
@@ -70,7 +70,7 @@ impl ProcessManager {
             .map_err(|e| BodoError::PluginError(format!("Failed to spawn {}: {}", name, e)))?;
         let managed_child = ManagedChild {
             name: name.to_string(),
-            child,
+            child: Some(child),
             color,
         };
 
@@ -94,17 +94,16 @@ impl ProcessManager {
             for idx in 0..locked.len() {
                 let mc_name = locked[idx].name.clone();
                 let mc_color = locked[idx].color.clone();
-                let mut child_orig = std::mem::replace(&mut locked[idx].child, dummy_child()?);
 
-                // Wait for the child process to avoid zombie processes
-                child_orig.wait()?;
+                // Take the child process out of the vector
+                let mut child = locked[idx].child.take().unwrap();
 
                 let c_any_failure = Arc::clone(&any_failure_for_threads);
                 let c_stop_signal = Arc::clone(&stop_for_threads);
                 let c_children = Arc::clone(&children_for_threads);
 
                 // Create stdout/stderr threads
-                if let Some(stdout) = child_orig.stdout.take() {
+                if let Some(stdout) = child.stdout.take() {
                     let name = mc_name.clone();
                     let color = mc_color.clone();
                     let stop_signal = Arc::clone(&stop_for_threads);
@@ -127,7 +126,7 @@ impl ProcessManager {
                     });
                 }
 
-                if let Some(stderr) = child_orig.stderr.take() {
+                if let Some(stderr) = child.stderr.take() {
                     let name = mc_name.clone();
                     let color = mc_color.clone();
                     let stop_signal = Arc::clone(&stop_for_threads);
@@ -151,7 +150,7 @@ impl ProcessManager {
                 }
 
                 // Wait for the child process to avoid zombie processes
-                if let Err(e) = child_orig.wait() {
+                if let Err(e) = child.wait() {
                     let mut w = c_any_failure.write().unwrap();
                     if w.is_none() {
                         *w = Some(format!("Error waiting on '{}': {}", mc_name, e));
@@ -162,7 +161,9 @@ impl ProcessManager {
                         // Kill all other processes
                         let mut locked_ch = c_children.lock().unwrap();
                         for c in locked_ch.iter_mut() {
-                            let _ = kill_child(&mut c.child);
+                            if let Some(child) = &mut c.child {
+                                let _ = kill_child(child);
+                            }
                         }
                     }
                 }
@@ -188,23 +189,12 @@ impl ProcessManager {
         self.stop_signal.store(true, Ordering::SeqCst);
         let mut locked = self.children.lock().unwrap();
         for mc in locked.iter_mut() {
-            kill_child(&mut mc.child)?;
+            if let Some(child) = &mut mc.child {
+                kill_child(child)?;
+            }
         }
         Ok(())
     }
-}
-
-/// Hack: You can't trivially build a "dummy" child in stable Rust,
-/// but we need to fill in the vector so we can move the real Child into a thread.
-fn dummy_child() -> Result<Child, BodoError> {
-    let child = Command::new("sh")
-        .arg("-c")
-        .arg("echo dummy_child")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| BodoError::PluginError(format!("Failed to create dummy child: {}", e)))?;
-    Ok(child)
 }
 
 /// Attempt to kill a child gracefully, then forcibly if needed.
