@@ -14,13 +14,15 @@ pub enum BodoError {
 impl fmt::Display for BodoError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BodoError::IoError(err) => write!(f, "IO error: {}", err),
-            BodoError::WatcherError(err) => write!(f, "Watcher error: {}", err),
-            BodoError::TaskNotFound(task) => write!(f, "Task not found: {}", task),
+            BodoError::IoError(err) => write!(f, "{}", err),
+            BodoError::WatcherError(err) => write!(f, "{}", err),
+            BodoError::TaskNotFound(_) => write!(f, "not found"),
             BodoError::PluginError(err) => write!(f, "Plugin error: {}", err),
-            BodoError::SerdeError(err) => write!(f, "JSON error: {}", err),
-            BodoError::YamlError(err) => write!(f, "YAML error: {}", err),
-            BodoError::NoTaskSpecified => write!(f, "No task specified and no default task found"),
+            BodoError::SerdeError(err) => write!(f, "{}", err),
+            BodoError::YamlError(err) => write!(f, "{}", err),
+            BodoError::NoTaskSpecified => {
+                write!(f, "No task specified and no scripts/script.yaml found")
+            }
         }
     }
 }
