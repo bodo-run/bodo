@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
 use bodo::{
-    errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
-    plugin::{Plugin, PluginConfig, PluginManager},
-    plugins::{concurrent_plugin::ConcurrentPlugin, execution_plugin::ExecutionPlugin},
+    plugin::Plugin,
+    plugins::concurrent_plugin::ConcurrentPlugin,
     Result,
 };
 use serde_json::json;

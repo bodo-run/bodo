@@ -5,7 +5,7 @@ use bodo::{
     Result,
 };
 use serde_json::json;
-use std::{collections::HashMap, fs, path::PathBuf, time::Duration};
+use std::{collections::HashMap, fs, time::Duration};
 use tempfile::tempdir;
 use tokio::time::sleep;
 

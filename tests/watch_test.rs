@@ -1,13 +1,12 @@
 use bodo::{
-    config::BodoConfig,
     errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
-    plugin::{Plugin, PluginConfig, PluginManager},
+    plugin::{PluginConfig, PluginManager},
     plugins::{execution_plugin::ExecutionPlugin, watch_plugin::WatchPlugin},
     Result,
 };
 use serde_json::json;
-use std::{collections::HashMap, fs, path::PathBuf, time::Duration};
+use std::{collections::HashMap, fs, time::Duration};
 use tempfile::tempdir;
 use tokio::time::sleep;
 

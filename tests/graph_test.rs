@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bodo::{
     errors::BodoError,
-    graph::{CommandData, Edge, Graph, NodeKind, TaskData},
+    graph::{CommandData, Graph, NodeKind, TaskData},
     Result,
 };
 

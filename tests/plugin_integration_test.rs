@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
 use bodo::{
-    errors::BodoError,
     graph::{CommandData, Graph, NodeKind, TaskData},
     plugin::{Plugin, PluginConfig, PluginManager},
     plugins::{
-        execution_plugin::{execute_graph, ExecutionPlugin},
+        execution_plugin::ExecutionPlugin,
         path_plugin::PathPlugin,
         timeout_plugin::TimeoutPlugin,
     },

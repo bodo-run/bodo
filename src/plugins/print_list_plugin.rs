@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use colored::Colorize;
 use std::{any::Any, collections::HashMap};
 
 use crate::{
@@ -43,21 +44,19 @@ impl Plugin for PrintListPlugin {
 
         // Print tasks grouped by script
         for (script_name, tasks) in tasks_by_script {
-            println!("\n{}", script_name);
+            println!("\n{}", script_name.bold().blue());
 
             // Print tasks
             for (name, desc, script_id) in tasks {
-                let task_name = format!("{}#{}", script_id, name);
-                if name == "default" {
-                    if let Some(desc) = desc {
-                        println!("  (default)   {}", desc);
-                    } else {
-                        println!("  (default)");
-                    }
-                } else if let Some(desc) = desc {
-                    println!("  {:<25} {}", task_name, desc);
+                let full_name = if name == "default" {
+                    script_id.to_string()
                 } else {
-                    println!("  {}", task_name);
+                    format!("{} {}", script_id, name)
+                };
+
+                match desc {
+                    Some(desc) => println!("  {:<25} {}", full_name, desc),
+                    None => println!("  {}", full_name),
                 }
             }
         }

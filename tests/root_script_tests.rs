@@ -2,7 +2,6 @@ use assert_cmd::Command as AssertCommand;
 use predicates::str::contains;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
 use std::time::Duration;
 use tempfile::tempdir;
 

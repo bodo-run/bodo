@@ -1,7 +1,7 @@
 use bodo::{
     errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
-    plugin::{Plugin, PluginConfig, PluginManager},
+    plugin::{PluginConfig, PluginManager},
     plugins::resolver_plugin::ResolverPlugin,
     Result,
 };

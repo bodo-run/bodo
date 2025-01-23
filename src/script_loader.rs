@@ -11,7 +11,7 @@ use crate::{
 
 /// Simplified ScriptLoader that handles loading task configurations from files.
 pub struct ScriptLoader {
-    // Track tasks across all files: "fileLabel#taskName" -> node ID
+    // Track tasks across all files: "script_id task_name" -> node ID
     pub name_to_id: HashMap<String, u64>,
     pub task_registry: HashMap<String, u64>,
 }
@@ -215,7 +215,7 @@ impl ScriptLoader {
         graph: &mut Graph,
     ) -> Result<()> {
         // Register with full key
-        let full_key = format!("{}#{}", script_id, task_name);
+        let full_key = format!("{} {}", script_id, task_name);
         if graph.task_registry.contains_key(&full_key) {
             return Err(BodoError::PluginError(format!(
                 "Duplicate task name: {}",
@@ -239,13 +239,13 @@ impl ScriptLoader {
     }
 
     fn resolve_dependency(&self, dep: &str, script_id: &str, graph: &Graph) -> Result<u64> {
-        // First try with full key (script_id#task_name)
+        // First try with full key (script_id task_name)
         if let Some(&id) = graph.task_registry.get(dep) {
             return Ok(id);
         }
 
         // Then try with current script_id
-        let full_key = format!("{}#{}", script_id, dep);
+        let full_key = format!("{} {}", script_id, dep);
         if let Some(&id) = graph.task_registry.get(&full_key) {
             return Ok(id);
         }

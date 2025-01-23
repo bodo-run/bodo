@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bodo::{
     graph::{Graph, NodeKind, TaskData},
-    plugin::{Plugin, PluginConfig, PluginManager},
+    plugin::{PluginConfig, PluginManager},
     plugins::print_list_plugin::PrintListPlugin,
     Result,
 };
