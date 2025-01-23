@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::any::Any;
 
 use crate::{
+    errors::BodoError,
     graph::{ConcurrentGroupData, Graph, NodeKind},
     plugin::Plugin,
     Result,
@@ -69,7 +70,7 @@ impl Plugin for ConcurrencyPlugin {
             let group_id = graph.add_node(NodeKind::ConcurrentGroup(group_data));
 
             // Add an edge from the task to the concurrency node
-            let _ = graph.add_edge(task_id, group_id);
+            graph.add_edge(task_id, group_id)?;
         }
 
         Ok(())
