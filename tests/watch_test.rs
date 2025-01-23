@@ -143,3 +143,79 @@ async fn test_watch_debounce() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_multiple_watchers() -> Result<()> {
+    let dir = tempdir()?;
+    let file1 = dir.path().join("file1.txt");
+    let file2 = dir.path().join("file2.txt");
+    fs::write(&file1, "initial content")?;
+    fs::write(&file2, "initial content")?;
+
+    let mut graph = Graph::new();
+
+    // Task 1 watching file1
+    let task1_id = graph.add_node(NodeKind::Task(TaskData {
+        name: "watch_test_1".into(),
+        description: Some("Test watch functionality 1".into()),
+        command: Some("echo 'File 1 changed'".into()),
+        working_dir: None,
+        env: HashMap::new(),
+        is_default: false,
+        script_name: None,
+    }));
+
+    // Task 2 watching file2
+    let task2_id = graph.add_node(NodeKind::Task(TaskData {
+        name: "watch_test_2".into(),
+        description: Some("Test watch functionality 2".into()),
+        command: Some("echo 'File 2 changed'".into()),
+        working_dir: None,
+        env: HashMap::new(),
+        is_default: false,
+        script_name: None,
+    }));
+
+    // Configure watchers
+    let node1 = &mut graph.nodes[task1_id as usize];
+    node1.metadata.insert(
+        "watch".to_string(),
+        json!({
+            "patterns": [file1.to_string_lossy().to_string()],
+            "debounce_ms": 100,
+            "ignore_patterns": []
+        })
+        .to_string(),
+    );
+
+    let node2 = &mut graph.nodes[task2_id as usize];
+    node2.metadata.insert(
+        "watch".to_string(),
+        json!({
+            "patterns": [file2.to_string_lossy().to_string()],
+            "debounce_ms": 100,
+            "ignore_patterns": []
+        })
+        .to_string(),
+    );
+
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(WatchPlugin::new()));
+    manager.register(Box::new(ExecutionPlugin));
+
+    manager
+        .run_lifecycle(&mut graph, &PluginConfig::default())
+        .await?;
+
+    // Wait for watchers to be set up
+    sleep(Duration::from_millis(200)).await;
+
+    // Modify both files
+    fs::write(&file1, "modified content 1")?;
+    fs::write(&file2, "modified content 2")?;
+
+    // Wait for both watchers to trigger
+    sleep(Duration::from_millis(300)).await;
+
+    Ok(())
+}

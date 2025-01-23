@@ -98,11 +98,37 @@ impl WatchPlugin {
                             // Trigger task re-run
                             let mut graph = graph.lock().await;
                             if let Some(node) = graph.nodes.get_mut(node_id as usize) {
-                                if let NodeKind::Task(_) = &node.kind {
+                                if let NodeKind::Task(task) = &node.kind {
                                     println!(
-                                        "Triggering re-run of task {} due to file change",
-                                        node.id
+                                        "File change detected - Re-running task: {}",
+                                        task.name
                                     );
+
+                                    // Execute the task
+                                    if let Some(cmd) = &task.command {
+                                        use tokio::process::Command;
+
+                                        let mut command = Command::new("sh");
+                                        command.arg("-c").arg(cmd);
+
+                                        if let Some(dir) = &task.working_dir {
+                                            command.current_dir(dir);
+                                        }
+
+                                        // Add environment variables
+                                        for (key, value) in &task.env {
+                                            command.env(key, value);
+                                        }
+
+                                        match command.spawn() {
+                                            Ok(mut child) => {
+                                                if let Err(e) = child.wait().await {
+                                                    eprintln!("Error running task: {}", e);
+                                                }
+                                            }
+                                            Err(e) => eprintln!("Failed to spawn task: {}", e),
+                                        }
+                                    }
                                 }
                             }
                         }
