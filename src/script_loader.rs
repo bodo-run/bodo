@@ -31,10 +31,35 @@ impl ScriptLoader {
         }
     }
 
+    // [CASCADING CHANGE] Helper function for merging environment variables
+    fn merge_envs(
+        global_env: &HashMap<String, String>,
+        script_env: &HashMap<String, String>,
+        task_env: &HashMap<String, String>,
+    ) -> HashMap<String, String> {
+        let mut merged = HashMap::new();
+        // Start with global
+        for (k, v) in global_env {
+            merged.insert(k.clone(), v.clone());
+        }
+        // Merge script-level, overriding if keys conflict
+        for (k, v) in script_env {
+            merged.insert(k.clone(), v.clone());
+        }
+        // Merge task-level
+        for (k, v) in task_env {
+            merged.insert(k.clone(), v.clone());
+        }
+        merged
+    }
+
     pub fn build_graph(&mut self, config: BodoConfig) -> Result<Graph> {
         let mut graph = Graph::new();
         let mut paths_to_load = vec![];
         let mut root_script_abs: Option<PathBuf> = None;
+
+        // [CASCADING CHANGE] Store global env to pass to load_script
+        let global_env = config.env.clone();
 
         if let Some(ref root_script) = config.root_script {
             let root_path = PathBuf::from(root_script);
@@ -87,13 +112,20 @@ impl ScriptLoader {
         }
 
         for (path, script_name) in paths_to_load {
-            self.load_script(&mut graph, &path, &script_name)?;
+            // [CASCADING CHANGE] Pass global_env to load_script
+            self.load_script(&mut graph, &path, &script_name, &global_env)?;
         }
 
         Ok(graph)
     }
 
-    fn load_script(&mut self, graph: &mut Graph, path: &Path, script_id: &str) -> Result<()> {
+    fn load_script(
+        &mut self,
+        graph: &mut Graph,
+        path: &Path,
+        script_id: &str,
+        global_env: &HashMap<String, String>, // [CASCADING CHANGE]
+    ) -> Result<()> {
         let abs = path.canonicalize()?;
         if self.loaded_scripts.contains_key(&abs) {
             return Ok(());
@@ -103,12 +135,29 @@ impl ScriptLoader {
             .insert(abs.clone(), script_id.to_string());
 
         let contents = fs::read_to_string(path)?;
-        let yaml = match serde_yaml::from_str::<serde_yaml::Value>(&contents) {
+        let yaml: serde_yaml::Value = match serde_yaml::from_str(&contents) {
             Ok(yaml) => yaml,
             Err(e) => {
                 warn!("Skipping invalid YAML file {}: {}", path.display(), e);
                 return Ok(());
             }
+        };
+
+        // [CASCADING CHANGE] Parse script-level env if present
+        let script_env = if let Some(env_val) = yaml.get("env") {
+            if let Some(map) = env_val.as_mapping() {
+                let mut senv = HashMap::new();
+                for (k, v) in map {
+                    if let (Some(k_str), Some(v_str)) = (k.as_str(), v.as_str()) {
+                        senv.insert(k_str.to_string(), v_str.to_string());
+                    }
+                }
+                senv
+            } else {
+                HashMap::new()
+            }
+        } else {
+            HashMap::new()
         };
 
         let yaml_name = yaml.get("name").and_then(|v| v.as_str()).unwrap_or("");
@@ -122,13 +171,18 @@ impl ScriptLoader {
 
         let mut task_ids = Vec::new();
         if let Some(default_task) = yaml.get("default_task") {
-            let task_config: TaskConfig = match serde_yaml::from_value(default_task.clone()) {
-                Ok(config) => config,
-                Err(e) => {
-                    warn!("Invalid default task in {}: {}", path.display(), e);
-                    return Ok(());
-                }
-            };
+            let mut task_config: TaskConfig =
+                match serde_yaml::from_value::<TaskConfig>(default_task.clone()) {
+                    Ok(config) => config,
+                    Err(e) => {
+                        warn!("Invalid default task in {}: {}", path.display(), e);
+                        return Ok(());
+                    }
+                };
+
+            // [CASCADING CHANGE] Merge environments for default task
+            task_config.env = Self::merge_envs(global_env, &script_env, &task_config.env);
+
             let default_id = self.create_task_node(
                 graph,
                 script_id,
@@ -147,8 +201,12 @@ impl ScriptLoader {
                 m.iter()
                     .filter_map(|(k, v)| {
                         let name = k.as_str().unwrap_or_default().to_string();
-                        match serde_yaml::from_value(v.clone()) {
-                            Ok(config) => Some(Ok((name, config))),
+                        match serde_yaml::from_value::<TaskConfig>(v.clone()) {
+                            Ok(mut config) => {
+                                // [CASCADING CHANGE] Merge environments for each task
+                                config.env = Self::merge_envs(global_env, &script_env, &config.env);
+                                Some(Ok((name, config)))
+                            }
                             Err(e) => {
                                 warn!("Invalid task '{}' in {}: {}", name, path.display(), e);
                                 None
@@ -172,6 +230,7 @@ impl ScriptLoader {
             task_ids.push((task_id, task_config));
         }
 
+        // Handle dependencies after all tasks are created
         for (task_id, task_config) in task_ids {
             for dep in task_config.pre_deps {
                 match dep {
@@ -345,41 +404,15 @@ impl ScriptLoader {
         referencing_file: &Path,
         graph: &mut Graph,
     ) -> Result<u64> {
-        if let Some(&id) = graph.task_registry.get(dep) {
-            return Ok(id);
+        if let Some((script_path, fallback_name)) = self.parse_cross_file_ref(dep, referencing_file)
+        {
+            // [CASCADING CHANGE] Create empty global env for cross-file references
+            let empty_global_env = HashMap::new();
+            self.load_script(graph, &script_path, &fallback_name, &empty_global_env)?;
         }
 
-        if let Some((script_path, subtask_name)) = self.parse_cross_file_ref(dep, referencing_file)
-        {
-            if !self.loaded_scripts.contains_key(&script_path) {
-                let fallback_name = script_path
-                    .file_stem()
-                    .map(|x| x.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "external".to_string());
-
-                self.load_script(graph, &script_path, &fallback_name)?;
-            }
-
-            let loaded_id = self.loaded_scripts.get(&script_path).ok_or_else(|| {
-                BodoError::PluginError(format!(
-                    "Script not found after load: {}",
-                    script_path.display()
-                ))
-            })?;
-            let full_key = if subtask_name == "default" {
-                loaded_id.to_string()
-            } else {
-                format!("{} {}", loaded_id, subtask_name)
-            };
-
-            if let Some(&id) = graph.task_registry.get(&full_key) {
-                return Ok(id);
-            }
-            return Err(BodoError::PluginError(format!(
-                "Dependency not found in loaded script: {} (task '{}')",
-                script_path.display(),
-                subtask_name
-            )));
+        if let Some(&id) = graph.task_registry.get(dep) {
+            return Ok(id);
         }
 
         let script_key = format!("{} {}", referencing_file.display(), dep);
