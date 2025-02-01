@@ -4,12 +4,42 @@ default_task:
   command: echo "Hello from Bodo root!"
   description: "Default greeting when running `bodo` with no arguments."
 
-tasks:
-  commit:
-    description: Commit everything
-    command: git add . && git commit
+# These are available to all tasks in this file
+env:
+  CARGO_TERM_COLOR: always
+exec_paths:
+  - $HOME/Library/pnpm
 
-  test-watch:
+tasks:
+  # Demonstrating how to use argument parsing
+  commit:
+    args:
+      - name: message
+        description: The commit message
+        required: false
+        default: "Initial commit"
+    description: Commit everything
+    command: git add -A && git commit -m "$message"
+
+  # Demonstrating how to use exec_paths to add a path to the PATH environment variable
+  kargo:
+    description: Kargo is a dummy executable that is added to the PATH environment variable
+    pre_deps:
+      - command: rm -rf /tmp/dummy
+        silent: true
+      - command: mkdir -p /tmp/dummy
+        silent: true
+      - command: ln -s $HOME/.cargo/bin/cargo /tmp/dummy/kargo
+        silent: true
+    post_deps:
+      - command: rm -rf /tmp/dummy
+        silent: true
+    exec_paths:
+      - /tmp/dummy
+    command: kargo --version
+
+  # Demonstrating how to use watch to run a command when files change
+  watch-tests:
     description: A test task that watches for file changes
     command: cargo test
     watch:
@@ -20,3 +50,9 @@ tasks:
       debounce_ms: 1000
       ignore_patterns:
         - "target/**"
+
+  # Demonstrating how to use env to set environment variables
+  env-test:
+    env:
+      RUST_BACKTRACE: short # only set for this task
+    command: cargo test
