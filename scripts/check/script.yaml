@@ -8,12 +8,10 @@ default_task:
     - task: clean
     - task: check
     - task: clippy
-    - task: test
     - task: fmt-check
   concurrently:
-    - command: cargo clippy
+    - command: echo "Running fake e2e tests..."
     - task: test
-    - task: fmt-check
   env:
     RUST_BACKTRACE: "1"
 

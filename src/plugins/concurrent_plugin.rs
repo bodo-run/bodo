@@ -85,8 +85,19 @@ impl Plugin for ConcurrentPlugin {
                         }
                     }
                     Value::Object(cmd) => {
+                        // Handle task objects
+                        if let Some(Value::String(task_name)) = cmd.get("task") {
+                            if let Some(&dep_id) = graph.task_registry.get(task_name) {
+                                child_ids.push(dep_id);
+                            } else {
+                                return Err(BodoError::PluginError(format!(
+                                    "Concurrent task not found: {}",
+                                    task_name
+                                )));
+                            }
+                        }
                         // Handle command objects
-                        if let Some(Value::String(command)) = cmd.get("command") {
+                        else if let Some(Value::String(command)) = cmd.get("command") {
                             let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
                                 raw_command: command.clone(),
                                 description: None,
@@ -95,6 +106,11 @@ impl Plugin for ConcurrentPlugin {
                                 env: std::collections::HashMap::new(),
                             }));
                             child_ids.push(cmd_node_id);
+                        } else {
+                            return Err(BodoError::PluginError(
+                                "Invalid concurrency dependency format (must have task or command)"
+                                    .to_string(),
+                            ));
                         }
                     }
                     _ => {
