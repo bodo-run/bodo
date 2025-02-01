@@ -1,4 +1,5 @@
 use std::{error::Error, fmt, io};
+use validator::{ValidationError, ValidationErrors};
 
 #[derive(Debug)]
 pub enum BodoError {
@@ -9,6 +10,7 @@ pub enum BodoError {
     SerdeError(serde_json::Error),
     YamlError(serde_yaml::Error),
     NoTaskSpecified,
+    ValidationError(String),
 }
 
 impl fmt::Display for BodoError {
@@ -23,6 +25,7 @@ impl fmt::Display for BodoError {
             BodoError::NoTaskSpecified => {
                 write!(f, "No task specified and no scripts/script.yaml found")
             }
+            BodoError::ValidationError(err) => write!(f, "Validation error: {}", err),
         }
     }
 }
@@ -50,6 +53,18 @@ impl From<serde_json::Error> for BodoError {
 impl From<serde_yaml::Error> for BodoError {
     fn from(err: serde_yaml::Error) -> Self {
         BodoError::YamlError(err)
+    }
+}
+
+impl From<ValidationError> for BodoError {
+    fn from(err: ValidationError) -> Self {
+        BodoError::ValidationError(err.to_string())
+    }
+}
+
+impl From<ValidationErrors> for BodoError {
+    fn from(err: ValidationErrors) -> Self {
+        BodoError::ValidationError(err.to_string())
     }
 }
 
