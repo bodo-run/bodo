@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::{
-    config::{BodoConfig, TaskConfig},
+    config::{BodoConfig, Dependency, TaskConfig},
     errors::{BodoError, Result},
-    graph::{Graph, NodeKind, TaskData},
+    graph::{CommandData, Graph, NodeKind, TaskData},
 };
 
 /// Simplified ScriptLoader that handles loading task configurations from files.
@@ -171,14 +171,43 @@ impl ScriptLoader {
         for (task_id, task_config) in task_ids {
             // Add pre-dependencies
             for dep in task_config.pre_deps {
-                let dep_id = self.resolve_dependency(&dep, script_id, graph)?;
-                graph.add_edge(dep_id, task_id)?;
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(&task, script_id, graph)?;
+                        graph.add_edge(dep_id, task_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        // Create a command node for inline command dependency
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command,
+                            description: None,
+                            working_dir: None,
+                            watch: None,
+                            env: HashMap::new(),
+                        }));
+                        graph.add_edge(cmd_node_id, task_id)?;
+                    }
+                }
             }
 
             // Add post-dependencies
             for dep in task_config.post_deps {
-                let dep_id = self.resolve_dependency(&dep, script_id, graph)?;
-                graph.add_edge(task_id, dep_id)?;
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(&task, script_id, graph)?;
+                        graph.add_edge(task_id, dep_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command,
+                            description: None,
+                            working_dir: None,
+                            watch: None,
+                            env: HashMap::new(),
+                        }));
+                        graph.add_edge(task_id, cmd_node_id)?;
+                    }
+                }
             }
         }
 

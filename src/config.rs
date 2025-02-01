@@ -2,6 +2,13 @@ use crate::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Dependency {
+    Task { task: String },
+    Command { command: String },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BodoConfig {
     pub root_script: Option<String>,
@@ -15,9 +22,9 @@ pub struct TaskConfig {
     pub command: Option<String>,
     pub cwd: Option<String>,
     #[serde(default)]
-    pub pre_deps: Vec<String>,
+    pub pre_deps: Vec<Dependency>,
     #[serde(default)]
-    pub post_deps: Vec<String>,
+    pub post_deps: Vec<Dependency>,
     pub watch: Option<WatchConfig>,
     pub timeout: Option<String>,
     #[serde(default)]
