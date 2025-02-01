@@ -1,3 +1,23 @@
+#[derive(Debug, Clone)]
+pub enum ColorSpec {
+    Black,
+    Red,
+    Green,
+    Yellow,
+    Blue,
+    Magenta,
+    Cyan,
+    White,
+    BrightBlack,
+    BrightRed,
+    BrightGreen,
+    BrightYellow,
+    BrightBlue,
+    BrightMagenta,
+    BrightCyan,
+    BrightWhite,
+}
+
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::{
@@ -7,7 +27,6 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 
 use crate::errors::BodoError;
-use crate::task::ColorSpec;
 use colored::Colorize;
 
 /// Holds a single child process plus some metadata.
@@ -88,94 +107,74 @@ impl ProcessManager {
         let stop_for_threads = Arc::clone(&self.stop_signal);
         let fail_fast = self.fail_fast;
 
-        // Create a waiter thread for each child
+        // Collect thread handles so we can join later
+        let mut thread_handles = Vec::new();
+
         {
             let mut locked = children_for_threads.lock().unwrap();
-            for idx in 0..locked.len() {
-                let mc_name = locked[idx].name.clone();
-                let mc_color = locked[idx].color.clone();
-
-                // Take the child process out of the vector
-                let mut child = locked[idx].child.take().unwrap();
-
+            for mc in locked.iter_mut() {
+                let mc_name = mc.name.clone();
+                let child = mc.child.take(); // Use take() instead of clone()
                 let c_any_failure = Arc::clone(&any_failure_for_threads);
                 let c_stop_signal = Arc::clone(&stop_for_threads);
                 let c_children = Arc::clone(&children_for_threads);
 
-                // Create stdout/stderr threads
-                if let Some(stdout) = child.stdout.take() {
-                    let name = mc_name.clone();
-                    let color = mc_color.clone();
-                    let stop_signal = Arc::clone(&stop_for_threads);
-                    thread::spawn(move || {
-                        let reader = BufReader::new(stdout);
-                        for line in reader.lines() {
-                            // Check if we should stop
-                            if stop_signal.load(Ordering::SeqCst) {
-                                break;
+                // Spawn a thread to wait on the child
+                let handle = std::thread::spawn(move || {
+                    if let Some(mut child) = child {
+                        match child.wait() {
+                            Ok(status) => {
+                                if !status.success() {
+                                    // Non‐zero exit → mark failure
+                                    let code = status.code().unwrap_or(-1);
+                                    let mut w = c_any_failure.write().unwrap();
+                                    if w.is_none() {
+                                        *w = Some(format!(
+                                            "'{}' failed with exit code {}",
+                                            mc_name, code
+                                        ));
+                                    }
+                                    // If fail_fast, kill all other processes
+                                    if fail_fast {
+                                        c_stop_signal.store(true, Ordering::SeqCst);
+                                        let mut locked_ch = c_children.lock().unwrap();
+                                        for c in locked_ch.iter_mut() {
+                                            if let Some(child2) = &mut c.child {
+                                                let _ = kill_child(child2);
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            if let Ok(line) = line {
-                                // Don't print if stop signal is set
-                                if !stop_signal.load(Ordering::SeqCst) {
-                                    let prefix = format!("[{}]", name);
-                                    let prefix_colored = apply_color(&prefix, color.as_ref());
-                                    println!("{} {}", prefix_colored, line);
+                            Err(e) => {
+                                // OS‐level error waiting on the process
+                                let mut w = c_any_failure.write().unwrap();
+                                if w.is_none() {
+                                    *w = Some(format!("Error waiting on '{}': {}", mc_name, e));
+                                }
+                                if fail_fast {
+                                    c_stop_signal.store(true, Ordering::SeqCst);
+                                    let mut locked_ch = c_children.lock().unwrap();
+                                    for c in locked_ch.iter_mut() {
+                                        if let Some(child2) = &mut c.child {
+                                            let _ = kill_child(child2);
+                                        }
+                                    }
                                 }
                             }
                         }
-                    });
-                }
-
-                if let Some(stderr) = child.stderr.take() {
-                    let name = mc_name.clone();
-                    let color = mc_color.clone();
-                    let stop_signal = Arc::clone(&stop_for_threads);
-                    thread::spawn(move || {
-                        let reader = BufReader::new(stderr);
-                        for line in reader.lines() {
-                            // Check if we should stop
-                            if stop_signal.load(Ordering::SeqCst) {
-                                break;
-                            }
-                            if let Ok(line) = line {
-                                // Don't print if stop signal is set
-                                if !stop_signal.load(Ordering::SeqCst) {
-                                    let prefix = format!("[{}]", name);
-                                    let prefix_colored = apply_color(&prefix, color.as_ref());
-                                    eprintln!("{} {}", prefix_colored, line);
-                                }
-                            }
-                        }
-                    });
-                }
-
-                // Wait for the child process to avoid zombie processes
-                if let Err(e) = child.wait() {
-                    let mut w = c_any_failure.write().unwrap();
-                    if w.is_none() {
-                        *w = Some(format!("Error waiting on '{}': {}", mc_name, e));
                     }
-                    if fail_fast {
-                        // Signal stop immediately
-                        c_stop_signal.store(true, Ordering::SeqCst);
-                        // Kill all other processes
-                        let mut locked_ch = c_children.lock().unwrap();
-                        for c in locked_ch.iter_mut() {
-                            if let Some(child) = &mut c.child {
-                                let _ = kill_child(child);
-                            }
-                        }
-                    }
-                }
+                });
+                thread_handles.push(handle);
             }
         }
 
-        // Just wait for all threads to finish
-        for handle in self.threads.drain(..) {
-            let _ = handle.join(); // ignore panics
+        // Wait for all threads to finish
+        for handle in thread_handles {
+            let _ = handle.join();
         }
 
-        // If we have an error, return it
+        // If any thread set any_failure, return an error
         let error_opt = &*any_failure_for_threads.read().unwrap();
         if let Some(msg) = error_opt {
             return Err(BodoError::PluginError(msg.clone()));
@@ -183,7 +182,6 @@ impl ProcessManager {
 
         Ok(())
     }
-
     /// Kills all running processes (if any).
     pub fn kill_all(&self) -> Result<(), BodoError> {
         self.stop_signal.store(true, Ordering::SeqCst);

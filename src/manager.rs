@@ -4,9 +4,9 @@ use crate::{
     graph::{Graph, NodeKind, TaskData},
     plugin::{PluginConfig, PluginManager},
     script_loader::ScriptLoader,
-    task::TaskManager,
     Result,
 };
+use serde_json;
 use std::collections::HashMap;
 
 /// Simplified GraphManager that no longer references ScriptLoader.
@@ -75,20 +75,15 @@ impl GraphManager {
         };
 
         // Convert TaskData -> TaskConfig
-        // (If you want pre_deps/post_deps, you must store them somewhere,
-        //  or you can return empty arrays as shown here.)
         Ok(TaskConfig {
             description: task_data.description.clone(),
             command: task_data.command.clone(),
             cwd: task_data.working_dir.clone(),
             env: task_data.env.clone(),
-            // Set these to empty if you do not store them in metadata:
             pre_deps: Vec::new(),
             post_deps: Vec::new(),
             watch: None,
             timeout: None,
-
-            // If your `TaskConfig` also has concurrency fields, set them:
             concurrently_options: Default::default(),
             concurrently: vec![],
         })
@@ -154,7 +149,7 @@ impl GraphManager {
             .map(|t| t.script_id.clone())
     }
 
-    pub async fn run_task(&self, task_name: &str) -> Result<()> {
+    pub async fn run_task(&mut self, task_name: &str) -> Result<()> {
         let node_id = self
             .graph
             .task_registry
@@ -162,67 +157,24 @@ impl GraphManager {
             .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?;
 
         let node = &self.graph.nodes[*node_id as usize];
-        match &node.kind {
-            NodeKind::Task(task_data) => {
-                // Create a task config from the task data
-                let task_config = TaskConfig {
-                    description: task_data.description.clone(),
-                    command: task_data.command.clone(),
-                    cwd: task_data.working_dir.clone(),
-                    pre_deps: Vec::new(), // TODO: Implement dependency resolution
-                    post_deps: Vec::new(),
-                    watch: None,
-                    timeout: None,
-                    env: task_data.env.clone(),
-                    concurrently_options: Default::default(),
-                    concurrently: Vec::new(),
-                };
 
-                let task_manager = TaskManager::new(task_config, &self.plugin_manager);
-                task_manager.run_task(task_name).map_err(|e| {
-                    BodoError::PluginError(format!("Failed to run task {}: {}", task_name, e))
-                })?;
-            }
-            NodeKind::ConcurrentGroup(group_data) => {
-                // Get concurrent items from metadata
-                let concurrent_items: Vec<Dependency> = node
-                    .metadata
-                    .get("concurrently_json")
-                    .and_then(|json| serde_json::from_str(json).ok())
-                    .unwrap_or_default();
+        // Run the task through the plugin system
+        let mut options = serde_json::Map::new();
+        options.insert(
+            "task".to_string(),
+            serde_json::Value::String(task_name.to_string()),
+        );
 
-                // For concurrent groups, create a task config with the concurrent settings
-                let task_config = TaskConfig {
-                    description: None,
-                    command: None,
-                    cwd: None,
-                    pre_deps: Vec::new(),
-                    post_deps: Vec::new(),
-                    watch: None,
-                    timeout: None,
-                    env: HashMap::new(),
-                    concurrently_options: ConcurrentlyOptions {
-                        fail_fast: Some(group_data.fail_fast),
-                        max_concurrent_tasks: group_data.max_concurrent,
-                    },
-                    concurrently: concurrent_items,
-                };
+        let plugin_config = PluginConfig {
+            fail_fast: true,
+            watch: false,
+            list: false,
+            options: Some(options),
+        };
 
-                let task_manager = TaskManager::new(task_config, &self.plugin_manager);
-                task_manager.run_task(task_name).map_err(|e| {
-                    BodoError::PluginError(format!(
-                        "Failed to run concurrent group {}: {}",
-                        task_name, e
-                    ))
-                })?;
-            }
-            NodeKind::Command(_) => {
-                return Err(BodoError::PluginError(format!(
-                    "Cannot directly run command node '{}'",
-                    task_name
-                )));
-            }
-        }
+        self.plugin_manager
+            .run_lifecycle(&mut self.graph.clone(), Some(plugin_config))
+            .await?;
 
         Ok(())
     }
