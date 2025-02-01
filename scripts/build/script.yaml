@@ -1,36 +1,42 @@
-name: Build Script
-description: Build tasks for the project
+name: "build"
+description: "Build tasks for the project"
 
-# Add paths to the script's execution context
-exec_paths:
-  - target/debug
-  - target/release
-
-# Set environment variables for this script
+# Global environment for all tasks in this file
 env:
   RUST_BACKTRACE: "1"
 
-# The default task is invoked by simply running `bodo build`
+# The default task, run via `bodo build/script.yaml` or `bodo build`.
+# Demonstrates concurrency, environment variables, and a typical build workflow.
 default_task:
-  command: cargo build
+  description: "Run the release build with checks and lints in parallel"
+  command: cargo build --release
+  pre_deps:
+    - task: dev-build # runs a dev build first
+    - command: echo "Formatting code..."
+    - task: fmt
+  concurrently:
+    - task: check
+    - task: clippy
+  env:
+    RUSTFLAGS: "-C target-cpu=native"
 
-# tasks
 tasks:
-  release:
-    pre_deps:
-      - task: ../check/script.yaml/check
-    description: Build the project in release mode
-    command: cargo build --release
+  dev-build:
+    description: "Development build"
+    command: cargo build
 
   check:
-    description: Check the project
+    description: "Check (cargo check)"
     command: cargo check
 
   clippy:
-    description: Run clippy
+    description: "Run clippy"
     command: cargo clippy
-    silent: true
 
   fmt:
-    description: Format the project
+    description: "Format the project"
     command: cargo fmt
+
+  release:
+    description: "Explicit release build task"
+    command: cargo build --release

@@ -1,13 +1,22 @@
-description: Root level tasks
+description: "Root script"
 
 default_task:
-  command: "echo 'Hello from bodo!'"
-  description: "Root script greeting. You can run `bodo` to run this task."
+  command: echo "Hello from Bodo root!"
+  description: "Default greeting when running `bodo` with no arguments."
 
 tasks:
-  echo:
-    command: "echo 'Hello from `bodo echo`!'"
-    description: "A script in the root directory. This can be run with `bodo echo`."
-  echo2:
-    command: "echo 'Hello from `bodo echo2`!'"
-    description: "Another example script in the root directory. This can be run with `bodo echo2`."
+  build:
+    description: "Run build tasks from build/script.yaml"
+    # Cross-file reference: by default it will run that file's default_task
+    pre_deps:
+      - task: build/script.yaml
+
+  test:
+    description: "Run tests from test/script.yaml"
+    pre_deps:
+      - task: test/script.yaml
+
+  deploy:
+    description: "Run deploy tasks from deploy/script.yaml"
+    pre_deps:
+      - task: deploy/script.yaml
