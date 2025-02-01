@@ -8,7 +8,6 @@ use crate::{
 };
 use serde_json;
 
-/// Simplified GraphManager that no longer references ScriptLoader.
 pub struct GraphManager {
     pub config: BodoConfig,
     pub graph: Graph,
@@ -39,7 +38,6 @@ impl GraphManager {
         let mut loader = ScriptLoader::new();
         self.graph = loader.build_graph(config).await?;
 
-        // Check for cycles after building the graph
         if let Some(cycle) = self.graph.detect_cycle() {
             let error_msg = self.graph.format_cycle_error(&cycle);
             return Err(BodoError::PluginError(error_msg));
@@ -49,19 +47,16 @@ impl GraphManager {
     }
 
     pub fn get_task_config(&self, task_name: &str) -> Result<TaskConfig> {
-        // Look up the node ID in the task registry
         let node_id = self
             .graph
             .task_registry
             .get(task_name)
             .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?;
 
-        // Grab the node from the graph
         let node = self.graph.nodes.get(*node_id as usize).ok_or_else(|| {
             BodoError::PluginError(format!("Invalid node ID for task '{}'", task_name))
         })?;
 
-        // Ensure it's actually a Task node
         let task_data = match &node.kind {
             NodeKind::Task(t) => t,
             _ => {
@@ -72,7 +67,6 @@ impl GraphManager {
             }
         };
 
-        // Convert TaskData -> TaskConfig
         Ok(TaskConfig {
             description: task_data.description.clone(),
             command: task_data.command.clone(),
@@ -148,7 +142,6 @@ impl GraphManager {
     }
 
     pub async fn run_task(&mut self, task_name: &str) -> Result<()> {
-        // Run the task through the plugin system
         let mut options = serde_json::Map::new();
         options.insert(
             "task".to_string(),

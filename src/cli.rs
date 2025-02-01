@@ -18,6 +18,10 @@ pub struct Args {
     #[arg(long)]
     pub auto_watch: bool,
 
+    /// Enable debug logs
+    #[arg(long)]
+    pub debug: bool,
+
     /// Task to run (defaults to default_task)
     pub task: Option<String>,
 

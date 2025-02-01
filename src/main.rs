@@ -12,14 +12,35 @@ use bodo::{
     BodoError,
 };
 use clap::Parser;
+use log::{error, LevelFilter};
 use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() {
-    let result: Result<(), BodoError> = async {
-        let args = Args::parse();
+    let args = Args::parse();
 
-        // If auto_watch is set, turn on watch mode
+    // Initialize env_logger with a default "info" level;
+    // if --debug is used, set "debug" level for our crate.
+    if args.debug {
+        std::env::set_var("RUST_LOG", "bodo=debug");
+    } else {
+        // If the user hasn't set RUST_LOG externally, default to "info"
+        if std::env::var("RUST_LOG").is_err() {
+            std::env::set_var("RUST_LOG", "bodo=info");
+        }
+    }
+    env_logger::Builder::from_default_env()
+        .filter_module(
+            "bodo",
+            if args.debug {
+                LevelFilter::Debug
+            } else {
+                LevelFilter::Info
+            },
+        )
+        .init();
+
+    let result: Result<(), BodoError> = async {
         let watch_mode = if args.auto_watch { true } else { args.watch };
 
         let config = BodoConfig {
@@ -37,7 +58,6 @@ async fn main() {
             return Ok(());
         }
 
-        // register plugins in this specific order:
         graph_manager.register_plugin(Box::new(EnvPlugin::new()));
         graph_manager.register_plugin(Box::new(PathPlugin::new()));
         graph_manager.register_plugin(Box::new(ConcurrentPlugin::new()));
@@ -46,12 +66,10 @@ async fn main() {
         graph_manager.register_plugin(Box::new(ExecutionPlugin::new()));
         graph_manager.register_plugin(Box::new(TimeoutPlugin::new()));
 
-        // Run the task
         let task_name = get_task_name(&args, &graph_manager)?;
         let mut options = serde_json::Map::new();
         options.insert("task".into(), serde_json::Value::String(task_name.clone()));
 
-        // The PluginConfig now honors our local watch_mode
         let plugin_config = PluginConfig {
             fail_fast: true,
             watch: watch_mode,
@@ -65,11 +83,8 @@ async fn main() {
     }
     .await;
 
-    match result {
-        Ok(_) => std::process::exit(0),
-        Err(e) => {
-            eprintln!("{}", e);
-            std::process::exit(1);
-        }
+    if let Err(e) = result {
+        error!("Error: {}", e);
+        std::process::exit(1);
     }
 }

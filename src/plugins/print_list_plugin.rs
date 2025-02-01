@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use colored::Colorize;
+use log::info;
 use std::{any::Any, cmp::Ordering, collections::HashMap};
 
 use crate::{
@@ -139,28 +140,26 @@ impl Plugin for PrintListPlugin {
         for line in lines {
             if line.is_heading {
                 if printed_first_heading {
-                    println!(); // blank line before subsequent headings
+                    info!("");
                 }
-                println!("{}", line.left_col); // heading text
+                info!("{}", line.left_col);
                 printed_first_heading = true;
                 continue;
             }
 
-            // Print a task line
             if let Some(desc) = line.desc {
-                println!(
+                info!(
                     "  {:<width$} {}",
                     line.left_col,
                     desc.dimmed(),
                     width = padded_width
                 );
             } else {
-                // No description
-                println!("  {}", line.left_col);
+                info!("  {}", line.left_col);
             }
         }
 
-        println!();
+        info!("");
         Ok(())
     }
 }

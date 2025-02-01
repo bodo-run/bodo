@@ -6,8 +6,8 @@ use crate::{
     Result,
 };
 use async_trait::async_trait;
-use chrono::Local;
 use globset::{Glob, GlobSet, GlobSetBuilder};
+use log::{debug, warn};
 use notify::{Config as NotifyConfig, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
     any::Any,
@@ -16,13 +16,6 @@ use std::{
     sync::mpsc::{self, Receiver},
     time::{Duration, Instant},
 };
-
-// Macro for debug logging with timestamps
-macro_rules! debug {
-    ($($arg:tt)*) => {
-        eprintln!("[{}] DEBUG: {}", Local::now().format("%H:%M:%S%.3f"), format!($($arg)*));
-    }
-}
 
 /// Plugin that watches for file changes and re-runs only tasks whose WatchConfig matched something.
 pub struct WatchPlugin {
@@ -74,17 +67,15 @@ impl WatchPlugin {
         );
         let mut matched = vec![];
 
-        // Get the project's base directory (cwd) once
         let cwd = match std::env::current_dir() {
             Ok(path) => path,
             Err(e) => {
-                debug!("Failed to get current directory: {}", e);
+                warn!("Failed to get current directory: {}", e);
                 return vec![];
             }
         };
-        debug!("Using project base directory: {}", cwd.display());
 
-        'outer: for changed_path in changed_paths {
+        for changed_path in changed_paths {
             debug!("Processing changed path: {}", changed_path.display());
             let changed_abs = match changed_path.canonicalize() {
                 Ok(p) => {
@@ -92,7 +83,7 @@ impl WatchPlugin {
                     p
                 }
                 Err(e) => {
-                    debug!(
+                    warn!(
                         "Failed to canonicalize path {}: {}",
                         changed_path.display(),
                         e
@@ -101,7 +92,6 @@ impl WatchPlugin {
                 }
             };
 
-            // First, check if the path is under any of our watch directories
             let mut is_under_watch_dir = false;
             for watch_dir in &entry.directories_to_watch {
                 debug!("Checking against watch dir: {}", watch_dir.display());
@@ -111,7 +101,7 @@ impl WatchPlugin {
                         p
                     }
                     Err(e) => {
-                        debug!(
+                        warn!(
                             "Failed to canonicalize watch dir {}: {}",
                             watch_dir.display(),
                             e
@@ -131,27 +121,23 @@ impl WatchPlugin {
                 continue;
             }
 
-            // Get path relative to project root for glob matching
             let rel_path = match changed_abs.strip_prefix(&cwd) {
                 Ok(p) => p,
                 Err(e) => {
-                    debug!("Failed to strip project prefix: {}", e);
+                    warn!("Failed to strip project prefix: {}", e);
                     continue;
                 }
             };
 
-            // Convert to string and normalize separators
             let rel_str = rel_path.to_string_lossy().replace('\\', "/");
             debug!("Testing relative path against globs: {}", rel_str);
 
-            // Check against glob patterns
             if !entry.glob_set.is_match(&rel_str) {
                 debug!("Path did not match include patterns");
                 continue;
             }
             debug!("Path matched include patterns");
 
-            // Check against ignore patterns
             if let Some(ignore) = &entry.ignore_set {
                 if ignore.is_match(&rel_str) {
                     debug!("Path matched ignore patterns, skipping");
@@ -160,7 +146,6 @@ impl WatchPlugin {
                 debug!("Path did not match ignore patterns");
             }
 
-            debug!("Adding matched path: {}", changed_path.display());
             matched.push(changed_path.clone());
         }
 
@@ -181,7 +166,7 @@ impl WatchPlugin {
             if let NodeKind::Task(task_data) = &graph.nodes[node_id as usize].kind {
                 if let Some(cmd) = &task_data.command {
                     debug!("Executing command: {}", cmd);
-                    println!("WatchPlugin: Running task: '{}'", task_data.name);
+                    debug!("Running task: '{}'", task_data.name);
                     let status = std::process::Command::new("sh").arg("-c").arg(cmd).status();
                     match status {
                         Ok(s) if !s.success() => {
@@ -297,7 +282,6 @@ impl Plugin for WatchPlugin {
                     let ignore_set = if have_ignores {
                         debug!("Building ignore globset");
                         Some(ignore_builder.build().map_err(|e| {
-                            debug!("Failed to build ignore globset: {}", e);
                             BodoError::PluginError(format!("Failed building ignore globset: {}", e))
                         })?)
                     } else {
@@ -329,8 +313,8 @@ impl Plugin for WatchPlugin {
         }
 
         for entry in &self.watch_entries {
-            println!(
-                "WatchPlugin: Will watch task '{}' over dirs: {:?}",
+            debug!(
+                "Will watch task '{}' over dirs: {:?}",
                 entry.task_name, entry.directories_to_watch
             );
         }
@@ -365,7 +349,7 @@ impl Plugin for WatchPlugin {
             debug!("Setting up watch for directory: {}", d.display());
             if d.is_dir() {
                 if let Err(e) = watcher.watch(d, RecursiveMode::Recursive) {
-                    debug!("WatchPlugin: Failed to watch '{}': {}", d.display(), e);
+                    warn!("WatchPlugin: Failed to watch '{}': {}", d.display(), e);
                 } else {
                     debug!("Successfully watching directory: {}", d.display());
                 }
@@ -377,7 +361,8 @@ impl Plugin for WatchPlugin {
             }
         }
 
-        println!("WatchPlugin: Watching for file changes. Press Ctrl-C to stop...");
+        println!("Watching for file changes. Press Ctrl-C to stop...");
+
         debug!("Watch setup complete, entering main loop");
         let mut last_run = Instant::now();
 
@@ -395,7 +380,7 @@ impl Plugin for WatchPlugin {
                     ev
                 }
                 Err(err) => {
-                    debug!("WatchPlugin: Watch error: {}", err);
+                    warn!("WatchPlugin: Watch error: {}", err);
                     continue;
                 }
             };
@@ -422,24 +407,24 @@ impl Plugin for WatchPlugin {
                 if !matched.is_empty() {
                     debug!("Found {} matching paths", matched.len());
                     if matched.len() < 6 {
-                        println!("WatchPlugin: Changes for '{}':", entry.task_name);
+                        debug!("Changes for '{}':", entry.task_name);
                         for p in &matched {
-                            println!("  -> {}", p.display());
+                            debug!("  -> {}", p.display());
                         }
                     } else {
-                        println!(
-                            "WatchPlugin: {} changes for '{}', showing first 5:",
+                        debug!(
+                            "{} changes for '{}', showing first 5:",
                             matched.len(),
                             entry.task_name
                         );
                         for p in matched.iter().take(5) {
-                            println!("  -> {}", p.display());
+                            debug!("  -> {}", p.display());
                         }
                     }
 
                     debug!("Triggering rerun for task: '{}'", entry.task_name);
                     if let Err(e) = self.rerun_task(graph, &entry.task_name).await {
-                        debug!("WatchPlugin: Task '{}' failed: {}", entry.task_name, e);
+                        warn!("WatchPlugin: Task '{}' failed: {}", entry.task_name, e);
                     }
                 } else {
                     debug!("No matching paths for task: '{}'", entry.task_name);

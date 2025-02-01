@@ -1,6 +1,7 @@
 use crate::config::WatchConfig;
 use crate::errors::BodoError;
 use crate::Result;
+use log::debug;
 use std::collections::HashMap;
 
 /// Unique identifier for a node in the graph.
@@ -118,68 +119,68 @@ impl Graph {
 
     /// Print debug information about the graph
     pub fn print_debug(&self) {
-        println!("\nGraph Debug Info:");
-        println!("Nodes: {}", self.nodes.len());
+        debug!("\nGraph Debug Info:");
+        debug!("Nodes: {}", self.nodes.len());
         for node in &self.nodes {
             match &node.kind {
                 NodeKind::Task(task) => {
-                    println!("  Task[{}]: {}", node.id, task.name);
+                    debug!("  Task[{}]: {}", node.id, task.name);
                     if let Some(desc) = &task.description {
-                        println!("    Description: {}", desc);
+                        debug!("    Description: {}", desc);
                     }
                     if let Some(cmd) = &task.command {
-                        println!("    Command: {}", cmd);
+                        debug!("    Command: {}", cmd);
                     }
                     if let Some(dir) = &task.working_dir {
-                        println!("    Working Dir: {}", dir);
+                        debug!("    Working Dir: {}", dir);
                     }
                     if !task.env.is_empty() {
-                        println!("    Environment:");
+                        debug!("    Environment:");
                         for (k, v) in &task.env {
-                            println!("      {}={}", k, v);
+                            debug!("      {}={}", k, v);
                         }
                     }
                 }
                 NodeKind::Command(cmd) => {
-                    println!("  Command[{}]: {}", node.id, cmd.raw_command);
+                    debug!("  Command[{}]: {}", node.id, cmd.raw_command);
                     if let Some(desc) = &cmd.description {
-                        println!("    Description: {}", desc);
+                        debug!("    Description: {}", desc);
                     }
                     if let Some(dir) = &cmd.working_dir {
-                        println!("    Working Dir: {}", dir);
+                        debug!("    Working Dir: {}", dir);
                     }
                     if !cmd.env.is_empty() {
-                        println!("    Environment:");
+                        debug!("    Environment:");
                         for (k, v) in &cmd.env {
-                            println!("      {}={}", k, v);
+                            debug!("      {}={}", k, v);
                         }
                     }
                 }
                 NodeKind::ConcurrentGroup(group) => {
-                    println!("  ConcurrentGroup[{}]:", node.id);
-                    println!("    Children: {:?}", group.child_nodes);
-                    println!("    Fail Fast: {}", group.fail_fast);
+                    debug!("  ConcurrentGroup[{}]:", node.id);
+                    debug!("    Children: {:?}", group.child_nodes);
+                    debug!("    Fail Fast: {}", group.fail_fast);
                     if let Some(max) = group.max_concurrent {
-                        println!("    Max Concurrent: {}", max);
+                        debug!("    Max Concurrent: {}", max);
                     }
                     if let Some(timeout) = group.timeout_secs {
-                        println!("    Timeout: {}s", timeout);
+                        debug!("    Timeout: {}s", timeout);
                     }
                 }
             }
             if !node.metadata.is_empty() {
-                println!("    Metadata:");
+                debug!("    Metadata:");
                 for (k, v) in &node.metadata {
-                    println!("      {}={}", k, v);
+                    debug!("      {}={}", k, v);
                 }
             }
         }
 
-        println!("\nEdges: {}", self.edges.len());
+        debug!("\nEdges: {}", self.edges.len());
         for edge in &self.edges {
-            println!("  {} -> {}", edge.from, edge.to);
+            debug!("  {} -> {}", edge.from, edge.to);
         }
-        println!();
+        debug!("");
     }
 
     /// Detects cycles in the graph and returns the cycle path if found

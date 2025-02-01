@@ -7,6 +7,7 @@ use crate::{
     plugin::Plugin,
 };
 use humantime::parse_duration;
+use log::debug;
 
 pub struct TimeoutPlugin;
 
@@ -29,7 +30,7 @@ impl Plugin for TimeoutPlugin {
     }
 
     fn priority(&self) -> i32 {
-        75 // Positioned between concurrency and watch plugins
+        75
     }
 
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
@@ -39,6 +40,10 @@ impl Plugin for TimeoutPlugin {
                     let seconds = parse_timeout(timeout_str)?;
                     node.metadata
                         .insert("timeout_seconds".to_string(), seconds.to_string());
+                    debug!(
+                        "TimeoutPlugin: node {} has timeout of {} seconds",
+                        node.id, seconds
+                    );
                 }
             }
         }
