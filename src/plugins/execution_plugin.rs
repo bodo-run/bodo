@@ -1,8 +1,10 @@
 use async_trait::async_trait;
+use colored::Colorize;
 use std::any::Any;
 use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
+use terminal_size::terminal_size;
 
 use crate::{
     errors::{BodoError, Result},
@@ -40,6 +42,26 @@ impl ExecutionPlugin {
         }
 
         deps
+    }
+
+    /// Format and print a command, truncating if needed
+    fn print_command(&self, cmd: &str) {
+        // Get terminal width, default to 80 if can't determine
+        let width = terminal_size().map_or(80, |size| size.0 .0 as usize);
+
+        // Leave room for "$ " prefix and 5 chars of padding
+        let max_length = width.saturating_sub(7);
+
+        // Take first line and truncate if needed
+        let cmd_line = cmd.lines().next().unwrap_or(cmd);
+        let truncated = if cmd_line.len() > max_length {
+            format!("{}...", &cmd_line[..max_length.saturating_sub(3)])
+        } else {
+            cmd_line.to_string()
+        };
+
+        // Print with dimmed "$ " prefix
+        println!("{} {}", "$".dimmed(), truncated.green());
     }
 }
 
@@ -133,6 +155,8 @@ fn run_single_task(task_data: &TaskData) -> Result<()> {
     // If there's no `command`, there's nothing to run; skip
     if let Some(cmd) = &task_data.command {
         let mut pm = ProcessManager::new(false); // Single node => fail_fast false
+                                                 // Print the command before executing
+        ExecutionPlugin::new().print_command(cmd);
         pm.spawn_command(&task_data.name, cmd)
             .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
         pm.run_concurrently()
@@ -146,6 +170,8 @@ fn run_single_command(cmd_data: &CommandData, node_id: NodeId) -> Result<()> {
     let mut pm = ProcessManager::new(false);
     // Give it a label like "cmd-0" or "cmd-5"
     let label = format!("cmd-{}", node_id);
+    // Print the command before executing
+    ExecutionPlugin::new().print_command(&cmd_data.raw_command);
     pm.spawn_command(&label, &cmd_data.raw_command)
         .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
     pm.run_concurrently()
