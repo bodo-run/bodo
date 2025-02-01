@@ -2,6 +2,7 @@ use crate::errors::BodoError;
 use crate::manager::GraphManager;
 use clap::Parser;
 use std::fmt::Debug;
+use tokio::sync::MutexGuard;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -33,7 +34,10 @@ pub struct Args {
     pub args: Vec<String>,
 }
 
-pub fn get_task_name(args: &Args, graph_manager: &GraphManager) -> Result<String, BodoError> {
+pub fn get_task_name(
+    args: &Args,
+    graph_manager: &MutexGuard<'_, GraphManager>,
+) -> Result<String, BodoError> {
     let task_name = if let Some(task) = args.task.clone() {
         if let Some(subtask) = args.subtask.clone() {
             format!("{} {}", task, subtask)

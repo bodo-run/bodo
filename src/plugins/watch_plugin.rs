@@ -2,13 +2,15 @@ use crate::{
     config::WatchConfig,
     errors::BodoError,
     graph::{Graph, NodeKind},
+    manager::GraphManager,
     plugin::{Plugin, PluginConfig},
     Result,
 };
 use async_trait::async_trait;
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use log::{debug, warn};
+use log::{debug, error, warn};
 use notify::{Config as NotifyConfig, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use std::sync::Arc;
 use std::{
     any::Any,
     collections::HashSet,
@@ -16,11 +18,15 @@ use std::{
     sync::mpsc::{self, Receiver},
     time::{Duration, Instant},
 };
+use tokio::sync::Mutex;
 
 /// Plugin that watches for file changes and re-runs only tasks whose WatchConfig matched something.
 pub struct WatchPlugin {
     watch_entries: Vec<WatchEntry>,
     watch_mode: bool,
+    /// If true, a failed re-run stops further watching
+    stop_on_fail: bool,
+    manager: Arc<Mutex<GraphManager>>,
 }
 
 #[derive(Debug)]
@@ -33,10 +39,12 @@ struct WatchEntry {
 }
 
 impl WatchPlugin {
-    pub fn new() -> Self {
+    pub fn new(manager: Arc<Mutex<GraphManager>>, watch_mode: bool, stop_on_fail: bool) -> Self {
         Self {
             watch_entries: Vec::new(),
-            watch_mode: false,
+            watch_mode,
+            stop_on_fail,
+            manager,
         }
     }
 
@@ -157,55 +165,39 @@ impl WatchPlugin {
         matched
     }
 
-    /// Re-run a single task. For a bigger system, you'd call the same manager logic
-    /// your ExecutionPlugin uses, but here we just spawn a shell command for illustration.
-    async fn rerun_task(&self, graph: &mut Graph, task_name: &str) -> Result<()> {
-        debug!("Attempting to rerun task: '{}'", task_name);
-        if let Some(&node_id) = graph.task_registry.get(task_name) {
-            debug!("Found task node_id: {}", node_id);
-            if let NodeKind::Task(task_data) = &graph.nodes[node_id as usize].kind {
-                if let Some(cmd) = &task_data.command {
-                    debug!("Executing command: {}", cmd);
-                    debug!("Running task: '{}'", task_data.name);
-                    let status = std::process::Command::new("sh").arg("-c").arg(cmd).status();
-                    match status {
-                        Ok(s) if !s.success() => {
-                            debug!("Task failed with exit code: {:?}", s.code());
-                            return Err(BodoError::PluginError(format!(
-                                "Task '{}' failed (exit={:?})",
-                                task_data.name,
-                                s.code()
-                            )));
-                        }
-                        Ok(_) => {
-                            debug!("Task completed successfully");
-                        }
-                        Err(e) => {
-                            debug!("Failed to spawn task: {}", e);
-                            return Err(BodoError::PluginError(format!(
-                                "Error spawning '{}': {}",
-                                task_data.name, e
-                            )));
-                        }
-                    }
-                } else {
-                    debug!("Task has no command defined");
-                }
-            }
-        } else {
-            debug!("Task '{}' not found in registry", task_name);
-            return Err(BodoError::PluginError(format!(
-                "Task '{}' not found for watch re-run",
-                task_name
-            )));
-        }
-        Ok(())
+    /// Re-run a single task using the full plugin pipeline via GraphManager.
+    async fn rerun_task(&self, task_name: &str) -> Result<()> {
+        debug!(
+            "Attempting to rerun task via plugin pipeline: '{}'",
+            task_name
+        );
+
+        // Build a plugin config specifying the one task to run
+        let mut options = serde_json::Map::new();
+        options.insert(
+            "task".to_string(),
+            serde_json::Value::String(task_name.to_string()),
+        );
+
+        // Create plugin config with watch mode disabled to avoid recursive watchers
+        let plugin_config = PluginConfig {
+            fail_fast: true,
+            watch: false, // Important: don't create nested watchers
+            list: false,
+            options: Some(options),
+        };
+
+        // Lock the manager and run plugins
+        let mut manager = self.manager.lock().await;
+        manager.run_plugins(Some(plugin_config)).await
     }
 }
 
 impl Default for WatchPlugin {
     fn default() -> Self {
-        Self::new()
+        // Note: This default implementation is not meant to be used in practice
+        // since we need a GraphManager reference. It's here to satisfy the trait.
+        Self::new(Arc::new(Mutex::new(GraphManager::default())), false, false)
     }
 }
 
@@ -224,7 +216,10 @@ impl Plugin for WatchPlugin {
     }
 
     async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
-        self.watch_mode = config.watch;
+        // Only update watch_mode if it wasn't set in constructor
+        if !self.watch_mode {
+            self.watch_mode = config.watch;
+        }
         Ok(())
     }
 
@@ -327,7 +322,7 @@ impl Plugin for WatchPlugin {
     }
 
     /// After initial run, start the watch loop: re-run only tasks whose watchers matched something.
-    async fn on_after_run(&mut self, graph: &mut Graph) -> Result<()> {
+    async fn on_after_run(&mut self, _graph: &mut Graph) -> Result<()> {
         debug!("Starting after_run in watch mode: {}", self.watch_mode);
         if !self.watch_mode || self.watch_entries.is_empty() {
             debug!("Watch mode disabled or no entries, exiting");
@@ -405,7 +400,11 @@ impl Plugin for WatchPlugin {
                 debug!("Checking changes for task: '{}'", entry.task_name);
                 let matched = self.filter_changed_paths(&changed_paths, entry);
                 if !matched.is_empty() {
-                    debug!("Found {} matching paths", matched.len());
+                    debug!(
+                        "Found {} matching paths for task '{}'",
+                        matched.len(),
+                        entry.task_name
+                    );
                     if matched.len() < 6 {
                         debug!("Changes for '{}':", entry.task_name);
                         for p in &matched {
@@ -421,10 +420,19 @@ impl Plugin for WatchPlugin {
                             debug!("  -> {}", p.display());
                         }
                     }
-
-                    debug!("Triggering rerun for task: '{}'", entry.task_name);
-                    if let Err(e) = self.rerun_task(graph, &entry.task_name).await {
-                        warn!("WatchPlugin: Task '{}' failed: {}", entry.task_name, e);
+                    debug!(
+                        "Triggering re-run via plugin pipeline for task: '{}'",
+                        entry.task_name
+                    );
+                    if let Err(e) = self.rerun_task(&entry.task_name).await {
+                        error!(
+                            "WatchPlugin: Task '{}' failed during re-run: {}",
+                            entry.task_name, e
+                        );
+                        if self.stop_on_fail {
+                            warn!("WatchPlugin: Stopping watch loop due to re-run failure");
+                            return Ok(());
+                        }
                     }
                 } else {
                     debug!("No matching paths for task: '{}'", entry.task_name);

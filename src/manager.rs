@@ -178,4 +178,35 @@ impl GraphManager {
             })
             .collect()
     }
+
+    /// Re-trigger execution for a single task.
+    /// This builds a PluginConfig with the specific task name in options.
+    pub async fn retrigger_execution(
+        &mut self,
+        task_name: &str,
+        stop_on_failure: bool,
+    ) -> Result<()> {
+        // Build a plugin configuration that mimics the normal execution pipeline.
+        // In addition to the task name option (which ExecutionPlugin uses),
+        // you can pass a flag (e.g. "stop_on_failure") to determine watch-run failure handling.
+        let mut options = serde_json::Map::new();
+        options.insert(
+            "task".into(),
+            serde_json::Value::String(task_name.to_string()),
+        );
+        options.insert(
+            "stop_on_failure".into(),
+            serde_json::Value::Bool(stop_on_failure),
+        );
+
+        let plugin_config = PluginConfig {
+            fail_fast: true,
+            watch: true,
+            list: false,
+            options: Some(options),
+        };
+
+        // Re-run the full plugin lifecycle.
+        self.run_plugins(Some(plugin_config)).await
+    }
 }

@@ -13,7 +13,8 @@ use bodo::{
 };
 use clap::Parser;
 use log::{error, LevelFilter};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() {
@@ -49,24 +50,32 @@ async fn main() {
             tasks: HashMap::new(),
         };
 
-        let mut graph_manager = GraphManager::new();
-        graph_manager.build_graph(config).await?;
+        let graph_manager = Arc::new(Mutex::new(GraphManager::new()));
+        graph_manager.lock().await.build_graph(config).await?;
 
         if args.list {
-            graph_manager.register_plugin(Box::new(PrintListPlugin));
-            graph_manager.run_plugins(None).await?;
+            graph_manager
+                .lock()
+                .await
+                .register_plugin(Box::new(PrintListPlugin));
+            graph_manager.lock().await.run_plugins(None).await?;
             return Ok(());
         }
 
-        graph_manager.register_plugin(Box::new(EnvPlugin::new()));
-        graph_manager.register_plugin(Box::new(PathPlugin::new()));
-        graph_manager.register_plugin(Box::new(ConcurrentPlugin::new()));
-        graph_manager.register_plugin(Box::new(PrefixPlugin::new()));
-        graph_manager.register_plugin(Box::new(WatchPlugin::new()));
-        graph_manager.register_plugin(Box::new(ExecutionPlugin::new()));
-        graph_manager.register_plugin(Box::new(TimeoutPlugin::new()));
+        let mut manager = graph_manager.lock().await;
+        manager.register_plugin(Box::new(EnvPlugin::new()));
+        manager.register_plugin(Box::new(PathPlugin::new()));
+        manager.register_plugin(Box::new(ConcurrentPlugin::new()));
+        manager.register_plugin(Box::new(PrefixPlugin::new()));
+        manager.register_plugin(Box::new(WatchPlugin::new(
+            Arc::clone(&graph_manager),
+            watch_mode,
+            true,
+        )));
+        manager.register_plugin(Box::new(ExecutionPlugin::new()));
+        manager.register_plugin(Box::new(TimeoutPlugin::new()));
 
-        let task_name = get_task_name(&args, &graph_manager)?;
+        let task_name = get_task_name(&args, &manager)?;
         let mut options = serde_json::Map::new();
         options.insert("task".into(), serde_json::Value::String(task_name.clone()));
 
@@ -77,7 +86,7 @@ async fn main() {
             options: Some(options),
         };
 
-        graph_manager.run_plugins(Some(plugin_config)).await?;
+        manager.run_plugins(Some(plugin_config)).await?;
 
         Ok(())
     }
