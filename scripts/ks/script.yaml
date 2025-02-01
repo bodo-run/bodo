@@ -11,6 +11,12 @@ default_task:
     - task: fast
 
 tasks:
+  parallel:
+    description: "Example parallel echo"
+    concurrently:
+      - command: 'echo "Hello task"'
+      - command: 'echo "World task"'
+
   hello:
     command: 'echo "Hello task"'
 

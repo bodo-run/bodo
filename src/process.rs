@@ -116,13 +116,12 @@ impl ProcessManager {
                     if let Some(mut child) = child {
                         // Create stdout reader thread
                         let stdout = child.stdout.take();
-                        let name_for_stdout = mc_name.clone();
                         let stdout_handle = stdout.map(|stdout| {
                             thread::spawn(move || {
                                 let reader = BufReader::new(stdout);
                                 for line in reader.lines() {
                                     if let Ok(line) = line {
-                                        println!("[{}] {}", name_for_stdout, line);
+                                        println!("{}", line);
                                     }
                                 }
                             })
