@@ -19,16 +19,27 @@ pub enum ColorSpec {
 }
 
 use log::{debug, error, info, warn};
-use std::io::{BufRead, BufReader};
-use std::process::{Child, Command, Stdio};
-use std::thread;
+use std::{
+    io::{BufRead, BufReader},
+    process::{Child, Command, Stdio},
+    thread::{self, JoinHandle},
+};
 
 use crate::errors::BodoError;
 use colored::{Color, Colorize};
 
+/// Holds all data needed to manage one child process plus its I/O handling threads.
+pub struct ChildProcess {
+    pub name: String,
+    pub child: Child,
+    pub stdout_handle: Option<JoinHandle<()>>,
+    pub stderr_handle: Option<JoinHandle<()>>,
+}
+
+/// Simple process manager that spawns commands without blocking until `run_concurrently()`.
 pub struct ProcessManager {
-    children: Vec<(String, Child)>,
-    fail_fast: bool,
+    pub children: Vec<ChildProcess>,
+    pub fail_fast: bool,
 }
 
 impl ProcessManager {
@@ -40,6 +51,7 @@ impl ProcessManager {
         }
     }
 
+    /// Spawn a command but **do not** wait on it here; just store the child for later.
     pub fn spawn_command(
         &mut self,
         name: &str,
@@ -49,7 +61,7 @@ impl ProcessManager {
         prefix_color: Option<String>,
     ) -> std::io::Result<()> {
         debug!(
-            "Spawning command '{}' with prefix_enabled={}, label={:?}, color={:?}",
+            "Spawning command '{}' (prefix={}, label={:?}, color={:?})",
             cmd, prefix_enabled, prefix_label, prefix_color
         );
 
@@ -62,18 +74,21 @@ impl ProcessManager {
 
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
-        let mc_name = name.to_string();
 
-        let stdout_handle = stdout.map(|stdout| {
-            let prefix_label = prefix_label.clone();
-            let prefix_color = prefix_color.clone();
+        let name_str = name.to_string();
+        let label_str = prefix_label.clone().unwrap_or_else(|| name_str.clone());
+        let color_str = prefix_color.clone();
+
+        // Handle stdout in a separate thread
+        let stdout_handle = stdout.map(|out| {
+            let label = label_str.clone();
+            let color = color_str.clone();
             thread::spawn(move || {
-                let reader = BufReader::new(stdout);
+                let reader = BufReader::new(out);
                 for line in reader.lines().map_while(Result::ok) {
                     if prefix_enabled {
-                        let prefix_str = prefix_label.as_deref().unwrap_or("");
-                        let colorized = color_line(prefix_str, &prefix_color, &line, false);
-                        info!("{}", colorized);
+                        let colored_line = color_line(&label, &color, &line, false);
+                        info!("{}", colored_line);
                     } else {
                         println!("{}", line);
                     }
@@ -81,17 +96,16 @@ impl ProcessManager {
             })
         });
 
-        let stderr_handle = stderr.map(|stderr| {
-            let prefix_label = prefix_label.clone();
-            let prefix_color = prefix_color.clone();
-            let mc_name = mc_name.clone();
+        // Handle stderr in a separate thread
+        let stderr_handle = stderr.map(|err| {
+            let label = label_str;
+            let color = color_str;
             thread::spawn(move || {
-                let reader = BufReader::new(stderr);
+                let reader = BufReader::new(err);
                 for line in reader.lines().map_while(Result::ok) {
                     if prefix_enabled {
-                        let prefix_str = prefix_label.as_deref().unwrap_or(&mc_name);
-                        let colorized = color_line(prefix_str, &prefix_color, &line, true);
-                        error!("{}", colorized);
+                        let colored_line = color_line(&label, &color, &line, true);
+                        error!("{}", colored_line);
                     } else {
                         eprintln!("{}", line);
                     }
@@ -99,91 +113,92 @@ impl ProcessManager {
             })
         });
 
-        match child.wait() {
-            Ok(status) => {
-                if !status.success() {
-                    let code = status.code().unwrap_or(-1);
-                    warn!("'{}' failed with exit code {}", mc_name, code);
-                } else {
-                    debug!("'{}' completed successfully", mc_name);
-                }
-            }
-            Err(e) => {
-                warn!("Error waiting on '{}': {}", mc_name, e);
-            }
-        }
-
-        if let Some(handle) = stdout_handle {
-            let _ = handle.join();
-        }
-        if let Some(handle) = stderr_handle {
-            let _ = handle.join();
-        }
+        self.children.push(ChildProcess {
+            name: name_str,
+            child,
+            stdout_handle,
+            stderr_handle,
+        });
 
         Ok(())
     }
 
+    /// Wait for all stored children, optionally stopping others if one fails (`fail_fast`).
     pub fn run_concurrently(&mut self) -> std::io::Result<()> {
         debug!("Running {} processes concurrently", self.children.len());
         let mut any_failed = false;
 
-        for (name, mut child) in self.children.drain(..) {
-            match child.wait() {
-                Ok(status) => {
-                    if !status.success() {
-                        let code = status.code().unwrap_or(-1);
-                        warn!("'{}' failed with exit code {}", name, code);
-                        any_failed = true;
-                        if self.fail_fast {
-                            debug!("Fail-fast enabled, stopping remaining processes");
-                            break;
-                        }
-                    } else {
-                        debug!("'{}' completed successfully", name);
+        // Take ownership of the children vector
+        let mut children = std::mem::take(&mut self.children);
+        let len = children.len();
+
+        for i in 0..len {
+            // Wait on this process
+            let status = children[i].child.wait()?;
+            if !status.success() {
+                let code = status.code().unwrap_or(-1);
+                warn!(
+                    "Process '{}' failed with exit code {}",
+                    children[i].name, code
+                );
+                any_failed = true;
+
+                // If fail-fast, kill remaining children
+                if self.fail_fast {
+                    debug!("Fail-fast enabled, killing remaining processes");
+                    for child in children.iter_mut().skip(i + 1) {
+                        let _ = child.child.kill(); // best effort
                     }
+                    break;
                 }
-                Err(e) => {
-                    warn!("Error waiting on '{}': {}", name, e);
-                    any_failed = true;
-                    if self.fail_fast {
-                        debug!("Fail-fast enabled, stopping remaining processes");
-                        break;
-                    }
-                }
+            } else {
+                debug!("Process '{}' completed successfully", children[i].name);
+            }
+        }
+
+        // Join all I/O threads
+        for mut child_info in children {
+            if let Some(handle) = child_info.stdout_handle.take() {
+                let _ = handle.join();
+            }
+            if let Some(handle) = child_info.stderr_handle.take() {
+                let _ = handle.join();
             }
         }
 
         if any_failed {
             debug!("One or more processes failed");
+            // Return a non-zero code, or an error
             std::process::exit(1);
         }
 
         Ok(())
     }
 
-    pub fn kill_all(&self) -> Result<(), BodoError> {
-        warn!("kill_all called but is now a no-op.");
+    /// In this version, kill_all is basically best effort, but you can expand it.
+    pub fn kill_all(&mut self) -> Result<(), BodoError> {
+        warn!("kill_all called, best effort kill all children...");
+        let mut children = std::mem::take(&mut self.children);
+        for child in &mut children {
+            let _ = child.child.kill();
+        }
+        self.children = children;
         Ok(())
     }
 }
 
-fn color_line(
-    prefix_label: &str,
-    prefix_color: &Option<String>,
-    line: &str,
-    is_stderr: bool,
-) -> String {
+/// Helper to apply prefix coloring to each log line.
+fn color_line(prefix: &str, prefix_color: &Option<String>, line: &str, is_stderr: bool) -> String {
     let default_color = if is_stderr { Color::Red } else { Color::White };
-
     let color = prefix_color
         .as_ref()
-        .and_then(|s| parse_color(s))
+        .and_then(|c| parse_color(c))
         .unwrap_or(default_color);
-
-    let colored_prefix = format!("[{}]", prefix_label).color(color);
+    let colored_prefix = format!("[{}]", prefix).color(color);
     format!("{} {}", colored_prefix, line)
 }
 
+/// Map color strings to `colored::Color`.
 fn parse_color(c: &str) -> Option<Color> {
     debug!("Parsing color: {}", c);
     match c.to_lowercase().as_str() {
