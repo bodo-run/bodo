@@ -1,0 +1,56 @@
+name: watch
+description: Examples of watch functionality
+
+tasks:
+  # Example 1: Watch Rust files and run tests
+  test:
+    description: Run tests when Rust files change
+    command: cargo test
+    watch:
+      patterns:
+        - "src/**/*.rs"
+        - "tests/**/*.rs"
+      debounce_ms: 1000 # Wait 1s after last change before running
+      ignore_patterns:
+        - "**/target/**"
+        - "**/*.swp"
+
+  # Example 2: Watch and rebuild docs
+  docs:
+    description: Rebuild documentation on changes
+    command: cargo doc --no-deps
+    watch:
+      patterns:
+        - "src/**/*.rs"
+        - "README.md"
+        - "docs/**/*"
+      debounce_ms: 500
+      ignore_patterns:
+        - "target/**"
+
+  # Example 3: Watch multiple things concurrently
+  dev:
+    description: Development mode - watch tests, docs, and cargo check
+    concurrently:
+      - task: test
+      - task: docs
+      - command: cargo check --watch
+    concurrently_options:
+      fail_fast: false
+      prefix_output: true
+      prefix_color: "cyan"
+
+  # Example 4: Watch with custom environment variables
+  custom:
+    description: Watch with custom configuration
+    command: cargo run --bin custom
+    watch:
+      patterns:
+        - "custom/**/*.rs"
+        - "config/*.yaml"
+      debounce_ms: 800
+      ignore_patterns:
+        - "**/tmp/**"
+    env:
+      RUST_LOG: debug
+      CUSTOM_CONFIG: dev

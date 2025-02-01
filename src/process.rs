@@ -27,11 +27,15 @@ use std::sync::{
 use std::thread;
 
 use crate::errors::BodoError;
+use colored::{Color, Colorize};
 
 /// Holds a single child process plus some metadata.
 struct ManagedChild {
     name: String,
     child: Option<Child>,
+    prefix_enabled: bool,
+    prefix_label: Option<String>,
+    prefix_color: Option<String>,
 }
 
 /// A "fail fast" process manager that can spawn concurrent processes
@@ -59,7 +63,14 @@ impl ProcessManager {
 
     /// Spawn a command using the system shell. The `name` is just a label
     /// that helps identify the process in logs/errors.
-    pub fn spawn_command(&mut self, name: &str, command: &str) -> Result<(), BodoError> {
+    pub fn spawn_command(
+        &mut self,
+        name: &str,
+        command: &str,
+        prefix_enabled: bool,
+        prefix_label: Option<String>,
+        prefix_color: Option<String>,
+    ) -> Result<(), BodoError> {
         let mut cmd = Command::new("sh");
         cmd.arg("-c").arg(command);
 
@@ -83,6 +94,9 @@ impl ProcessManager {
         let managed_child = ManagedChild {
             name: name.to_string(),
             child: Some(child),
+            prefix_enabled,
+            prefix_label,
+            prefix_color,
         };
 
         // Store it in the shared list
@@ -99,53 +113,77 @@ impl ProcessManager {
         let stop_for_threads = Arc::clone(&self.stop_signal);
         let fail_fast = self.fail_fast;
 
-        // Collect thread handles so we can join later
         let mut thread_handles = Vec::new();
 
         {
             let mut locked = children_for_threads.lock().unwrap();
             for mc in locked.iter_mut() {
                 let mc_name = mc.name.clone();
-                let child = mc.child.take(); // Use take() instead of clone()
+                let child = mc.child.take();
                 let c_any_failure = Arc::clone(&any_failure_for_threads);
                 let c_stop_signal = Arc::clone(&stop_for_threads);
                 let c_children = Arc::clone(&children_for_threads);
 
-                // Spawn a thread to wait on the child and handle its output
+                // Clone prefix info for threads
+                let prefix_enabled = mc.prefix_enabled;
+                let prefix_label = mc.prefix_label.clone();
+                let prefix_color = mc.prefix_color.clone();
+
                 let handle = std::thread::spawn(move || {
                     if let Some(mut child) = child {
-                        // Create stdout reader thread
                         let stdout = child.stdout.take();
+                        let stdout_prefix_label = prefix_label.clone();
+                        let stdout_prefix_color = prefix_color.clone();
                         let stdout_handle = stdout.map(|stdout| {
+                            let prefix_enabled = prefix_enabled;
+                            let prefix_label = stdout_prefix_label.clone();
+                            let prefix_color = stdout_prefix_color;
                             thread::spawn(move || {
                                 let reader = BufReader::new(stdout);
                                 for line in reader.lines() {
                                     if let Ok(line) = line {
-                                        println!("{}", line);
+                                        if prefix_enabled {
+                                            let prefix_str = prefix_label.as_deref().unwrap_or("");
+                                            let colorized =
+                                                color_line(prefix_str, &prefix_color, &line, false);
+                                            println!("{}", colorized);
+                                        } else {
+                                            println!("{}", line);
+                                        }
                                     }
                                 }
                             })
                         });
 
-                        // Create stderr reader thread
                         let stderr = child.stderr.take();
                         let name_for_stderr = mc_name.clone();
+                        let stderr_prefix_label = prefix_label.clone();
+                        let stderr_prefix_color = prefix_color;
                         let stderr_handle = stderr.map(|stderr| {
+                            let prefix_enabled = prefix_enabled;
+                            let prefix_label = stderr_prefix_label.clone();
+                            let prefix_color = stderr_prefix_color;
                             thread::spawn(move || {
                                 let reader = BufReader::new(stderr);
                                 for line in reader.lines() {
                                     if let Ok(line) = line {
-                                        eprintln!("[{}] {}", name_for_stderr, line);
+                                        if prefix_enabled {
+                                            let prefix_str =
+                                                prefix_label.as_deref().unwrap_or(&name_for_stderr);
+                                            let colorized =
+                                                color_line(prefix_str, &prefix_color, &line, true);
+                                            eprintln!("{}", colorized);
+                                        } else {
+                                            eprintln!("[{}] {}", name_for_stderr, line);
+                                        }
                                     }
                                 }
                             })
                         });
 
-                        // Wait for the child process to finish
                         match child.wait() {
                             Ok(status) => {
                                 if !status.success() {
-                                    // Non‐zero exit → mark failure
                                     let code = status.code().unwrap_or(-1);
                                     let mut w = c_any_failure.write().unwrap();
                                     if w.is_none() {
@@ -154,7 +192,6 @@ impl ProcessManager {
                                             mc_name, code
                                         ));
                                     }
-                                    // If fail_fast, kill all other processes
                                     if fail_fast {
                                         c_stop_signal.store(true, Ordering::SeqCst);
                                         let mut locked_ch = c_children.lock().unwrap();
@@ -167,7 +204,6 @@ impl ProcessManager {
                                 }
                             }
                             Err(e) => {
-                                // OS‐level error waiting on the process
                                 let mut w = c_any_failure.write().unwrap();
                                 if w.is_none() {
                                     *w = Some(format!("Error waiting on '{}': {}", mc_name, e));
@@ -184,7 +220,6 @@ impl ProcessManager {
                             }
                         }
 
-                        // Wait for output reader threads to finish
                         if let Some(handle) = stdout_handle {
                             let _ = handle.join();
                         }
@@ -246,4 +281,49 @@ fn kill_child(child: &mut Child) -> Result<(), BodoError> {
     }
 
     Ok(())
+}
+
+/// Helper to color a line with a prefix
+fn color_line(
+    prefix_label: &str,
+    prefix_color: &Option<String>,
+    line: &str,
+    _is_stderr: bool,
+) -> String {
+    // default prefix color if none is set
+    let default_color = Color::White;
+
+    // parse the color from prefix_color Option<String>, fallback to default_color
+    let color = prefix_color
+        .as_ref()
+        .and_then(|s| parse_color(s))
+        .unwrap_or(default_color);
+
+    let colored_prefix = format!("[{}]", prefix_label).color(color);
+
+    // Example final output: "[taskName] some text"
+    format!("{} {}", colored_prefix, line)
+}
+
+/// Convert a &str like "blue"/"red"/"magenta" to a Color from `colored`
+fn parse_color(c: &str) -> Option<Color> {
+    match c.to_lowercase().as_str() {
+        "black" => Some(Color::Black),
+        "red" => Some(Color::Red),
+        "green" => Some(Color::Green),
+        "yellow" => Some(Color::Yellow),
+        "blue" => Some(Color::Blue),
+        "magenta" => Some(Color::Magenta),
+        "cyan" => Some(Color::Cyan),
+        "white" => Some(Color::White),
+        "brightblack" => Some(Color::BrightBlack),
+        "brightred" => Some(Color::BrightRed),
+        "brightgreen" => Some(Color::BrightGreen),
+        "brightyellow" => Some(Color::BrightYellow),
+        "brightblue" => Some(Color::BrightBlue),
+        "brightmagenta" => Some(Color::BrightMagenta),
+        "brightcyan" => Some(Color::BrightCyan),
+        "brightwhite" => Some(Color::BrightWhite),
+        _ => None,
+    }
 }

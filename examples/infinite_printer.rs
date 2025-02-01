@@ -5,7 +5,7 @@ use std::time::Duration;
 fn main() {
     println!("Start2");
     loop {
-        print!("You should never see me\n");
+        println!("You should never see me");
         io::stdout().flush().unwrap();
         thread::sleep(Duration::from_millis(100));
     }

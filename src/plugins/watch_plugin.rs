@@ -8,6 +8,12 @@ use std::any::Any;
 
 pub struct WatchPlugin {}
 
+impl Default for WatchPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WatchPlugin {
     pub fn new() -> Self {
         Self {}

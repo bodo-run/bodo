@@ -20,6 +20,8 @@ pub struct BodoConfig {
 pub struct ConcurrentlyOptions {
     pub fail_fast: Option<bool>,
     pub max_concurrent_tasks: Option<usize>,
+    pub prefix_output: Option<bool>,
+    pub prefix_color: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

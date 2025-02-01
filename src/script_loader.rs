@@ -349,11 +349,10 @@ impl ScriptLoader {
         // Strategy: search from left to right for a .yaml or .yml extension
         let mut found_yaml = false;
         let mut path_part = PathBuf::new();
-        let mut task_part = None;
 
         // We'll iterate components to find the file that has .yaml or .yml
         let mut components = full_ref.components().peekable();
-        while let Some(comp) = components.next() {
+        for comp in components.by_ref() {
             path_part.push(comp);
             if let Some(ext) = path_part.extension() {
                 let ext_s = ext.to_string_lossy().to_lowercase();
@@ -372,18 +371,19 @@ impl ScriptLoader {
 
         // If there are leftover components after the .yaml / .yml, that's the subtask
         let remaining: Vec<_> = components.collect();
-        if !remaining.is_empty() {
+        let task_part = if !remaining.is_empty() {
             // subtask name is the join of all remaining components with "/"
-            let joined = remaining
-                .iter()
-                .map(|c| c.as_os_str().to_string_lossy())
-                .collect::<Vec<_>>()
-                .join("/");
-            task_part = Some(joined);
+            Some(
+                remaining
+                    .iter()
+                    .map(|c| c.as_os_str().to_string_lossy())
+                    .collect::<Vec<_>>()
+                    .join("/"),
+            )
         } else {
             // no subtask => default
-            task_part = Some("default".to_string());
-        }
+            Some("default".to_string())
+        };
 
         // Now we form the absolute path to the .yaml file
         let abs_script = referencing_dir.join(path_part).canonicalize().ok()?;

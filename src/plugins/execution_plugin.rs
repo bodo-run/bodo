@@ -63,6 +63,23 @@ impl ExecutionPlugin {
         // Print with dimmed "$ " prefix
         println!("{} {}", "$".dimmed(), truncated.green());
     }
+
+    /// Helper to extract prefix metadata from a node's metadata, defaulting to off.
+    fn get_prefix_settings(
+        &self,
+        node: &crate::graph::Node,
+    ) -> (bool, Option<String>, Option<String>) {
+        let prefix_enabled = node
+            .metadata
+            .get("prefix_enabled")
+            .map(|v| v == "true")
+            .unwrap_or(false);
+
+        let prefix_label = node.metadata.get("prefix_label").cloned();
+        let prefix_color = node.metadata.get("prefix_color").cloned();
+
+        (prefix_enabled, prefix_label, prefix_color)
+    }
 }
 
 impl Default for ExecutionPlugin {
@@ -152,12 +169,10 @@ impl Plugin for ExecutionPlugin {
 
 /// Runs a single Task node by spawning a process with ProcessManager.
 fn run_single_task(task_data: &TaskData) -> Result<()> {
-    // If there's no `command`, there's nothing to run; skip
     if let Some(cmd) = &task_data.command {
-        let mut pm = ProcessManager::new(false); // Single node => fail_fast false
-                                                 // Print the command before executing
+        let mut pm = ProcessManager::new(false);
         ExecutionPlugin::new().print_command(cmd);
-        pm.spawn_command(&task_data.name, cmd)
+        pm.spawn_command(&task_data.name, cmd, false, None, None)
             .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
         pm.run_concurrently()
             .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
@@ -168,11 +183,9 @@ fn run_single_task(task_data: &TaskData) -> Result<()> {
 /// Runs a single Command node by spawning a process with ProcessManager.
 fn run_single_command(cmd_data: &CommandData, node_id: NodeId) -> Result<()> {
     let mut pm = ProcessManager::new(false);
-    // Give it a label like "cmd-0" or "cmd-5"
     let label = format!("cmd-{}", node_id);
-    // Print the command before executing
     ExecutionPlugin::new().print_command(&cmd_data.raw_command);
-    pm.spawn_command(&label, &cmd_data.raw_command)
+    pm.spawn_command(&label, &cmd_data.raw_command, false, None, None)
         .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
     pm.run_concurrently()
         .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
@@ -191,7 +204,6 @@ fn run_concurrent_group<'a>(
 
         let mut pending = vec![];
         for &child_id in &group_data.child_nodes {
-            // If we've hit the concurrency limit, run the chunk now and reset
             if pending.len() >= max_concurrent {
                 pm.run_concurrently()
                     .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
@@ -200,29 +212,37 @@ fn run_concurrent_group<'a>(
             }
 
             let child_node = &graph.nodes[child_id as usize];
+            let (prefix_enabled, prefix_label, prefix_color) = {
+                let plugin = ExecutionPlugin::new();
+                plugin.get_prefix_settings(child_node)
+            };
+
             match &child_node.kind {
                 NodeKind::Task(t) => {
                     if let Some(cmd) = &t.command {
-                        pm.spawn_command(&t.name, cmd)
+                        pm.spawn_command(&t.name, cmd, prefix_enabled, prefix_label, prefix_color)
                             .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
                         pending.push(t.name.clone());
                     }
                 }
                 NodeKind::Command(cmd) => {
                     let label = format!("cmd-{}", child_node.id);
-                    pm.spawn_command(&label, &cmd.raw_command)
-                        .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
+                    pm.spawn_command(
+                        &label,
+                        &cmd.raw_command,
+                        prefix_enabled,
+                        prefix_label,
+                        prefix_color,
+                    )
+                    .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
                     pending.push(label);
                 }
                 NodeKind::ConcurrentGroup(sub_group) => {
-                    // Nested concurrency group:
-                    // run it immediately in a sub-block
                     run_concurrent_group(sub_group, graph).await?;
                 }
             }
         }
 
-        // Run any leftover chunk
         if !pending.is_empty() {
             pm.run_concurrently()
                 .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
