@@ -455,9 +455,6 @@ tasks:
 Running `bodo --list` will show the following:
 
 ```
-Root Script (scripts/script.yaml)
-Root level tasks
-
   (default_task)   Default greeting
   echo             echo task
   echo2            echo2 task

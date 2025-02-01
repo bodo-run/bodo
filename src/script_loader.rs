@@ -34,12 +34,18 @@ impl ScriptLoader {
     pub async fn build_graph(&mut self, config: BodoConfig) -> Result<Graph> {
         let mut graph = Graph::new();
         let mut paths_to_load = vec![];
+        // Store the canonicalized root script path if it exists
+        let mut root_script_abs: Option<PathBuf> = None;
 
         // Load the root script if exists
         if let Some(ref root_script) = config.root_script {
             let root_path = PathBuf::from(root_script);
             if root_path.exists() {
-                paths_to_load.push((root_path, "default".to_string()));
+                // Save canonicalized path for later comparison
+                root_script_abs = Some(root_path.canonicalize()?);
+                // Instead of giving it a header display name, push it with an empty string.
+                // That tells the print plugin to print its tasks without a leading header.
+                paths_to_load.push((root_path, "".to_string()));
             }
         }
 
@@ -58,24 +64,33 @@ impl ScriptLoader {
                     .filter_map(|e| e.ok())
                 {
                     let path = entry.path().to_path_buf();
-                    let file_name = path.file_name().map(|n| n.to_string_lossy());
-
+                    // Skip the root script file if a match
+                    if let Some(ref root_abs) = root_script_abs {
+                        if let Ok(candidate) = path.canonicalize() {
+                            if candidate == *root_abs {
+                                continue;
+                            }
+                        }
+                    }
+                    let file_name = path.file_name().and_then(|n| n.to_str());
                     if let Some(name) = file_name {
                         if name == "script.yaml" || name == "script.yml" {
-                            // For script.yaml files, use the parent directory name
-                            let script_name = path
+                            // For these files, use the parent directory name as the display name
+                            let script_display = path
                                 .parent()
                                 .and_then(|p| p.file_name())
-                                .map(|n| n.to_string_lossy().into_owned())
-                                .unwrap_or_else(|| "default".to_string());
-                            paths_to_load.push((path, script_name));
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("default")
+                                .to_string();
+                            paths_to_load.push((path, script_display));
                         } else if name.ends_with(".yaml") || name.ends_with(".yml") {
-                            // For other YAML files, use the file stem
-                            let script_name = path
+                            // For other YAML files, use the file stem as display name
+                            let script_display = path
                                 .file_stem()
-                                .map(|n| n.to_string_lossy().into_owned())
-                                .unwrap_or_else(|| "default".to_string());
-                            paths_to_load.push((path, script_name));
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("default")
+                                .to_string();
+                            paths_to_load.push((path, script_display));
                         }
                     }
                 }
@@ -106,7 +121,11 @@ impl ScriptLoader {
 
         // Get script display name from yaml or fallback to script_id
         let yaml_name = yaml.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        let script_display_name = if yaml_name.is_empty() {
+        // For the root script, we want an empty display name;
+        // otherwise, we use the provided name.
+        let script_display_name = if script_id == "scripts" {
+            "".to_string()
+        } else if yaml_name.is_empty() {
             script_id.to_string()
         } else {
             yaml_name.to_string()
@@ -159,10 +178,15 @@ impl ScriptLoader {
             .transpose()?
             .unwrap_or_default();
 
-        // Create nodes for each task
+        // Create nodes for each task in tasks map: use empty display name for root script tasks.
         for (name, task_config) in tasks_map {
+            let task_display_name = if script_id == "scripts" {
+                "".to_string()
+            } else {
+                script_display_name.clone()
+            };
             let task_id =
-                self.create_task_node(graph, script_id, &script_display_name, &name, &task_config);
+                self.create_task_node(graph, script_id, &task_display_name, &name, &task_config);
             self.register_task(script_id, &name, task_id, graph)?;
             task_ids.push((task_id, task_config));
         }
@@ -177,7 +201,6 @@ impl ScriptLoader {
                         graph.add_edge(dep_id, task_id)?;
                     }
                     Dependency::Command { command } => {
-                        // Create a command node for inline command dependency
                         let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
                             raw_command: command,
                             description: None,
