@@ -1,4 +1,5 @@
-use async_trait::async_trait;
+use humantime::parse_duration;
+use log::debug;
 use std::any::Any;
 
 use crate::{
@@ -6,8 +7,6 @@ use crate::{
     graph::{Graph, NodeKind},
     plugin::Plugin,
 };
-use humantime::parse_duration;
-use log::debug;
 
 pub struct TimeoutPlugin;
 
@@ -23,7 +22,6 @@ impl TimeoutPlugin {
     }
 }
 
-#[async_trait]
 impl Plugin for TimeoutPlugin {
     fn name(&self) -> &'static str {
         "TimeoutPlugin"
@@ -33,7 +31,7 @@ impl Plugin for TimeoutPlugin {
         75
     }
 
-    async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
+    fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
         for node in &mut graph.nodes {
             if let NodeKind::Task(_) = &node.kind {
                 if let Some(timeout_str) = node.metadata.get("timeout") {

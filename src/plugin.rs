@@ -1,29 +1,30 @@
 use crate::graph::Graph;
 use crate::Result;
-use async_trait::async_trait;
-use serde_json::{Map, Value};
 use std::any::Any;
 
-#[async_trait]
+/// Synchronous plugin trait (no `async` anymore).
 pub trait Plugin: Send {
     fn name(&self) -> &'static str;
     fn priority(&self) -> i32;
     fn as_any(&self) -> &dyn Any;
 
-    async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
-        let _ = config;
+    /// Called after plugin is created, before building the graph.
+    fn on_init(&mut self, _config: &PluginConfig) -> Result<()> {
         Ok(())
     }
-    async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
-        let _ = graph;
+
+    /// Called when building/modifying the graph (e.g. adding concurrency).
+    fn on_graph_build(&mut self, _graph: &mut Graph) -> Result<()> {
         Ok(())
     }
-    async fn on_after_run(&mut self, graph: &mut Graph) -> Result<()> {
-        let _ = graph;
+
+    /// Called after the graph is built but before final execution.
+    fn on_after_run(&mut self, _graph: &mut Graph) -> Result<()> {
         Ok(())
     }
-    async fn on_run(&mut self, node_id: usize, graph: &mut Graph) -> Result<()> {
-        let _ = (node_id, graph);
+
+    /// Called each time we run an individual node (not used here by default).
+    fn on_run(&mut self, _node_id: usize, _graph: &mut Graph) -> Result<()> {
         Ok(())
     }
 }
@@ -33,7 +34,7 @@ pub struct PluginConfig {
     pub fail_fast: bool,
     pub watch: bool,
     pub list: bool,
-    pub options: Option<Map<String, Value>>,
+    pub options: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 pub struct PluginManager {
@@ -56,22 +57,22 @@ impl PluginManager {
         self.plugins.push(plugin);
     }
 
-    pub async fn run_lifecycle(
-        &mut self,
-        graph: &mut Graph,
-        config: Option<PluginConfig>,
-    ) -> Result<()> {
+    /// Runs the "lifecycle" in a blocking (synchronous) manner.
+    pub fn run_lifecycle(&mut self, graph: &mut Graph, config: Option<PluginConfig>) -> Result<()> {
         let config = config.unwrap_or_default();
         self.sort_plugins();
 
+        // on_init
         for plugin in &mut self.plugins {
-            plugin.on_init(&config).await?;
+            plugin.on_init(&config)?;
         }
+        // on_graph_build
         for plugin in &mut self.plugins {
-            plugin.on_graph_build(graph).await?;
+            plugin.on_graph_build(graph)?;
         }
+        // on_after_run
         for plugin in &mut self.plugins {
-            plugin.on_after_run(graph).await?;
+            plugin.on_after_run(graph)?;
         }
         Ok(())
     }

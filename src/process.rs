@@ -28,7 +28,6 @@ use std::{
 use crate::errors::BodoError;
 use colored::{Color, Colorize};
 
-/// Holds all data needed to manage one child process plus its I/O handling threads.
 pub struct ChildProcess {
     pub name: String,
     pub child: Child,
@@ -36,7 +35,6 @@ pub struct ChildProcess {
     pub stderr_handle: Option<JoinHandle<()>>,
 }
 
-/// Simple process manager that spawns commands without blocking until `run_concurrently()`.
 pub struct ProcessManager {
     pub children: Vec<ChildProcess>,
     pub fail_fast: bool,
@@ -51,7 +49,6 @@ impl ProcessManager {
         }
     }
 
-    /// Spawn a command but **do not** wait on it here; just store the child for later.
     pub fn spawn_command(
         &mut self,
         name: &str,
@@ -79,7 +76,6 @@ impl ProcessManager {
         let label_str = prefix_label.clone().unwrap_or_else(|| name_str.clone());
         let color_str = prefix_color.clone();
 
-        // Handle stdout in a separate thread
         let stdout_handle = stdout.map(|out| {
             let label = label_str.clone();
             let color = color_str.clone();
@@ -96,7 +92,6 @@ impl ProcessManager {
             })
         });
 
-        // Handle stderr in a separate thread
         let stderr_handle = stderr.map(|err| {
             let label = label_str;
             let color = color_str;
@@ -123,17 +118,14 @@ impl ProcessManager {
         Ok(())
     }
 
-    /// Wait for all stored children, optionally stopping others if one fails (`fail_fast`).
     pub fn run_concurrently(&mut self) -> std::io::Result<()> {
         debug!("Running {} processes concurrently", self.children.len());
         let mut any_failed = false;
 
-        // Take ownership of the children vector
         let mut children = std::mem::take(&mut self.children);
         let len = children.len();
 
         for i in 0..len {
-            // Wait on this process
             let status = children[i].child.wait()?;
             if !status.success() {
                 let code = status.code().unwrap_or(-1);
@@ -142,12 +134,10 @@ impl ProcessManager {
                     children[i].name, code
                 );
                 any_failed = true;
-
-                // If fail-fast, kill remaining children
                 if self.fail_fast {
                     debug!("Fail-fast enabled, killing remaining processes");
                     for child in children.iter_mut().skip(i + 1) {
-                        let _ = child.child.kill(); // best effort
+                        let _ = child.child.kill();
                     }
                     break;
                 }
@@ -156,7 +146,6 @@ impl ProcessManager {
             }
         }
 
-        // Join all I/O threads
         for mut child_info in children {
             if let Some(handle) = child_info.stdout_handle.take() {
                 let _ = handle.join();
@@ -168,14 +157,12 @@ impl ProcessManager {
 
         if any_failed {
             debug!("One or more processes failed");
-            // Return a non-zero code, or an error
             std::process::exit(1);
         }
 
         Ok(())
     }
 
-    /// In this version, kill_all is basically best effort, but you can expand it.
     pub fn kill_all(&mut self) -> Result<(), BodoError> {
         warn!("kill_all called, best effort kill all children...");
         let mut children = std::mem::take(&mut self.children);
@@ -187,7 +174,6 @@ impl ProcessManager {
     }
 }
 
-/// Helper to apply prefix coloring to each log line.
 fn color_line(prefix: &str, prefix_color: &Option<String>, line: &str, is_stderr: bool) -> String {
     let default_color = if is_stderr { Color::Red } else { Color::White };
     let color = prefix_color
@@ -198,7 +184,6 @@ fn color_line(prefix: &str, prefix_color: &Option<String>, line: &str, is_stderr
     format!("{} {}", colored_prefix, line)
 }
 
-/// Map color strings to `colored::Color`.
 fn parse_color(c: &str) -> Option<Color> {
     debug!("Parsing color: {}", c);
     match c.to_lowercase().as_str() {

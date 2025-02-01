@@ -16,6 +16,18 @@ pub struct BodoConfig {
     pub tasks: HashMap<String, TaskConfig>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WatchConfig {
+    pub patterns: Vec<String>,
+    #[serde(default = "default_debounce_ms")]
+    pub debounce_ms: u64,
+    #[serde(default)]
+    pub ignore_patterns: Vec<String>,
+}
+fn default_debounce_ms() -> u64 {
+    500
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct ConcurrentlyOptions {
     pub fail_fast: Option<bool>,
@@ -43,21 +55,9 @@ pub struct TaskConfig {
     pub env: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct WatchConfig {
-    pub patterns: Vec<String>,
-    #[serde(default = "default_debounce_ms")]
-    pub debounce_ms: u64,
-    #[serde(default)]
-    pub ignore_patterns: Vec<String>,
-}
-
-fn default_debounce_ms() -> u64 {
-    500
-}
-
 impl BodoConfig {
-    pub async fn load(_config_path: Option<String>) -> Result<Self> {
+    pub fn load(_config_path: Option<String>) -> Result<Self> {
+        // You could load from a file, etc.
         Ok(BodoConfig::default())
     }
 }

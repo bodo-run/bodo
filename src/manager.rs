@@ -6,7 +6,6 @@ use crate::{
     script_loader::ScriptLoader,
     Result,
 };
-use serde_json;
 
 pub struct GraphManager {
     pub config: BodoConfig,
@@ -33,16 +32,15 @@ impl GraphManager {
         self.plugin_manager.register(plugin);
     }
 
-    pub async fn build_graph(&mut self, config: BodoConfig) -> Result<&Graph> {
+    pub fn build_graph(&mut self, config: BodoConfig) -> Result<&Graph> {
         self.config = config.clone();
         let mut loader = ScriptLoader::new();
-        self.graph = loader.build_graph(config).await?;
+        self.graph = loader.build_graph(config)?;
 
         if let Some(cycle) = self.graph.detect_cycle() {
             let error_msg = self.graph.format_cycle_error(&cycle);
             return Err(BodoError::PluginError(error_msg));
         }
-
         Ok(&self.graph)
     }
 
@@ -81,22 +79,19 @@ impl GraphManager {
         })
     }
 
-    pub async fn initialize(&mut self) -> Result<()> {
+    pub fn initialize(&mut self) -> Result<()> {
         let config = BodoConfig {
             root_script: Some("scripts/main.yaml".into()),
             scripts_dirs: Some(vec!["scripts/".into()]),
             tasks: Default::default(),
         };
-        self.build_graph(config).await?;
+        self.build_graph(config)?;
         Ok(())
     }
 
-    pub async fn run_plugins(&mut self, config: Option<PluginConfig>) -> Result<()> {
-        let cfg = config.unwrap_or_default();
+    pub fn run_plugins(&mut self, config: Option<PluginConfig>) -> Result<()> {
         self.plugin_manager.sort_plugins();
-        self.plugin_manager
-            .run_lifecycle(&mut self.graph, Some(cfg))
-            .await?;
+        self.plugin_manager.run_lifecycle(&mut self.graph, config)?;
         Ok(())
     }
 
@@ -141,23 +136,16 @@ impl GraphManager {
             .map(|t| t.script_id.clone())
     }
 
-    pub async fn run_task(&mut self, task_name: &str) -> Result<()> {
-        let mut options = serde_json::Map::new();
-        options.insert(
-            "task".to_string(),
-            serde_json::Value::String(task_name.to_string()),
-        );
-
-        let plugin_config = PluginConfig {
-            fail_fast: true,
-            watch: false,
-            list: false,
-            options: Some(options),
-        };
-
-        self.plugin_manager
-            .run_lifecycle(&mut self.graph, Some(plugin_config))
-            .await
+    pub fn run_task(&mut self, task_name: &str) -> Result<()> {
+        // If we wanted a simpler entry point to run a single task (bypassing the plugin pipeline).
+        // Currently not used, but you could call it in watch plugin if desired.
+        let _node_id = *self
+            .graph
+            .task_registry
+            .get(task_name)
+            .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?;
+        // your synchronous run logic here or reuse plugin approach
+        Ok(())
     }
 
     pub fn get_task_name_by_name(&self, task_name: &str) -> Option<String> {
@@ -177,36 +165,5 @@ impl GraphManager {
                 _ => None,
             })
             .collect()
-    }
-
-    /// Re-trigger execution for a single task.
-    /// This builds a PluginConfig with the specific task name in options.
-    pub async fn retrigger_execution(
-        &mut self,
-        task_name: &str,
-        stop_on_failure: bool,
-    ) -> Result<()> {
-        // Build a plugin configuration that mimics the normal execution pipeline.
-        // In addition to the task name option (which ExecutionPlugin uses),
-        // you can pass a flag (e.g. "stop_on_failure") to determine watch-run failure handling.
-        let mut options = serde_json::Map::new();
-        options.insert(
-            "task".into(),
-            serde_json::Value::String(task_name.to_string()),
-        );
-        options.insert(
-            "stop_on_failure".into(),
-            serde_json::Value::Bool(stop_on_failure),
-        );
-
-        let plugin_config = PluginConfig {
-            fail_fast: true,
-            watch: true,
-            list: false,
-            options: Some(options),
-        };
-
-        // Re-run the full plugin lifecycle.
-        self.run_plugins(Some(plugin_config)).await
     }
 }

@@ -1,7 +1,6 @@
 name: "test"
 description: "Testing tasks"
 
-# Default task will run unit + integration tests concurrently, fail on the first error.
 default_task:
   description: "Run all tests concurrently with fail-fast"
   concurrently_options:

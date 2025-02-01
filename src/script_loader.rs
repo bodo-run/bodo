@@ -31,7 +31,7 @@ impl ScriptLoader {
         }
     }
 
-    pub async fn build_graph(&mut self, config: BodoConfig) -> Result<Graph> {
+    pub fn build_graph(&mut self, config: BodoConfig) -> Result<Graph> {
         let mut graph = Graph::new();
         let mut paths_to_load = vec![];
         let mut root_script_abs: Option<PathBuf> = None;
@@ -122,7 +122,7 @@ impl ScriptLoader {
 
         let mut task_ids = Vec::new();
         if let Some(default_task) = yaml.get("default_task") {
-            let task_config = match serde_yaml::from_value(default_task.clone()) {
+            let task_config: TaskConfig = match serde_yaml::from_value(default_task.clone()) {
                 Ok(config) => config,
                 Err(e) => {
                     warn!("Invalid default task in {}: {}", path.display(), e);
@@ -191,7 +191,6 @@ impl ScriptLoader {
                     }
                 }
             }
-
             for dep in task_config.post_deps {
                 match dep {
                     Dependency::Task { task } => {
@@ -238,12 +237,11 @@ impl ScriptLoader {
         let node_id = graph.add_node(NodeKind::Task(task_data));
 
         if !cfg.concurrently.is_empty() {
-            let node = graph.nodes.get_mut(node_id as usize).unwrap();
+            let node = &mut graph.nodes[node_id as usize];
             node.metadata.insert(
                 "concurrently".to_string(),
                 serde_json::to_string(&cfg.concurrently).unwrap_or_default(),
             );
-
             if let Some(ff) = cfg.concurrently_options.fail_fast {
                 node.metadata
                     .insert("fail_fast".to_string(), ff.to_string());

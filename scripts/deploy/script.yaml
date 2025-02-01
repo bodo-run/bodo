@@ -1,12 +1,10 @@
 name: "deploy"
 description: "Deployment tasks"
 
-# Environment variables for all deployment tasks
 env:
   DEPLOY_ENV: "staging"
   BODO_LOG_LEVEL: "debug"
 
-# Default task: run a staging deploy
 default_task:
   description: "Deploy to the staging environment"
   command: |
