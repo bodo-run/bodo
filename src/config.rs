@@ -27,6 +27,8 @@ pub struct WatchConfig {
     pub debounce_ms: u64,
     #[serde(default)]
     pub ignore_patterns: Vec<String>,
+    #[serde(default)]
+    pub auto_watch: bool,
 }
 fn default_debounce_ms() -> u64 {
     500

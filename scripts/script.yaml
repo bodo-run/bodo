@@ -13,6 +13,7 @@ tasks:
     description: A test task that watches for file changes
     command: cargo test
     watch:
+      auto_watch: true
       patterns:
         - "src/**/*.rs"
         - "tests/**/*.rs"
