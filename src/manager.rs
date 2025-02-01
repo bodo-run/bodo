@@ -40,10 +40,9 @@ impl GraphManager {
         self.graph = loader.build_graph(config).await?;
 
         // Check for cycles after building the graph
-        if self.graph.has_cycle() {
-            return Err(BodoError::PluginError(
-                "Circular dependency detected in task graph".to_string(),
-            ));
+        if let Some(cycle) = self.graph.detect_cycle() {
+            let error_msg = self.graph.format_cycle_error(&cycle);
+            return Err(BodoError::PluginError(error_msg));
         }
 
         Ok(&self.graph)

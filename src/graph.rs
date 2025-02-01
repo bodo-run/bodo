@@ -181,35 +181,103 @@ impl Graph {
         println!();
     }
 
-    /// Detects cycles in the graph using DFS
-    pub fn has_cycle(&self) -> bool {
+    /// Detects cycles in the graph and returns the cycle path if found
+    pub fn detect_cycle(&self) -> Option<Vec<NodeId>> {
         let mut visited = vec![false; self.nodes.len()];
         let mut stack = vec![false; self.nodes.len()];
+        let mut parent = vec![None; self.nodes.len()];
 
-        fn dfs(graph: &Graph, u: usize, visited: &mut [bool], stack: &mut [bool]) -> bool {
-            if stack[u] {
-                return true;
-            }
-            if visited[u] {
-                return false;
-            }
+        fn dfs(
+            graph: &Graph,
+            u: usize,
+            visited: &mut [bool],
+            stack: &mut [bool],
+            parent: &mut [Option<usize>],
+        ) -> Option<(usize, usize)> {
             visited[u] = true;
             stack[u] = true;
+
             for e in &graph.edges {
-                if e.from as usize == u && dfs(graph, e.to as usize, visited, stack) {
-                    return true;
+                if e.from as usize == u {
+                    let v = e.to as usize;
+                    if !visited[v] {
+                        parent[v] = Some(u);
+                        if let Some(cycle) = dfs(graph, v, visited, stack, parent) {
+                            return Some(cycle);
+                        }
+                    } else if stack[v] {
+                        // Found a cycle: v is already in the stack
+                        return Some((u, v));
+                    }
                 }
             }
             stack[u] = false;
-            false
+            None
         }
 
+        // Try DFS from each unvisited node
         for i in 0..self.nodes.len() {
-            if dfs(self, i, &mut visited, &mut stack) {
-                return true;
+            if !visited[i] {
+                if let Some((from, to)) = dfs(self, i, &mut visited, &mut stack, &mut parent) {
+                    return Some(self.reconstruct_cycle(from, to, &parent));
+                }
             }
         }
-        false
+        None
+    }
+
+    /// Reconstructs the cycle path from the parent array
+    fn reconstruct_cycle(
+        &self,
+        mut from: usize,
+        to: usize,
+        parent: &[Option<usize>],
+    ) -> Vec<NodeId> {
+        let mut path = vec![from as NodeId];
+        while from != to {
+            from = parent[from].unwrap();
+            path.push(from as NodeId);
+        }
+        path.reverse();
+        path
+    }
+
+    /// Formats a cycle error message in a compiler-like style
+    pub fn format_cycle_error(&self, cycle: &[NodeId]) -> String {
+        let mut error = String::from("error: found cyclical dependency involving:\n");
+
+        // Print each dependency in the cycle
+        for window in cycle.windows(2) {
+            let from = window[0] as usize;
+            let to = window[1] as usize;
+            let from_name = self.get_node_name(from);
+            let to_name = self.get_node_name(to);
+            error.push_str(&format!("   --> {} depends on {}\n", from_name, to_name));
+        }
+
+        // Close the loop by connecting last to first
+        let last = cycle[cycle.len() - 1] as usize;
+        let first = cycle[0] as usize;
+        let last_name = self.get_node_name(last);
+        let first_name = self.get_node_name(first);
+        error.push_str(&format!("   --> {} depends on {}\n", last_name, first_name));
+
+        error
+    }
+
+    /// Helper to get a human-readable name for a node
+    fn get_node_name(&self, node_id: usize) -> String {
+        match &self.nodes[node_id].kind {
+            NodeKind::Task(task) => {
+                if task.script_display_name.is_empty() {
+                    task.name.clone()
+                } else {
+                    format!("{}/{}", task.script_display_name, task.name)
+                }
+            }
+            NodeKind::Command(cmd) => format!("command[{}]", cmd.raw_command),
+            NodeKind::ConcurrentGroup(_) => format!("concurrent_group[{}]", node_id),
+        }
     }
 
     /// Returns a topological sort of the graph nodes
