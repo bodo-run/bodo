@@ -31,7 +31,6 @@ impl WatchPlugin {
         // Get the original node
         let old_node = &graph.nodes[node_id as usize];
         let old_kind = old_node.kind.clone();
-        let old_metadata = old_node.metadata.clone();
 
         // Extract task data
         let task_data = match old_kind {
@@ -128,12 +127,6 @@ impl Plugin for WatchPlugin {
             if let NodeKind::ConcurrentGroup(_) = node.kind {
                 continue;
             }
-
-            // Check if it's a Task with watch config
-            let task_data = match &node.kind {
-                NodeKind::Task(t) if t.watch.is_some() => t,
-                _ => continue,
-            };
 
             // Skip if it has explicit concurrency
             if node.metadata.get("concurrently").is_some() {
