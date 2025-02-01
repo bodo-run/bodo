@@ -20,6 +20,7 @@ pub struct TaskData {
     pub command: Option<String>,
     pub working_dir: Option<String>,
     pub env: HashMap<String, String>,
+    pub exec_paths: Vec<String>,
     pub is_default: bool,
     pub script_id: String,
     pub script_display_name: String,
