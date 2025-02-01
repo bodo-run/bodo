@@ -3,64 +3,344 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+  PKG_CONFIG_ALLOW_CROSS: true
+
+permissions:
+  contents: write
+
 jobs:
-  build:
-    name: Build
+  determine-changes:
+    name: Determine Changes
     runs-on: ubuntu-latest
+    outputs:
+      only_docs: ${{ steps.check.outputs.only_docs }}
+      only_tests: ${{ steps.check.outputs.only_tests }}
+      only_src: ${{ steps.check.outputs.only_src }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: check
+        run: |
+          changed_files="$(git diff --name-only HEAD^ HEAD || true)"
+
+          doc_pattern='^(docs/|.+\.md|\.txt$|\.md$)'
+          test_pattern='^(tests/|test/)'
+          src_pattern='^(src/|Cargo\.toml|Cargo\.lock)'
+
+          only_docs=true
+          only_tests=true
+          only_src=true
+
+          if [ -z "$changed_files" ]; then
+            only_docs=false
+            only_tests=false
+            only_src=false
+          else
+            while IFS= read -r file; do
+              [[ "$file" =~ $doc_pattern ]] || only_docs=false
+              [[ "$file" =~ $test_pattern ]] || only_tests=false
+              [[ "$file" =~ $src_pattern ]] || only_src=false
+            done < <(echo "$changed_files")
+          fi
+
+          echo "only_docs=$only_docs" >> $GITHUB_OUTPUT
+          echo "only_tests=$only_tests" >> $GITHUB_OUTPUT
+          echo "only_src=$only_src" >> $GITHUB_OUTPUT
+
+  lint:
+    name: Lint
+    needs: determine-changes
+    runs-on: ubuntu-latest
+    if: >
+      needs.determine-changes.outputs.only_docs != 'true' &&
+      needs.determine-changes.outputs.only_tests != 'true' &&
+      needs.determine-changes.outputs.only_src != 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+      - name: Format check
+        run: cargo fmt --check
+
+  test:
+    name: Test
+    needs: determine-changes
+    runs-on: ubuntu-latest
+    if: needs.determine-changes.outputs.only_docs != 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run tests
+        run: cargo test --verbose
+
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    needs: determine-changes
+    if: >
+      needs.determine-changes.outputs.only_docs != 'true' &&
+      needs.determine-changes.outputs.only_tests != 'true'
     strategy:
+      fail-fast: false
       matrix:
-        target:
-          - x86_64-unknown-linux-musl
-          - x86_64-pc-windows-gnu
-          - x86_64-apple-darwin
+        include:
+          # Linux builds
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset_name: bodo-x86_64-unknown-linux-gnu.tar.gz
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            asset_name: bodo-aarch64-unknown-linux-gnu.tar.gz
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            asset_name: bodo-x86_64-unknown-linux-musl.tar.gz
+          # macOS
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            asset_name: bodo-x86_64-apple-darwin.tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset_name: bodo-aarch64-apple-darwin.tar.gz
+          # Windows
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset_name: bodo-x86_64-pc-windows-msvc.zip
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            asset_name: bodo-aarch64-pc-windows-msvc.zip
 
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v3
         with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          override: true
-
-      - name: Install Cross
-        run: cargo install cross
-
+          path: |
+            ~/.cargo
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cross build --release --target ${{ matrix.target }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: ./.github/actions/build
+        id: build
         with:
-          name: bodo-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/bodo*
+          target: ${{ matrix.target }}
+
+      - name: Package binary (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p release-artifacts
+          staging="bodo-${{ matrix.target }}"
+          mkdir -p "$staging"
+          cp "${{ steps.build.outputs.binary_path }}" "$staging/"
+          tar czf "release-artifacts/${{ matrix.asset_name }}" "$staging"
+          [ -f "release-artifacts/${{ matrix.asset_name }}" ] || { echo "::error::No artifact"; exit 1; }
+          [ -s "release-artifacts/${{ matrix.asset_name }}" ] || { echo "::error::Artifact is empty"; exit 1; }
+
+      - name: Package binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-artifacts
+          $staging = "bodo-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path $staging
+          Copy-Item "${{ steps.build.outputs.binary_path }}" $staging
+          7z a "release-artifacts\${{ matrix.asset_name }}" "$staging"
+          if (-not (Test-Path "release-artifacts\${{ matrix.asset_name }}")) {
+            Write-Error "No artifact"
+            exit 1
+          }
+          if ((Get-Item "release-artifacts\${{ matrix.asset_name }}").Length -eq 0) {
+            Write-Error "Artifact is empty"
+            exit 1
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.target }}
+          path: release-artifacts/${{ matrix.asset_name }}
+
+  release:
+    name: Release
+    needs: [test, lint, build]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: build-*
+
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@v2
+        id: git-cliff
+        with:
+          config: cliff.toml
+          args: --current --strip header
+        env:
+          OUTPUT: CHANGES.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/build-*/bodo-*
+          body_path: CHANGES.md
+          tag_name: ${{ github.ref_name }}
+
+  publish:
+    name: Publish to crates.io
+    needs: [test, lint, build]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.84.0"
+
+      - name: Publish
+        run: |
+          if cargo search --color=never bodo | grep -q ${{ github.ref_name }}; then
+            echo "bodo@${{ github.ref_name }} already published"
+            exit 0
+          fi
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   coverage:
     name: Code Coverage
+    needs: determine-changes
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
+    if: needs.determine-changes.outputs.only_docs != 'true'
+    env:
+      CARGO_TERM_COLOR: always
+      RUSTFLAGS: "-Cinstrument-coverage"
+      LLVM_PROFILE_FILE: "bodo-%p-%m.profraw"
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+    steps:
+      - uses: actions/checkout@v4
         with:
-          toolchain: stable
-          override: true
+          fetch-depth: 0 # needed so we can check out base_ref below
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
           components: llvm-tools-preview
 
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Generate code coverage
+      - name: Install system dependencies
         run: |
-          cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev lcov
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+      - name: Install grcov
+        run: cargo install grcov
+
+      # --- Base Branch Coverage ---
+      - name: Fetch and check out base branch
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          git checkout ${{ github.base_ref }}
+
+      - name: Build + Test coverage on base
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p coverage-base
+          LLVM_PROFILE_FILE="coverage-base/bodo-%p-%m.profraw" cargo test --profile coverage
+          grcov . \
+            --binary-path ./target/coverage/deps/ \
+            -s . \
+            -t lcov \
+            --branch \
+            --ignore-not-existing \
+            --ignore "/*" \
+            --ignore "tests/*" \
+            -o coverage-base/lcov.info
+          grcov . \
+            --binary-path ./target/coverage/deps/ \
+            -s . \
+            -t covdir \
+            --branch \
+            --ignore-not-existing \
+            --ignore "/*" \
+            --ignore "tests/*" \
+            -o coverage-base/coverage.json
+
+      # --- PR Branch Coverage ---
+      - name: Check out head branch (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          git checkout ${{ github.head_ref }}
+
+      - name: Build + Test coverage on PR
+        run: |
+          mkdir -p coverage
+          LLVM_PROFILE_FILE="coverage/bodo-%p-%m.profraw" cargo test --profile coverage
+          grcov . \
+            --binary-path ./target/coverage/deps/ \
+            -s . \
+            -t lcov \
+            --branch \
+            --ignore-not-existing \
+            --ignore "/*" \
+            --ignore "tests/*" \
+            -o coverage/lcov.info
+          grcov . \
+            --binary-path ./target/coverage/deps/ \
+            -s . \
+            -t covdir \
+            --branch \
+            --ignore-not-existing \
+            --ignore "/*" \
+            --ignore "tests/*" \
+            -o coverage/coverage.json
+
+      - name: Compare coverage
+        if: github.event_name == 'pull_request'
+        run: |
+          # Check if base coverage file exists
+          if [ ! -f coverage-base/coverage.json ]; then
+            echo "No base branch coverage data found - this might be the first coverage run"
+            echo "PR branch coverage: $(jq -r '.coveragePercent' coverage/coverage.json)%"
+            exit 0
+          fi
+
+          # Extract line coverage from JSON files using jq
+          BASE_COV=$(jq -r '.coveragePercent' coverage-base/coverage.json)
+          PR_COV=$(jq -r '.coveragePercent' coverage/coverage.json)
+
+          echo "Base branch coverage: ${BASE_COV}%"
+          echo "PR branch coverage:   ${PR_COV}%"
+
+          # Compare and fail if coverage decreased
+          check=$(awk -v base="$BASE_COV" -v pr="$PR_COV" 'BEGIN { if (pr < base) print 1; else print 0; }')
+          if [ "$check" -eq 1 ]; then
+            echo "Error: Coverage decreased from ${BASE_COV}% to ${PR_COV}%"
+            exit 1
+          else
+            echo "Coverage has not decreased."
+          fi
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
         with:
-          files: lcov.info
-          fail_ci_if_error: true
+          name: coverage-reports
+          path: |
+            coverage/lcov.info
+            coverage-base/lcov.info
