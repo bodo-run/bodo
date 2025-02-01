@@ -84,6 +84,7 @@ impl GraphManager {
             root_script: Some("scripts/main.yaml".into()),
             scripts_dirs: Some(vec!["scripts/".into()]),
             tasks: Default::default(),
+            env: Default::default(),
         };
         self.build_graph(config)?;
         Ok(())

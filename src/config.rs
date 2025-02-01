@@ -14,6 +14,8 @@ pub struct BodoConfig {
     pub root_script: Option<String>,
     pub scripts_dirs: Option<Vec<String>>,
     pub tasks: HashMap<String, TaskConfig>,
+    #[serde(default)]
+    pub env: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

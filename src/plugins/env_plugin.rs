@@ -53,21 +53,17 @@ impl Plugin for EnvPlugin {
     }
 
     fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
-        if let Some(ref global_env) = self.global_env {
+        if let Some(ref extra_env) = self.global_env {
             for node in &mut graph.nodes {
                 match &mut node.kind {
                     NodeKind::Task(task_data) => {
-                        for (k, v) in global_env {
-                            if !task_data.env.contains_key(k) {
-                                task_data.env.insert(k.clone(), v.clone());
-                            }
+                        for (k, v) in extra_env {
+                            task_data.env.insert(k.clone(), v.clone());
                         }
                     }
                     NodeKind::Command(cmd_data) => {
-                        for (k, v) in global_env {
-                            if !cmd_data.env.contains_key(k) {
-                                cmd_data.env.insert(k.clone(), v.clone());
-                            }
+                        for (k, v) in extra_env {
+                            cmd_data.env.insert(k.clone(), v.clone());
                         }
                     }
                     NodeKind::ConcurrentGroup(_) => {}
