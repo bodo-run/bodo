@@ -147,15 +147,35 @@ impl Plugin for WatchPlugin {
     }
 
     fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
+        // First check if any task has auto_watch enabled
+        if !self.watch_mode {
+            for node in &graph.nodes {
+                if let NodeKind::Task(task_data) = &node.kind {
+                    if let Some(WatchConfig {
+                        auto_watch: true, ..
+                    }) = &task_data.watch
+                    {
+                        // Found auto_watch == true, enable watch mode
+                        self.watch_mode = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // If watch_mode is still false, do nothing
         if !self.watch_mode {
             return Ok(());
         }
+
+        // Process watch entries for all tasks that have watch configs
         for node in &graph.nodes {
             if let NodeKind::Task(task_data) = &node.kind {
                 if let Some(WatchConfig {
                     patterns,
                     debounce_ms,
                     ignore_patterns,
+                    ..
                 }) = &task_data.watch
                 {
                     let mut gbuilder = GlobSetBuilder::new();
@@ -171,6 +191,7 @@ impl Plugin for WatchPlugin {
                     let glob_set = gbuilder.build().map_err(|e| {
                         BodoError::PluginError(format!("Could not build globset: {}", e))
                     })?;
+
                     let mut ignore_builder = GlobSetBuilder::new();
                     let mut have_ignores = false;
                     for ig in ignore_patterns {
