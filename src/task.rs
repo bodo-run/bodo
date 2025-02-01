@@ -1,6 +1,8 @@
+use crate::config::Dependency;
 use crate::config::TaskConfig;
 use crate::plugin::PluginManager;
 use colored::{ColoredString, Colorize};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::io::{BufRead, BufReader};
@@ -145,6 +147,33 @@ struct PrefixSettings {
     padding_width: usize,
 }
 
+#[derive(Debug, Clone)]
+pub enum NodeKind {
+    Task(TaskData),
+    Command(CommandData),
+    ConcurrentGroup(ConcurrentGroupData),
+}
+
+#[derive(Debug, Clone)]
+pub struct TaskData {
+    pub name: String,
+    pub command: Option<String>,
+    pub working_dir: Option<String>,
+    pub env: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CommandData {
+    pub raw_command: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConcurrentGroupData {
+    pub fail_fast: bool,
+    pub max_concurrent: Option<usize>,
+    pub items: Vec<Dependency>,
+}
+
 pub struct TaskManager<'a> {
     pub config: TaskConfig,
     // allow dead code for now
@@ -160,18 +189,61 @@ impl<'a> TaskManager<'a> {
         }
     }
 
-    pub fn run_task(&mut self, task_name: &str) -> Result<(), Box<dyn Error>> {
-        if let Some(command) = &self.config.command {
-            let output_config = None;
-            self.spawn_and_wait(command, task_name, output_config)?;
-        } else {
-            return Err(Box::new(TaskError(format!(
-                "Task '{}' has no command defined",
-                task_name
-            ))));
-        }
+    pub fn run_task(&self, task_name: &str) -> Result<(), Box<dyn Error>> {
+        // Get the node from the registry
+        let node = self.get_node(task_name)?;
 
+        match &node {
+            NodeKind::Task(task_data) => {
+                self.run_single_task(task_data)?;
+            }
+            NodeKind::Command(cmd_data) => {
+                self.run_single_command(cmd_data)?;
+            }
+            NodeKind::ConcurrentGroup(group_data) => {
+                self.run_concurrent_group(group_data)?;
+            }
+        }
         Ok(())
+    }
+
+    fn get_node(&self, task_name: &str) -> Result<NodeKind, Box<dyn Error>> {
+        // For now, simulate node retrieval based on config
+        // This should be replaced with actual graph node lookup
+        if !self.config.concurrently.is_empty() {
+            Ok(NodeKind::ConcurrentGroup(ConcurrentGroupData {
+                fail_fast: self.config.concurrently_options.fail_fast.unwrap_or(false),
+                max_concurrent: self.config.concurrently_options.max_concurrent_tasks,
+                items: self.config.concurrently.clone(),
+            }))
+        } else if let Some(cmd) = &self.config.command {
+            Ok(NodeKind::Task(TaskData {
+                name: task_name.to_string(),
+                command: Some(cmd.clone()),
+                working_dir: self.config.cwd.clone(),
+                env: self.config.env.clone(),
+            }))
+        } else {
+            Err(Box::new(TaskError(format!(
+                "Task '{}' not found",
+                task_name
+            ))))
+        }
+    }
+
+    fn run_single_task(&self, task_data: &TaskData) -> Result<(), Box<dyn Error>> {
+        if let Some(command) = &task_data.command {
+            self.spawn_and_wait(command, &task_data.name, None)?;
+        }
+        Ok(())
+    }
+
+    fn run_single_command(&self, cmd_data: &CommandData) -> Result<(), Box<dyn Error>> {
+        self.spawn_and_wait(&cmd_data.raw_command, "command", None)
+    }
+
+    fn run_concurrent_group(&self, group: &ConcurrentGroupData) -> Result<(), Box<dyn Error>> {
+        run_in_parallel(&group.items, Some(group.fail_fast))
     }
 
     /// Spawns the given command, prefixing all output lines
@@ -330,6 +402,36 @@ impl<'a> TaskManager<'a> {
     }
 }
 
+fn run_in_parallel(tasks: &[Dependency], fail_fast: Option<bool>) -> Result<(), Box<dyn Error>> {
+    let mut handles = Vec::new();
+    let fail_fast = fail_fast.unwrap_or(false);
+
+    for task in tasks {
+        match task {
+            Dependency::Command { command } => {
+                let command = command.clone();
+                let handle =
+                    thread::spawn(move || Command::new("sh").arg("-c").arg(&command).status());
+                handles.push(handle);
+            }
+            Dependency::Task { task } => {
+                // For now, just print that we would run the task
+                println!("Would run task: {}", task);
+            }
+        }
+    }
+
+    for handle in handles {
+        if let Ok(status) = handle.join().unwrap() {
+            if !status.success() && fail_fast {
+                return Err(Box::new(TaskError("A concurrent task failed".to_string())));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,6 +448,8 @@ mod tests {
             watch: None,
             timeout: None,
             env: HashMap::new(),
+            concurrently_options: Default::default(),
+            concurrently: Vec::new(),
         };
         let plugin_manager = PluginManager::new();
 

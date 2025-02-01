@@ -1,5 +1,5 @@
 use crate::{
-    config::{BodoConfig, TaskConfig},
+    config::{BodoConfig, ConcurrentlyOptions, Dependency, TaskConfig},
     errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
     plugin::{PluginConfig, PluginManager},
@@ -7,6 +7,7 @@ use crate::{
     task::TaskManager,
     Result,
 };
+use std::collections::HashMap;
 
 /// Simplified GraphManager that no longer references ScriptLoader.
 pub struct GraphManager {
@@ -47,6 +48,50 @@ impl GraphManager {
         }
 
         Ok(&self.graph)
+    }
+
+    pub fn get_task_config(&self, task_name: &str) -> Result<TaskConfig> {
+        // Look up the node ID in the task registry
+        let node_id = self
+            .graph
+            .task_registry
+            .get(task_name)
+            .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?;
+
+        // Grab the node from the graph
+        let node = self.graph.nodes.get(*node_id as usize).ok_or_else(|| {
+            BodoError::PluginError(format!("Invalid node ID for task '{}'", task_name))
+        })?;
+
+        // Ensure it's actually a Task node
+        let task_data = match &node.kind {
+            NodeKind::Task(t) => t,
+            _ => {
+                return Err(BodoError::PluginError(format!(
+                    "Node '{}' is not a Task node",
+                    task_name
+                )));
+            }
+        };
+
+        // Convert TaskData -> TaskConfig
+        // (If you want pre_deps/post_deps, you must store them somewhere,
+        //  or you can return empty arrays as shown here.)
+        Ok(TaskConfig {
+            description: task_data.description.clone(),
+            command: task_data.command.clone(),
+            cwd: task_data.working_dir.clone(),
+            env: task_data.env.clone(),
+            // Set these to empty if you do not store them in metadata:
+            pre_deps: Vec::new(),
+            post_deps: Vec::new(),
+            watch: None,
+            timeout: None,
+
+            // If your `TaskConfig` also has concurrency fields, set them:
+            concurrently_options: Default::default(),
+            concurrently: vec![],
+        })
     }
 
     pub async fn initialize(&mut self) -> Result<()> {
@@ -110,42 +155,74 @@ impl GraphManager {
     }
 
     pub async fn run_task(&self, task_name: &str) -> Result<()> {
-        let task = if let Some(node_id) = self.graph.task_registry.get(task_name) {
-            // First try to find a task by exact name in the registry
-            let node = self
-                .graph
-                .nodes
-                .get(*node_id as usize)
-                .ok_or_else(|| BodoError::PluginError("Invalid node ID".to_string()))?;
-            if let NodeKind::Task(task_data) = &node.kind {
-                task_data
-            } else {
-                return Err(BodoError::PluginError(
-                    "Registry points to non-task node".to_string(),
-                ));
+        let node_id = self
+            .graph
+            .task_registry
+            .get(task_name)
+            .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?;
+
+        let node = &self.graph.nodes[*node_id as usize];
+        match &node.kind {
+            NodeKind::Task(task_data) => {
+                // Create a task config from the task data
+                let task_config = TaskConfig {
+                    description: task_data.description.clone(),
+                    command: task_data.command.clone(),
+                    cwd: task_data.working_dir.clone(),
+                    pre_deps: Vec::new(), // TODO: Implement dependency resolution
+                    post_deps: Vec::new(),
+                    watch: None,
+                    timeout: None,
+                    env: task_data.env.clone(),
+                    concurrently_options: Default::default(),
+                    concurrently: Vec::new(),
+                };
+
+                let task_manager = TaskManager::new(task_config, &self.plugin_manager);
+                task_manager.run_task(task_name).map_err(|e| {
+                    BodoError::PluginError(format!("Failed to run task {}: {}", task_name, e))
+                })?;
             }
-        } else {
-            // If not found in registry, try to find by name
-            self.get_task_by_name(task_name)
-                .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?
-        };
+            NodeKind::ConcurrentGroup(group_data) => {
+                // Get concurrent items from metadata
+                let concurrent_items: Vec<Dependency> = node
+                    .metadata
+                    .get("concurrently_json")
+                    .and_then(|json| serde_json::from_str(json).ok())
+                    .unwrap_or_default();
 
-        // Create a task config from the task data
-        let task_config = TaskConfig {
-            description: task.description.clone(),
-            command: task.command.clone(),
-            cwd: task.working_dir.clone(),
-            pre_deps: Vec::new(), // TODO: Implement dependency resolution
-            post_deps: Vec::new(),
-            watch: None,
-            timeout: None,
-            env: task.env.clone(),
-        };
+                // For concurrent groups, create a task config with the concurrent settings
+                let task_config = TaskConfig {
+                    description: None,
+                    command: None,
+                    cwd: None,
+                    pre_deps: Vec::new(),
+                    post_deps: Vec::new(),
+                    watch: None,
+                    timeout: None,
+                    env: HashMap::new(),
+                    concurrently_options: ConcurrentlyOptions {
+                        fail_fast: Some(group_data.fail_fast),
+                        max_concurrent_tasks: group_data.max_concurrent,
+                    },
+                    concurrently: concurrent_items,
+                };
 
-        let mut task_manager = TaskManager::new(task_config, &self.plugin_manager);
-        task_manager.run_task(task_name).map_err(|e| {
-            BodoError::PluginError(format!("Failed to run task {}: {}", task_name, e))
-        })?;
+                let task_manager = TaskManager::new(task_config, &self.plugin_manager);
+                task_manager.run_task(task_name).map_err(|e| {
+                    BodoError::PluginError(format!(
+                        "Failed to run concurrent group {}: {}",
+                        task_name, e
+                    ))
+                })?;
+            }
+            NodeKind::Command(_) => {
+                return Err(BodoError::PluginError(format!(
+                    "Cannot directly run command node '{}'",
+                    task_name
+                )));
+            }
+        }
 
         Ok(())
     }

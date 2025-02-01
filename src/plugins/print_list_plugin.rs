@@ -12,6 +12,7 @@ use crate::{
 /// - If `script_name` is non-empty and `is_heading` is true, this line is a heading (e.g., "Build Script").
 /// - If `is_heading` is false, this line is a task (left column plus optional description).
 struct TaskLine {
+    #[allow(dead_code)] // no sure why this is dead code
     script_name: String,
     is_heading: bool,
     left_col: String,

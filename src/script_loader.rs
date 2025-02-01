@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+use crate::graph::ConcurrentGroupData;
 use crate::{
     config::{BodoConfig, Dependency, TaskConfig},
     errors::{BodoError, Result},
@@ -236,7 +237,6 @@ impl ScriptLoader {
 
         Ok(())
     }
-
     fn create_task_node(
         &self,
         graph: &mut Graph,
@@ -245,17 +245,44 @@ impl ScriptLoader {
         name: &str,
         cfg: &TaskConfig,
     ) -> u64 {
+        // If it has a `concurrently` array, build a concurrency group node
+        if !cfg.concurrently.is_empty() {
+            // We'll store concurrency info in metadata or create a concurrency node here
+            let node_id = graph.add_node(NodeKind::ConcurrentGroup(ConcurrentGroupData {
+                child_nodes: vec![],
+                fail_fast: cfg.concurrently_options.fail_fast.unwrap_or(false),
+                max_concurrent: cfg.concurrently_options.max_concurrent_tasks,
+                timeout_secs: None,
+            }));
+            // You can store the tasks/commands from `cfg.concurrently` in `metadata`,
+            // so the `ConcurrentPlugin` can expand them properly:
+            let node = graph.nodes.get_mut(node_id as usize).unwrap();
+            node.metadata.insert(
+                "concurrently_json".to_string(),
+                serde_json::to_string(&cfg.concurrently).unwrap_or_default(),
+            );
+            node.metadata
+                .insert("task_name".to_string(), name.to_string());
+            node.metadata
+                .insert("script_id".to_string(), script_id.to_string());
+            node.metadata.insert(
+                "script_display_name".to_string(),
+                script_display_name.to_string(),
+            );
+            return node_id;
+        }
+
+        // Otherwise, it's a normal task
         let task_data = TaskData {
             name: name.to_string(),
             description: cfg.description.clone(),
             command: cfg.command.clone(),
             working_dir: cfg.cwd.clone(),
+            env: cfg.env.clone(),
             is_default: name == "default",
             script_id: script_id.to_string(),
             script_display_name: script_display_name.to_string(),
-            env: cfg.env.clone(),
         };
-
         graph.add_node(NodeKind::Task(task_data))
     }
 

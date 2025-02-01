@@ -17,6 +17,12 @@ pub struct BodoConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ConcurrentlyOptions {
+    pub fail_fast: Option<bool>,
+    pub max_concurrent_tasks: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TaskConfig {
     pub description: Option<String>,
     pub command: Option<String>,
@@ -25,6 +31,10 @@ pub struct TaskConfig {
     pub pre_deps: Vec<Dependency>,
     #[serde(default)]
     pub post_deps: Vec<Dependency>,
+    #[serde(default)]
+    pub concurrently_options: ConcurrentlyOptions,
+    #[serde(default)]
+    pub concurrently: Vec<Dependency>,
     pub watch: Option<WatchConfig>,
     pub timeout: Option<String>,
     #[serde(default)]
