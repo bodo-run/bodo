@@ -1,23 +1,45 @@
 use async_trait::async_trait;
 use std::any::Any;
+use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
 
 use crate::{
     errors::{BodoError, Result},
     graph::{CommandData, ConcurrentGroupData, Graph, NodeId, NodeKind, TaskData},
-    plugin::Plugin,
+    plugin::{Plugin, PluginConfig},
     process::ProcessManager,
 };
 
 /// ExecutionPlugin is the final step in the plugin chain:
 /// it takes the fully built & transformed graph (topological order)
 /// and actually runs the tasks/commands.
-pub struct ExecutionPlugin;
+pub struct ExecutionPlugin {
+    task_name: Option<String>,
+}
 
 impl ExecutionPlugin {
     pub fn new() -> Self {
-        Self
+        Self { task_name: None }
+    }
+
+    /// Helper function to find all dependencies of a given node (including the node itself)
+    fn get_dependency_subgraph(&self, graph: &Graph, start_node: NodeId) -> HashSet<NodeId> {
+        let mut deps = HashSet::new();
+        let mut stack = vec![start_node];
+
+        while let Some(node_id) = stack.pop() {
+            if deps.insert(node_id) {
+                // For each edge that points TO this node, add its source
+                for edge in &graph.edges {
+                    if edge.to == node_id {
+                        stack.push(edge.from);
+                    }
+                }
+            }
+        }
+
+        deps
     }
 }
 
@@ -43,16 +65,46 @@ impl Plugin for ExecutionPlugin {
         self
     }
 
+    async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
+        if let Some(options) = &config.options {
+            if let Some(task) = options.get("task") {
+                if let Some(task_name) = task.as_str() {
+                    self.task_name = Some(task_name.to_string());
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// We do our "full run" during on_after_run, so that:
     /// - on_graph_build can finalize node transformations
     /// - watchers or other allocations can be set up in earlier phases
     /// - we only actually "run" at the last step in the lifecycle.
     async fn on_after_run(&mut self, graph: &mut Graph) -> Result<()> {
+        // Get the requested task from stored task_name
+        let task_name = self
+            .task_name
+            .as_deref()
+            .ok_or_else(|| BodoError::PluginError("No task specified for execution".to_string()))?;
+
+        // Find the task node
+        let task_node_id = *graph
+            .task_registry
+            .get(task_name)
+            .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?;
+
+        // Get all dependencies of this task
+        let deps = self.get_dependency_subgraph(graph, task_node_id);
+
         // 1) Sort the graph topologically so we respect dependencies
         let sorted = graph.topological_sort()?;
 
-        // 2) Walk each node in topological order
+        // 2) Walk each node in topological order, but only process nodes in our dependency subgraph
         for node_id in sorted {
+            if !deps.contains(&node_id) {
+                continue;
+            }
+
             let node = &graph.nodes[node_id as usize];
 
             // Skip children that were marked by the concurrency plugin
