@@ -60,10 +60,7 @@ jobs:
     name: Lint
     needs: determine-changes
     runs-on: ubuntu-latest
-    if: >
-      needs.determine-changes.outputs.only_docs != 'true' &&
-      needs.determine-changes.outputs.only_tests != 'true' &&
-      needs.determine-changes.outputs.only_src != 'true'
+    if: needs.determine-changes.outputs.only_docs != 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Setup Rust
@@ -227,7 +224,8 @@ jobs:
     name: Code Coverage
     needs: determine-changes
     runs-on: ubuntu-latest
-    if: needs.determine-changes.outputs.only_docs != 'true'
+    # only run on pull requests
+    if: github.event_name == 'pull_request' && needs.determine-changes.outputs.only_docs != 'true'
     env:
       CARGO_TERM_COLOR: always
       RUSTFLAGS: "-Cinstrument-coverage"
