@@ -18,11 +18,13 @@ pub enum ColorSpec {
     BrightWhite,
 }
 
+use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, RwLock,
 };
+use std::thread;
 
 use crate::errors::BodoError;
 
@@ -109,9 +111,38 @@ impl ProcessManager {
                 let c_stop_signal = Arc::clone(&stop_for_threads);
                 let c_children = Arc::clone(&children_for_threads);
 
-                // Spawn a thread to wait on the child
+                // Spawn a thread to wait on the child and handle its output
                 let handle = std::thread::spawn(move || {
                     if let Some(mut child) = child {
+                        // Create stdout reader thread
+                        let stdout = child.stdout.take();
+                        let name_for_stdout = mc_name.clone();
+                        let stdout_handle = stdout.map(|stdout| {
+                            thread::spawn(move || {
+                                let reader = BufReader::new(stdout);
+                                for line in reader.lines() {
+                                    if let Ok(line) = line {
+                                        println!("[{}] {}", name_for_stdout, line);
+                                    }
+                                }
+                            })
+                        });
+
+                        // Create stderr reader thread
+                        let stderr = child.stderr.take();
+                        let name_for_stderr = mc_name.clone();
+                        let stderr_handle = stderr.map(|stderr| {
+                            thread::spawn(move || {
+                                let reader = BufReader::new(stderr);
+                                for line in reader.lines() {
+                                    if let Ok(line) = line {
+                                        eprintln!("[{}] {}", name_for_stderr, line);
+                                    }
+                                }
+                            })
+                        });
+
+                        // Wait for the child process to finish
                         match child.wait() {
                             Ok(status) => {
                                 if !status.success() {
@@ -152,6 +183,14 @@ impl ProcessManager {
                                     }
                                 }
                             }
+                        }
+
+                        // Wait for output reader threads to finish
+                        if let Some(handle) = stdout_handle {
+                            let _ = handle.join();
+                        }
+                        if let Some(handle) = stderr_handle {
+                            let _ = handle.join();
                         }
                     }
                 });

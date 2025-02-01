@@ -1,19 +1,16 @@
 use crate::{
     graph::{Graph, NodeKind},
-    plugin::{Plugin, PluginManager},
+    plugin::Plugin,
     Result,
 };
 use async_trait::async_trait;
 use std::any::Any;
 
-pub struct WatchPlugin {
-    #[allow(dead_code)]
-    plugin_manager: PluginManager,
-}
+pub struct WatchPlugin {}
 
 impl WatchPlugin {
-    pub fn new(plugin_manager: PluginManager) -> Self {
-        Self { plugin_manager }
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
@@ -32,7 +29,7 @@ impl Plugin for WatchPlugin {
     }
 
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
-        // Find tasks with watch config
+        // Find tasks with watch configuration
         let watch_tasks: Vec<_> = graph
             .nodes
             .iter()
@@ -49,7 +46,7 @@ impl Plugin for WatchPlugin {
             })
             .collect();
 
-        // For now, just print the tasks that would be watched
+        // For now, simply print the tasks that would be watched
         for task in watch_tasks {
             println!(
                 "Would watch task: {} with paths: {:?}",

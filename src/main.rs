@@ -1,38 +1,24 @@
 use bodo::{
-    config::BodoConfig, errors::BodoError, manager::GraphManager,
-    plugins::print_list_plugin::PrintListPlugin,
+    cli::{get_task_name, Args},
+    config::BodoConfig,
+    manager::GraphManager,
+    plugins::{
+        concurrent_plugin::ConcurrentPlugin, env_plugin::EnvPlugin,
+        execution_plugin::ExecutionPlugin, path_plugin::PathPlugin, prefix_plugin::PrefixPlugin,
+        print_list_plugin::PrintListPlugin, timeout_plugin::TimeoutPlugin,
+        watch_plugin::WatchPlugin,
+    },
+    BodoError,
 };
 use clap::Parser;
 use std::collections::HashMap;
 
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// List all available tasks
-    #[arg(short, long)]
-    list: bool,
-
-    /// Watch mode - rerun task on file changes
-    #[arg(short, long)]
-    watch: bool,
-
-    /// Task to run (defaults to default_task)
-    task: Option<String>,
-
-    /// Subtask to run
-    subtask: Option<String>,
-
-    /// Additional arguments passed to the task
-    #[arg(last = true)]
-    args: Vec<String>,
-}
-
 #[tokio::main]
 async fn main() {
-    let result = async {
+    let result: Result<(), BodoError> = async {
         let args = Args::parse();
 
-        // Load configuration
+        // Normal flow below
         let config = BodoConfig {
             root_script: None,
             scripts_dirs: Some(vec!["scripts/".into()]),
@@ -48,27 +34,17 @@ async fn main() {
             return Ok(());
         }
 
-        // Parse task name and subtask
-        let task_name = if let Some(task) = args.task {
-            if let Some(subtask) = args.subtask {
-                format!("{} {}", task, subtask)
-            } else {
-                task
-            }
-        } else {
-            // Check if default task exists
-            if !graph_manager.task_exists("default") {
-                return Err(BodoError::NoTaskSpecified);
-            }
-            "default".to_string()
-        };
-
-        // Check if task exists
-        if !graph_manager.task_exists(&task_name) {
-            return Err(BodoError::TaskNotFound(task_name));
-        }
+        // register plugins in this specific order:
+        graph_manager.register_plugin(Box::new(EnvPlugin::new()));
+        graph_manager.register_plugin(Box::new(PathPlugin::new()));
+        graph_manager.register_plugin(Box::new(ConcurrentPlugin::new()));
+        graph_manager.register_plugin(Box::new(PrefixPlugin::new()));
+        graph_manager.register_plugin(Box::new(WatchPlugin::new()));
+        graph_manager.register_plugin(Box::new(ExecutionPlugin::new()));
+        graph_manager.register_plugin(Box::new(TimeoutPlugin::new()));
 
         // Run the task
+        let task_name = get_task_name(&args, &graph_manager)?;
         graph_manager.run_task(&task_name).await?;
 
         Ok(())

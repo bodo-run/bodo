@@ -10,6 +10,12 @@ use humantime::parse_duration;
 
 pub struct TimeoutPlugin;
 
+impl TimeoutPlugin {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 #[async_trait]
 impl Plugin for TimeoutPlugin {
     fn name(&self) -> &'static str {

@@ -4,9 +4,7 @@ use bodo::{
     graph::{CommandData, Graph, NodeKind, TaskData},
     plugin::{Plugin, PluginConfig, PluginManager},
     plugins::{
-        execution_plugin::ExecutionPlugin,
-        path_plugin::PathPlugin,
-        timeout_plugin::TimeoutPlugin,
+        execution_plugin::ExecutionPlugin, path_plugin::PathPlugin, timeout_plugin::TimeoutPlugin,
     },
     Result,
 };
