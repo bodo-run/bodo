@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use std::any::Any;
 
 use crate::{
@@ -19,13 +18,22 @@ impl PathPlugin {
     }
 }
 
-#[async_trait]
+impl Default for PathPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Plugin for PathPlugin {
     fn name(&self) -> &'static str {
         "PathPlugin"
     }
 
-    async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
+    fn priority(&self) -> i32 {
+        85
+    }
+
+    fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
         if let Some(options) = &config.options {
             if let Some(paths) = options.get("default_paths") {
                 if let Some(arr) = paths.as_array() {
@@ -39,7 +47,7 @@ impl Plugin for PathPlugin {
         Ok(())
     }
 
-    async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
+    fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
         for node in &mut graph.nodes {
             match &mut node.kind {
                 NodeKind::Task(task_data) => {

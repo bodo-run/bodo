@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use std::{any::Any, collections::HashMap};
 
 use crate::{
@@ -17,16 +16,28 @@ impl EnvPlugin {
     }
 }
 
-#[async_trait]
+impl Default for EnvPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Plugin for EnvPlugin {
     fn name(&self) -> &'static str {
         "EnvPlugin"
     }
 
-    async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
+    fn priority(&self) -> i32 {
+        90
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
         if let Some(options) = &config.options {
             if let Some(val) = options.get("env") {
-                // Parse env object: { "FOO": "bar", "XYZ": "123" }
                 if let Some(obj) = val.as_object() {
                     let mut map = HashMap::new();
                     for (k, v) in obj {
@@ -41,13 +52,12 @@ impl Plugin for EnvPlugin {
         Ok(())
     }
 
-    async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
+    fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
         if let Some(ref global_env) = self.global_env {
             for node in &mut graph.nodes {
                 match &mut node.kind {
                     NodeKind::Task(task_data) => {
                         for (k, v) in global_env {
-                            // Only set if not already set
                             if !task_data.env.contains_key(k) {
                                 task_data.env.insert(k.clone(), v.clone());
                             }
@@ -60,16 +70,10 @@ impl Plugin for EnvPlugin {
                             }
                         }
                     }
-                    NodeKind::ConcurrentGroup(_) => {
-                        // No direct env for concurrent groups
-                    }
+                    NodeKind::ConcurrentGroup(_) => {}
                 }
             }
         }
         Ok(())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }

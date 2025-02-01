@@ -4,17 +4,25 @@ use std::{error::Error, fmt, io};
 pub enum BodoError {
     IoError(io::Error),
     WatcherError(String),
+    TaskNotFound(String),
     PluginError(String),
     SerdeError(serde_json::Error),
+    YamlError(serde_yaml::Error),
+    NoTaskSpecified,
 }
 
 impl fmt::Display for BodoError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BodoError::IoError(err) => write!(f, "IO error: {}", err),
-            BodoError::WatcherError(err) => write!(f, "Watcher error: {}", err),
+            BodoError::IoError(err) => write!(f, "{}", err),
+            BodoError::WatcherError(err) => write!(f, "{}", err),
+            BodoError::TaskNotFound(_) => write!(f, "not found"),
             BodoError::PluginError(err) => write!(f, "Plugin error: {}", err),
-            BodoError::SerdeError(err) => write!(f, "JSON error: {}", err),
+            BodoError::SerdeError(err) => write!(f, "{}", err),
+            BodoError::YamlError(err) => write!(f, "{}", err),
+            BodoError::NoTaskSpecified => {
+                write!(f, "No task specified and no scripts/script.yaml found")
+            }
         }
     }
 }
@@ -36,6 +44,12 @@ impl From<notify::Error> for BodoError {
 impl From<serde_json::Error> for BodoError {
     fn from(err: serde_json::Error) -> Self {
         BodoError::SerdeError(err)
+    }
+}
+
+impl From<serde_yaml::Error> for BodoError {
+    fn from(err: serde_yaml::Error) -> Self {
+        BodoError::YamlError(err)
     }
 }
 

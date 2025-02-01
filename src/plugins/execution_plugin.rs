@@ -1,169 +1,217 @@
-use async_trait::async_trait;
+use colored::Colorize;
+use log::debug;
 use std::any::Any;
-use std::time::Duration;
-use tokio::{sync::mpsc, time::timeout};
+use terminal_size::terminal_size;
 
 use crate::{
-    errors::BodoError,
-    graph::{ConcurrentGroupData, Graph, NodeKind},
-    plugin::{Plugin, PluginManager},
-    Result,
+    errors::{BodoError, Result},
+    graph::{ConcurrentGroupData, Graph, NodeId, NodeKind},
+    plugin::{Plugin, PluginConfig},
+    process::ProcessManager,
 };
 
-pub struct ExecutionPlugin;
+pub struct ExecutionPlugin {
+    task_name: Option<String>,
+}
 
-#[async_trait]
+impl ExecutionPlugin {
+    pub fn new() -> Self {
+        Self { task_name: None }
+    }
+
+    fn get_dependency_subgraph(
+        &self,
+        graph: &Graph,
+        start_node: NodeId,
+    ) -> std::collections::HashSet<NodeId> {
+        let mut deps = std::collections::HashSet::new();
+        let mut stack = vec![start_node];
+        while let Some(node_id) = stack.pop() {
+            if deps.insert(node_id) {
+                for edge in &graph.edges {
+                    if edge.to == node_id {
+                        stack.push(edge.from);
+                    }
+                }
+            }
+        }
+        deps
+    }
+
+    fn print_command(&self, cmd: &str) {
+        let width = terminal_size().map_or(80, |size| size.0 .0 as usize);
+        let max_length = width.saturating_sub(7);
+        let cmd_line = cmd.lines().next().unwrap_or(cmd);
+        let truncated = if cmd_line.len() > max_length {
+            format!("{}...", &cmd_line[..max_length.saturating_sub(3)])
+        } else {
+            cmd_line.to_string()
+        };
+        println!("{} {}", "$".dimmed(), truncated.green());
+    }
+
+    fn get_prefix_settings(
+        &self,
+        node: &crate::graph::Node,
+    ) -> (bool, Option<String>, Option<String>) {
+        let prefix_enabled = node
+            .metadata
+            .get("prefix_enabled")
+            .map(|v| v == "true")
+            .unwrap_or(false);
+        let prefix_label = node.metadata.get("prefix_label").cloned();
+        let prefix_color = node.metadata.get("prefix_color").cloned();
+        (prefix_enabled, prefix_label, prefix_color)
+    }
+}
+
+impl Default for ExecutionPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Plugin for ExecutionPlugin {
     fn name(&self) -> &'static str {
         "ExecutionPlugin"
     }
 
-    async fn on_before_run(&mut self, graph: &mut Graph) -> Result<()> {
-        if graph.has_cycle() {
-            return Err(BodoError::PluginError(
-                "Cannot run with cycles in the graph".to_string(),
-            ));
-        }
-        Ok(())
+    fn priority(&self) -> i32 {
+        95
     }
 
     fn as_any(&self) -> &dyn Any {
         self
     }
-}
 
-/// Execute the graph in topological order, handling concurrent groups
-pub async fn execute_graph(manager: &mut PluginManager, graph: &mut Graph) -> Result<()> {
-    let order = graph.topological_sort()?;
-    let mut done = vec![false; graph.nodes.len()];
-
-    for node_id in order {
-        let node_idx = node_id as usize;
-        if done[node_idx] {
-            continue;
-        }
-
-        manager.on_run_node(node_id, graph).await?;
-
-        // Clone the node kind to avoid borrow issues
-        let node_kind = graph.nodes[node_idx].kind.clone();
-        match node_kind {
-            NodeKind::Task(task_data) => {
-                println!("Running task: {}", task_data.name);
-                if let Some(cmd) = &task_data.command {
-                    // Here we'd use tokio::process::Command to actually run the command
-                    // For now we just print
-                    println!("Would execute: {}", cmd);
+    fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
+        if let Some(options) = &config.options {
+            if let Some(task) = options.get("task") {
+                if let Some(task_name) = task.as_str() {
+                    debug!("Initializing ExecutionPlugin with task: {}", task_name);
+                    self.task_name = Some(task_name.to_string());
                 }
-                done[node_idx] = true;
-            }
-            NodeKind::Command(cmd_data) => {
-                println!("Running command: {}", cmd_data.raw_command);
-                // Here we'd use tokio::process::Command
-                done[node_idx] = true;
-            }
-            NodeKind::ConcurrentGroup(group_data) => {
-                execute_concurrent_group(manager, graph, node_id, &group_data, &mut done).await?;
             }
         }
+        Ok(())
     }
 
-    Ok(())
+    fn on_after_run(&mut self, graph: &mut Graph) -> Result<()> {
+        let task_name = self
+            .task_name
+            .as_deref()
+            .ok_or_else(|| BodoError::PluginError("No task specified for execution".to_string()))?;
+
+        debug!("Starting execution of task: {}", task_name);
+
+        let task_node_id = *graph
+            .task_registry
+            .get(task_name)
+            .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?;
+
+        let deps = self.get_dependency_subgraph(graph, task_node_id);
+        let sorted = graph.topological_sort()?;
+
+        for node_id in sorted {
+            if !deps.contains(&node_id) {
+                continue;
+            }
+            let node = &graph.nodes[node_id as usize];
+            if node.metadata.get("skip_main_pass") == Some(&"true".to_string()) {
+                debug!("Skipping node {} (skip_main_pass=true)", node_id);
+                continue;
+            }
+            match &node.kind {
+                NodeKind::Task(task_data) => {
+                    if let Some(cmd) = &task_data.command {
+                        debug!("Executing task: {}", task_data.name);
+                        self.print_command(cmd);
+                        let mut pm = ProcessManager::new(false);
+                        pm.spawn_command(&task_data.name, cmd, false, None, None)
+                            .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
+                        pm.run_concurrently()
+                            .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
+                    }
+                }
+                NodeKind::Command(cmd_data) => {
+                    debug!("Executing command node: {}", node_id);
+                    self.print_command(&cmd_data.raw_command);
+                    let mut pm = ProcessManager::new(false);
+                    let label = format!("cmd-{}", node_id);
+                    pm.spawn_command(&label, &cmd_data.raw_command, false, None, None)
+                        .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
+                    pm.run_concurrently()
+                        .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
+                }
+                NodeKind::ConcurrentGroup(group_data) => {
+                    debug!("Executing concurrent group: {}", node_id);
+                    run_concurrent_group(group_data, graph, self)?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
-async fn execute_concurrent_group(
-    _manager: &mut PluginManager,
-    graph: &mut Graph,
-    group_id: u64,
+fn run_concurrent_group(
     group_data: &ConcurrentGroupData,
-    done: &mut [bool],
+    graph: &Graph,
+    plugin: &ExecutionPlugin,
 ) -> Result<()> {
-    let children = &group_data.child_nodes;
-    if children.is_empty() {
-        done[group_id as usize] = true;
-        return Ok(());
-    }
+    let mut pm = ProcessManager::new(group_data.fail_fast);
+    let max_concurrent = group_data.max_concurrent.unwrap_or(usize::MAX);
 
-    let (tx, mut rx) = mpsc::unbounded_channel::<Result<()>>();
-    let mut handles = Vec::new();
+    debug!(
+        "Running concurrent group with max_concurrent={}, fail_fast={}",
+        max_concurrent, group_data.fail_fast
+    );
+    let mut pending = vec![];
 
-    // Spawn tasks up to max_concurrent limit
-    let max_concurrent = group_data.max_concurrent.unwrap_or(children.len());
-    let mut active = 0;
-    let mut next_child = 0;
-
-    while active > 0 || next_child < children.len() {
-        // Spawn new tasks if under limit
-        while active < max_concurrent && next_child < children.len() {
-            let child_id = children[next_child];
-            let tx = tx.clone();
-            let child_node = graph.nodes[child_id as usize].kind.clone();
-
-            let handle = tokio::spawn(async move {
-                match child_node {
-                    NodeKind::Task(t) => {
-                        println!("(Concurrent) Running task: {}", t.name);
-                        if let Some(cmd) = t.command {
-                            println!("Would execute: {}", cmd);
-                        }
-                        tx.send(Ok(())).unwrap_or_default();
-                    }
-                    NodeKind::Command(c) => {
-                        println!("(Concurrent) Running command: {}", c.raw_command);
-                        tx.send(Ok(())).unwrap_or_default();
-                    }
-                    NodeKind::ConcurrentGroup(_) => {
-                        tx.send(Err(BodoError::PluginError(
-                            "Nested concurrency not supported".to_string(),
-                        )))
-                        .unwrap_or_default();
-                    }
-                }
-            });
-
-            handles.push(handle);
-            active += 1;
-            next_child += 1;
+    for &child_id in &group_data.child_nodes {
+        if pending.len() >= max_concurrent {
+            pm.run_concurrently()
+                .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
+            pm = ProcessManager::new(group_data.fail_fast);
+            pending.clear();
         }
-
-        // Wait for a task to complete
-        if let Some(result) = rx.recv().await {
-            active -= 1;
-            match result {
-                Ok(_) => {}
-                Err(e) => {
-                    if group_data.fail_fast {
-                        // Cancel remaining tasks
-                        for handle in handles {
-                            handle.abort();
-                        }
-                        return Err(e);
-                    }
+        let child_node = &graph.nodes[child_id as usize];
+        let (prefix_enabled, prefix_label, prefix_color) = plugin.get_prefix_settings(child_node);
+        match &child_node.kind {
+            NodeKind::Task(t) => {
+                if let Some(cmd) = &t.command {
+                    pm.spawn_command(
+                        &t.name,
+                        cmd,
+                        prefix_enabled,
+                        prefix_label.clone(),
+                        prefix_color.clone(),
+                    )
+                    .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
+                    pending.push(t.name.clone());
                 }
+            }
+            NodeKind::Command(cmd) => {
+                let label = format!("cmd-{}", child_node.id);
+                pm.spawn_command(
+                    &label,
+                    &cmd.raw_command,
+                    prefix_enabled,
+                    prefix_label.clone(),
+                    prefix_color.clone(),
+                )
+                .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
+                pending.push(label);
+            }
+            NodeKind::ConcurrentGroup(sub_group) => {
+                // Nested concurrency
+                run_concurrent_group(sub_group, graph, plugin)?;
             }
         }
     }
 
-    // Apply timeout if specified
-    if let Some(timeout_secs) = group_data.timeout_secs {
-        match timeout(
-            Duration::from_secs(timeout_secs),
-            futures::future::join_all(handles),
-        )
-        .await
-        {
-            Ok(_) => {}
-            Err(_) => {
-                return Err(BodoError::PluginError(format!(
-                    "Concurrent group timed out after {} seconds",
-                    timeout_secs
-                )));
-            }
-        }
-    } else {
-        futures::future::join_all(handles).await;
+    if !pending.is_empty() {
+        pm.run_concurrently()
+            .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
     }
-
-    done[group_id as usize] = true;
     Ok(())
 }

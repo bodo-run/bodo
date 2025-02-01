@@ -1,0 +1,14 @@
+output_dir: "./repo-serialized"
+
+ignore_patterns:
+  - "docs/"
+  - "target/"
+  - "DESIGN.md"
+
+priority_rules:
+  - score: 100
+    pattern: "^src/"
+  - score: 90
+    pattern: "^src/plugins/"
+  - score: 40
+    pattern: "^tests/"
