@@ -3,7 +3,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-use crate::graph::ConcurrentGroupData;
 use crate::{
     config::{BodoConfig, Dependency, TaskConfig},
     errors::{BodoError, Result},
@@ -245,34 +244,7 @@ impl ScriptLoader {
         name: &str,
         cfg: &TaskConfig,
     ) -> u64 {
-        // If it has a `concurrently` array, build a concurrency group node
-        if !cfg.concurrently.is_empty() {
-            // We'll store concurrency info in metadata or create a concurrency node here
-            let node_id = graph.add_node(NodeKind::ConcurrentGroup(ConcurrentGroupData {
-                child_nodes: vec![],
-                fail_fast: cfg.concurrently_options.fail_fast.unwrap_or(false),
-                max_concurrent: cfg.concurrently_options.max_concurrent_tasks,
-                timeout_secs: None,
-            }));
-            // You can store the tasks/commands from `cfg.concurrently` in `metadata`,
-            // so the `ConcurrentPlugin` can expand them properly:
-            let node = graph.nodes.get_mut(node_id as usize).unwrap();
-            node.metadata.insert(
-                "concurrently_json".to_string(),
-                serde_json::to_string(&cfg.concurrently).unwrap_or_default(),
-            );
-            node.metadata
-                .insert("task_name".to_string(), name.to_string());
-            node.metadata
-                .insert("script_id".to_string(), script_id.to_string());
-            node.metadata.insert(
-                "script_display_name".to_string(),
-                script_display_name.to_string(),
-            );
-            return node_id;
-        }
-
-        // Otherwise, it's a normal task
+        // Create a normal task node
         let task_data = TaskData {
             name: name.to_string(),
             description: cfg.description.clone(),
@@ -282,8 +254,33 @@ impl ScriptLoader {
             is_default: name == "default",
             script_id: script_id.to_string(),
             script_display_name: script_display_name.to_string(),
+            watch: None,
         };
-        graph.add_node(NodeKind::Task(task_data))
+
+        let node_id = graph.add_node(NodeKind::Task(task_data));
+
+        // If there's a concurrently array, store it in metadata
+        if !cfg.concurrently.is_empty() {
+            let node = graph.nodes.get_mut(node_id as usize).unwrap();
+
+            // Store concurrency array as JSON
+            node.metadata.insert(
+                "concurrently".to_string(),
+                serde_json::to_string(&cfg.concurrently).unwrap_or_default(),
+            );
+
+            // Store concurrency options
+            if let Some(ff) = cfg.concurrently_options.fail_fast {
+                node.metadata
+                    .insert("fail_fast".to_string(), ff.to_string());
+            }
+            if let Some(mc) = cfg.concurrently_options.max_concurrent_tasks {
+                node.metadata
+                    .insert("max_concurrent".to_string(), mc.to_string());
+            }
+        }
+
+        node_id
     }
 
     fn register_task(

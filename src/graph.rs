@@ -32,6 +32,8 @@ pub struct TaskData {
     pub script_id: String,
     /// The display name of the script this task came from
     pub script_display_name: String,
+    /// Watch paths for file changes
+    pub watch: Option<Vec<String>>,
 }
 
 /// Represents data for a Command node.

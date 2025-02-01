@@ -6,7 +6,6 @@ pub mod plugin;
 pub mod plugins;
 pub mod process;
 pub mod script_loader;
-pub mod task;
 
 pub use config::BodoConfig;
 pub use errors::{BodoError, Result};

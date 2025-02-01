@@ -18,22 +18,18 @@ pub enum ColorSpec {
     BrightWhite,
 }
 
-use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, RwLock,
 };
-use std::thread::{self, JoinHandle};
 
 use crate::errors::BodoError;
-use colored::Colorize;
 
 /// Holds a single child process plus some metadata.
 struct ManagedChild {
     name: String,
     child: Option<Child>,
-    color: Option<ColorSpec>,
 }
 
 /// A "fail fast" process manager that can spawn concurrent processes
@@ -43,7 +39,7 @@ pub struct ProcessManager {
     fail_fast: bool,
     any_failure: Arc<RwLock<Option<String>>>,
     stop_signal: Arc<AtomicBool>,
-    threads: Vec<JoinHandle<()>>,
+    // threads: Vec<JoinHandle<()>>,
 }
 
 impl ProcessManager {
@@ -55,18 +51,13 @@ impl ProcessManager {
             fail_fast,
             any_failure: Arc::new(RwLock::new(None)),
             stop_signal: Arc::new(AtomicBool::new(false)),
-            threads: Vec::new(),
+            // threads: Vec::new(),
         }
     }
 
     /// Spawn a command using the system shell. The `name` is just a label
     /// that helps identify the process in logs/errors.
-    pub fn spawn_command(
-        &mut self,
-        name: &str,
-        command: &str,
-        color: Option<ColorSpec>,
-    ) -> Result<(), BodoError> {
+    pub fn spawn_command(&mut self, name: &str, command: &str) -> Result<(), BodoError> {
         let mut cmd = Command::new("sh");
         cmd.arg("-c").arg(command);
 
@@ -90,7 +81,6 @@ impl ProcessManager {
         let managed_child = ManagedChild {
             name: name.to_string(),
             child: Some(child),
-            color,
         };
 
         // Store it in the shared list
@@ -218,42 +208,4 @@ fn kill_child(child: &mut Child) -> Result<(), BodoError> {
     }
 
     Ok(())
-}
-
-fn apply_color(text: &str, color: Option<&ColorSpec>) -> colored::ColoredString {
-    if let Some(color) = color {
-        match color {
-            ColorSpec::Black => text.black(),
-            ColorSpec::Red => text.red(),
-            ColorSpec::Green => text.green(),
-            ColorSpec::Yellow => text.yellow(),
-            ColorSpec::Blue => text.blue(),
-            ColorSpec::Magenta => text.magenta(),
-            ColorSpec::Cyan => text.cyan(),
-            ColorSpec::White => text.white(),
-            ColorSpec::BrightBlack => text.bright_black(),
-            ColorSpec::BrightRed => text.bright_red(),
-            ColorSpec::BrightGreen => text.bright_green(),
-            ColorSpec::BrightYellow => text.bright_yellow(),
-            ColorSpec::BrightBlue => text.bright_blue(),
-            ColorSpec::BrightMagenta => text.bright_magenta(),
-            ColorSpec::BrightCyan => text.bright_cyan(),
-            ColorSpec::BrightWhite => text.bright_white(),
-        }
-    } else {
-        text.normal()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_concurrent_run() {
-        let mut pm = ProcessManager::new(true);
-        pm.spawn_command("test1", "echo test1", None).unwrap();
-        pm.spawn_command("test2", "echo test2", None).unwrap();
-        pm.run_concurrently().unwrap();
-    }
 }

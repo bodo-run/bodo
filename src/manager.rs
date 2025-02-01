@@ -1,5 +1,5 @@
 use crate::{
-    config::{BodoConfig, ConcurrentlyOptions, Dependency, TaskConfig},
+    config::{BodoConfig, TaskConfig},
     errors::BodoError,
     graph::{Graph, NodeKind, TaskData},
     plugin::{PluginConfig, PluginManager},
@@ -7,7 +7,6 @@ use crate::{
     Result,
 };
 use serde_json;
-use std::collections::HashMap;
 
 /// Simplified GraphManager that no longer references ScriptLoader.
 pub struct GraphManager {
@@ -150,14 +149,6 @@ impl GraphManager {
     }
 
     pub async fn run_task(&mut self, task_name: &str) -> Result<()> {
-        let node_id = self
-            .graph
-            .task_registry
-            .get(task_name)
-            .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?;
-
-        let node = &self.graph.nodes[*node_id as usize];
-
         // Run the task through the plugin system
         let mut options = serde_json::Map::new();
         options.insert(
@@ -173,10 +164,8 @@ impl GraphManager {
         };
 
         self.plugin_manager
-            .run_lifecycle(&mut self.graph.clone(), Some(plugin_config))
-            .await?;
-
-        Ok(())
+            .run_lifecycle(&mut self.graph, Some(plugin_config))
+            .await
     }
 
     pub fn get_task_name_by_name(&self, task_name: &str) -> Option<String> {
