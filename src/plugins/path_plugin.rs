@@ -19,10 +19,20 @@ impl PathPlugin {
     }
 }
 
+impl Default for PathPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl Plugin for PathPlugin {
     fn name(&self) -> &'static str {
         "PathPlugin"
+    }
+
+    fn priority(&self) -> i32 {
+        85 // After env but before concurrency
     }
 
     async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {

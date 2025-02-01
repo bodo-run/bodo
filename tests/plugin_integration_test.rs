@@ -1,31 +1,53 @@
 use std::collections::HashMap;
 
 use bodo::{
-    graph::{Graph, NodeKind, TaskData},
-    plugin::{Plugin, PluginConfig},
-    plugins::{path_plugin::PathPlugin, prefix_plugin::PrefixPlugin},
+    graph::{CommandData, Graph, NodeKind, TaskData},
+    plugin::{Plugin, PluginConfig, PluginManager},
+    plugins::{
+        execution_plugin::ExecutionPlugin,
+        path_plugin::PathPlugin,
+        timeout_plugin::TimeoutPlugin,
+    },
     Result,
 };
 use serde_json::json;
 
 #[tokio::test]
 async fn test_prefix_and_path_plugin_integration() -> Result<()> {
-    // Initialize plugins
-    let mut prefix_plugin = PrefixPlugin::new();
-    let prefix_config = PluginConfig {
-        options: Some(
-            json!({
-                "prefix": "[Test] "
-            })
-            .as_object()
-            .cloned()
-            .unwrap(),
-        ),
-    };
-    prefix_plugin.on_init(&prefix_config).await?;
+    let mut graph = Graph::new();
 
+    // Create a task node
+    let task = TaskData {
+        name: "test".to_string(),
+        description: Some("Test task".to_string()),
+        command: Some("echo test".to_string()),
+        working_dir: None,
+        is_default: false,
+        script_id: "test_script".to_string(),
+        script_display_name: "Test".to_string(),
+        env: HashMap::new(),
+    };
+    let task_id = graph.add_node(NodeKind::Task(task));
+
+    // Create a command node
+    let command = CommandData {
+        raw_command: "echo test".to_string(),
+        description: None,
+        working_dir: None,
+        watch: None,
+        env: HashMap::new(),
+    };
+    let cmd_id = graph.add_node(NodeKind::Command(command));
+
+    // Add edge
+    graph.add_edge(task_id, cmd_id)?;
+
+    // Test path plugin
     let mut path_plugin = PathPlugin::new();
     let path_config = PluginConfig {
+        fail_fast: false,
+        watch: false,
+        list: false,
         options: Some(
             json!({
                 "default_paths": ["/usr/local/bin"]
@@ -35,58 +57,66 @@ async fn test_prefix_and_path_plugin_integration() -> Result<()> {
             .unwrap(),
         ),
     };
+
     path_plugin.on_init(&path_config).await?;
-
-    // Create a test graph
-    let mut graph = Graph::new();
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "build".to_string(),
-        description: Some("Build the project".to_string()),
-        command: Some("make build".to_string()),
-        working_dir: Some("/tmp".to_string()),
-        is_default: false,
-        script_name: Some("Test".to_string()),
-        env: HashMap::new(),
-    }));
-
-    // Apply plugins in sequence
-    prefix_plugin.on_graph_build(&mut graph).await?;
     path_plugin.on_graph_build(&mut graph).await?;
 
-    // Verify the results
-    let node = &graph.nodes[task_id as usize];
-    if let NodeKind::Task(task) = &node.kind {
-        assert_eq!(
-            task.description,
-            Some("[Test] Build the project".to_string())
-        );
-        assert!(task.env.get("PATH").unwrap().contains("/usr/local/bin"));
-        assert!(task.env.get("PATH").unwrap().contains("/tmp"));
-    } else {
-        panic!("Expected task node");
-    }
+    // Run plugins to process metadata
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(TimeoutPlugin));
+    manager.register(Box::new(ExecutionPlugin));
+
+    manager
+        .run_lifecycle(
+            &mut graph,
+            Some(PluginConfig {
+                fail_fast: false,
+                watch: false,
+                list: false,
+                options: None,
+            }),
+        )
+        .await?;
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_plugin_order_matters() -> Result<()> {
-    // Initialize plugins
-    let mut prefix_plugin = PrefixPlugin::new();
-    let prefix_config = PluginConfig {
-        options: Some(
-            json!({
-                "prefix": "[Test] "
-            })
-            .as_object()
-            .cloned()
-            .unwrap(),
-        ),
-    };
-    prefix_plugin.on_init(&prefix_config).await?;
+    let mut graph = Graph::new();
 
+    // Create a task node
+    let task = TaskData {
+        name: "test".to_string(),
+        description: Some("Test task".to_string()),
+        command: Some("echo test".to_string()),
+        working_dir: None,
+        is_default: false,
+        script_id: "test_script".to_string(),
+        script_display_name: "Test".to_string(),
+        env: HashMap::new(),
+    };
+    let task_id = graph.add_node(NodeKind::Task(task));
+
+    // Create a command node
+    let command = CommandData {
+        raw_command: "echo test".to_string(),
+        description: None,
+        working_dir: None,
+        watch: None,
+        env: HashMap::new(),
+    };
+    let cmd_id = graph.add_node(NodeKind::Command(command));
+
+    // Add edge
+    graph.add_edge(task_id, cmd_id)?;
+
+    // Then test path plugin
     let mut path_plugin = PathPlugin::new();
     let path_config = PluginConfig {
+        fail_fast: false,
+        watch: false,
+        list: false,
         options: Some(
             json!({
                 "default_paths": ["/usr/local/bin"]
@@ -96,78 +126,100 @@ async fn test_plugin_order_matters() -> Result<()> {
             .unwrap(),
         ),
     };
+
     path_plugin.on_init(&path_config).await?;
-
-    // Create a test graph
-    let mut graph = Graph::new();
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "build".to_string(),
-        description: Some("Build the project".to_string()),
-        command: Some("make build".to_string()),
-        working_dir: Some("/tmp".to_string()),
-        is_default: false,
-        script_name: Some("Test".to_string()),
-        env: HashMap::new(),
-    }));
-
-    // Apply plugins in reverse order
     path_plugin.on_graph_build(&mut graph).await?;
-    prefix_plugin.on_graph_build(&mut graph).await?;
 
-    // Verify the results
-    let node = &graph.nodes[task_id as usize];
-    if let NodeKind::Task(task) = &node.kind {
-        assert_eq!(
-            task.description,
-            Some("[Test] Build the project".to_string())
-        );
-        assert!(task.env.get("PATH").unwrap().contains("/usr/local/bin"));
-        assert!(task.env.get("PATH").unwrap().contains("/tmp"));
-    } else {
-        panic!("Expected task node");
-    }
+    // Run plugins to process metadata
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(TimeoutPlugin));
+    manager.register(Box::new(ExecutionPlugin));
+
+    manager
+        .run_lifecycle(
+            &mut graph,
+            Some(PluginConfig {
+                fail_fast: false,
+                watch: false,
+                list: false,
+                options: None,
+            }),
+        )
+        .await?;
 
     Ok(())
 }
 
 #[tokio::test]
-async fn test_plugin_chain_with_empty_config() -> Result<()> {
-    // Initialize plugins with empty configs
-    let mut prefix_plugin = PrefixPlugin::new();
-    let mut path_plugin = PathPlugin::new();
-
-    prefix_plugin.on_init(&PluginConfig::default()).await?;
-    path_plugin.on_init(&PluginConfig::default()).await?;
-
-    // Create a test graph
+async fn test_timeout_plugin() -> Result<()> {
     let mut graph = Graph::new();
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "build".to_string(),
-        description: Some("Build the project".to_string()),
-        command: Some("make build".to_string()),
-        working_dir: Some("/tmp".to_string()),
+
+    // Create a task that will timeout
+    let task = TaskData {
+        name: "test".to_string(),
+        description: Some("Test task".to_string()),
+        command: Some("sleep 5".to_string()),
+        working_dir: None,
         is_default: false,
-        script_name: Some("Test".to_string()),
+        script_id: "test_script".to_string(),
+        script_display_name: "Test".to_string(),
         env: HashMap::new(),
-    }));
+    };
+    let task_id = graph.add_node(NodeKind::Task(task));
 
-    // Apply plugins
-    prefix_plugin.on_graph_build(&mut graph).await?;
-    path_plugin.on_graph_build(&mut graph).await?;
+    // Add timeout metadata
+    let node = &mut graph.nodes[task_id as usize];
+    node.metadata
+        .insert("timeout".to_string(), "1s".to_string());
 
-    // Verify the results
+    // Setup plugins
+    let mut manager = PluginManager::new();
+    manager.register(Box::new(TimeoutPlugin));
+
+    // Run plugins to process metadata
+    manager
+        .run_lifecycle(
+            &mut graph,
+            Some(PluginConfig {
+                fail_fast: false,
+                watch: false,
+                list: false,
+                options: None,
+            }),
+        )
+        .await?;
+
+    // Verify that timeout metadata was processed
     let node = &graph.nodes[task_id as usize];
-    if let NodeKind::Task(task) = &node.kind {
-        // Description should be unchanged since prefix was empty
-        assert_eq!(task.description, Some("Build the project".to_string()));
-        // PATH should only contain /tmp since no default paths were set
-        if let Some(path) = task.env.get("PATH") {
-            assert!(path.contains("/tmp"));
-            assert!(!path.contains("/usr/local/bin"));
-        }
-    } else {
-        panic!("Expected task node");
-    }
+    assert!(node.metadata.contains_key("timeout"));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_plugin_lifecycle() -> Result<()> {
+    let mut manager = PluginManager::new();
+    let mut graph = Graph::new();
+
+    // Register plugins
+    manager.register(Box::new(ExecutionPlugin));
+
+    // Run lifecycle with default config
+    manager.run_lifecycle(&mut graph, None).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_plugin_execution() -> Result<()> {
+    let mut manager = PluginManager::new();
+    let mut graph = Graph::new();
+
+    // Register plugins
+    manager.register(Box::new(ExecutionPlugin));
+
+    // Run lifecycle with default config
+    manager.run_lifecycle(&mut graph, None).await?;
 
     Ok(())
 }

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use bodo::{
     graph::{Graph, NodeKind, TaskData},
     plugin::Plugin,
-    plugins::concurrency_plugin::ConcurrencyPlugin,
+    plugins::concurrent_plugin::ConcurrentPlugin,
     Result,
 };
 use serde_json::json;
@@ -24,7 +24,8 @@ fn make_graph_with_concurrent_tasks(
             command: Some(command),
             working_dir: None,
             is_default: false,
-            script_name: Some("Test".to_string()),
+            script_id: "test_script".to_string(),
+            script_display_name: "Test".to_string(),
             env: HashMap::new(),
         });
         let id = graph.add_node(task);
@@ -81,7 +82,7 @@ async fn test_concurrent_graph_construction() -> Result<()> {
 
 #[tokio::test]
 async fn test_concurrent_plugin_transformation() -> Result<()> {
-    let mut plugin = ConcurrencyPlugin;
+    let mut plugin = ConcurrentPlugin::new();
     let mut graph = make_graph_with_concurrent_tasks(
         vec![
             ("task1".to_string(), "echo task1".to_string()),
@@ -96,9 +97,12 @@ async fn test_concurrent_plugin_transformation() -> Result<()> {
     // After plugin transformation:
     // - Original 2 task nodes remain
     // - 1 new concurrent group node is added
-    // - 1 edge from task1 to concurrent group
     assert_eq!(graph.nodes.len(), 3);
-    assert_eq!(graph.edges.len(), 1);
+
+    // Verify edges:
+    // - Edge from task1 to concurrent group
+    // - Edge from concurrent group to task2
+    assert_eq!(graph.edges.len(), 2);
 
     // Verify the concurrent group was created correctly
     let group_node = graph

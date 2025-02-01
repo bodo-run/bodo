@@ -17,10 +17,20 @@ impl EnvPlugin {
     }
 }
 
+impl Default for EnvPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl Plugin for EnvPlugin {
     fn name(&self) -> &'static str {
         "EnvPlugin"
+    }
+
+    fn priority(&self) -> i32 {
+        90 // High priority for environment setup
     }
 
     async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {

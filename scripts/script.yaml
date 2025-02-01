@@ -2,12 +2,12 @@ description: Root level tasks
 
 default_task:
   command: "echo 'Hello from bodo!'"
-  description: "Default greeting"
+  description: "Root script greeting. You can run `bodo` to run this task."
 
 tasks:
   echo:
     command: "echo 'Hello from `bodo echo`!'"
-    description: "echo task"
+    description: "A script in the root directory. This can be run with `bodo echo`."
   echo2:
     command: "echo 'Hello from `bodo echo2`!'"
-    description: "echo2 task"
+    description: "Another example script in the root directory. This can be run with `bodo echo2`."

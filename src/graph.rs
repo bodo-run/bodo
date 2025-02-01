@@ -28,8 +28,10 @@ pub struct TaskData {
     pub env: HashMap<String, String>,
     /// Whether this is a default task
     pub is_default: bool,
-    /// The name of the script this task came from
-    pub script_name: Option<String>,
+    /// The identifier of the script this task came from
+    pub script_id: String,
+    /// The display name of the script this task came from
+    pub script_display_name: String,
 }
 
 /// Represents data for a Command node.
@@ -59,7 +61,7 @@ pub struct ConcurrentGroupData {
 }
 
 /// A node in the graph
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
     pub id: NodeId,
     pub kind: NodeKind,
@@ -68,17 +70,18 @@ pub struct Node {
 }
 
 /// A directed edge in the graph (dependency or order).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Edge {
     pub from: NodeId,
     pub to: NodeId,
 }
 
 /// Core Graph structure.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Graph {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
+    pub task_registry: HashMap<String, NodeId>,
 }
 
 impl Graph {
@@ -86,6 +89,7 @@ impl Graph {
         Self {
             nodes: Vec::new(),
             edges: Vec::new(),
+            task_registry: HashMap::new(),
         }
     }
 
@@ -190,10 +194,8 @@ impl Graph {
             visited[u] = true;
             stack[u] = true;
             for e in &graph.edges {
-                if e.from as usize == u {
-                    if dfs(graph, e.to as usize, visited, stack) {
-                        return true;
-                    }
+                if e.from as usize == u && dfs(graph, e.to as usize, visited, stack) {
+                    return true;
                 }
             }
             stack[u] = false;

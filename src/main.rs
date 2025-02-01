@@ -1,81 +1,85 @@
 use bodo::{
-    graph::{Graph, NodeKind, TaskData},
-    plugin::{PluginConfig, PluginManager},
-    plugins::{
-        concurrency_plugin::ConcurrencyPlugin,
-        env_plugin::EnvPlugin,
-        execution_plugin::{execute_graph, ExecutionPlugin},
-    },
-    Result,
+    config::BodoConfig, errors::BodoError, manager::GraphManager,
+    plugins::print_list_plugin::PrintListPlugin,
 };
-use serde_json::json;
+use clap::Parser;
 use std::collections::HashMap;
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// List all available tasks
+    #[arg(short, long)]
+    list: bool,
+
+    /// Watch mode - rerun task on file changes
+    #[arg(short, long)]
+    watch: bool,
+
+    /// Task to run (defaults to default_task)
+    task: Option<String>,
+
+    /// Subtask to run
+    subtask: Option<String>,
+
+    /// Additional arguments passed to the task
+    #[arg(last = true)]
+    args: Vec<String>,
+}
+
 #[tokio::main]
-async fn main() -> Result<()> {
-    // Create a simple graph with two tasks
-    let mut graph = Graph::new();
+async fn main() {
+    let result = async {
+        let args = Args::parse();
 
-    // Add a "build" task
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "build".into(),
-        description: Some("Build the project".into()),
-        command: Some("echo Building".into()),
-        working_dir: None,
-        env: HashMap::new(),
-        is_default: false,
-        script_name: None,
-    }));
+        // Load configuration
+        let config = BodoConfig {
+            root_script: None,
+            scripts_dirs: Some(vec!["scripts/".into()]),
+            tasks: HashMap::new(),
+        };
 
-    // Add a "test" task
-    let test_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "test".into(),
-        description: Some("Run tests".into()),
-        command: Some("echo Testing".into()),
-        working_dir: None,
-        env: HashMap::new(),
-        is_default: false,
-        script_name: None,
-    }));
+        let mut graph_manager = GraphManager::new();
+        graph_manager.build_graph(config).await?;
 
-    // Add concurrency metadata to the build task
-    {
-        let node = &mut graph.nodes[task_id as usize];
-        node.metadata.insert(
-            "concurrently".to_string(),
-            json!({
-                "children": [test_id],
-                "fail_fast": true
-            })
-            .to_string(),
-        );
+        if args.list {
+            graph_manager.register_plugin(Box::new(PrintListPlugin));
+            graph_manager.run_plugins(None).await?;
+            return Ok(());
+        }
+
+        // Parse task name and subtask
+        let task_name = if let Some(task) = args.task {
+            if let Some(subtask) = args.subtask {
+                format!("{} {}", task, subtask)
+            } else {
+                task
+            }
+        } else {
+            // Check if default task exists
+            if !graph_manager.task_exists("default") {
+                return Err(BodoError::NoTaskSpecified);
+            }
+            "default".to_string()
+        };
+
+        // Check if task exists
+        if !graph_manager.task_exists(&task_name) {
+            return Err(BodoError::TaskNotFound(task_name));
+        }
+
+        // Run the task
+        graph_manager.run_task(&task_name).await?;
+
+        Ok(())
     }
+    .await;
 
-    // Create and configure plugins
-    let mut manager = PluginManager::new();
-    manager.register(Box::new(ConcurrencyPlugin));
-    manager.register(Box::new(EnvPlugin::new()));
-    manager.register(Box::new(ExecutionPlugin));
-
-    // Configure global environment variables
-    let plugin_config = PluginConfig {
-        options: Some(
-            json!({
-                "env": {
-                    "RUST_LOG": "info"
-                }
-            })
-            .as_object()
-            .cloned()
-            .unwrap(),
-        ),
-    };
-
-    // Run plugin lifecycle
-    manager.run_lifecycle(&mut graph, &plugin_config).await?;
-
-    // Execute the graph
-    execute_graph(&mut manager, &mut graph).await?;
-
-    Ok(())
+    match result {
+        Ok(_) => std::process::exit(0),
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
+    }
 }

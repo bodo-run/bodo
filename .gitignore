@@ -23,3 +23,5 @@ Thumbs.db
 
 # Yek
 repo-serialized/
+.aider*
+.aider

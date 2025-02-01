@@ -4,4 +4,13 @@ Always run tests and clippy after writing code to ensure it works.
 
 Place all tests in the `tests/` directory.
 
-Before "trying a different approach" when tests fail, run `./scripts/ask.js` and use its output to guide you.
+Prefix commit messages with semantic releases conventions
+
+We are in implementation phase.
+
+Run `askds --system-prompt=../yek/prompts/implement.txt cat DESIGN.md` to get the next steps for the implementation.
+
+IMPORTANT: to run the tests execute `askds --system-prompt=../yek/prompts/fix-tests.txt cargo test`
+IMPORTANT: NEVER KILL ask.js too quickly while DeepSeek is reasoning
+
+Once tests pass, commit your changes and run `askds --system-prompt=../yek/prompts/implement.txt cat DESIGN.md` to get the next steps for the implementation.

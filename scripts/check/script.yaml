@@ -1,4 +1,4 @@
-name: check
+name: Check
 description: Run all checks for the project, including clippy
 
 default_task:
