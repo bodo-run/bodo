@@ -265,7 +265,7 @@ impl ScriptLoader {
             is_default: name == "default",
             script_id: script_id.to_string(),
             script_display_name: script_display_name.to_string(),
-            watch: None,
+            watch: cfg.watch.clone(),
         };
 
         let node_id = graph.add_node(NodeKind::Task(task_data));

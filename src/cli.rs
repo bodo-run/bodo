@@ -14,6 +14,10 @@ pub struct Args {
     #[arg(short, long)]
     pub watch: bool,
 
+    /// Auto watch mode - automatically enable watch if specified
+    #[arg(long)]
+    pub auto_watch: bool,
+
     /// Task to run (defaults to default_task)
     pub task: Option<String>,
 

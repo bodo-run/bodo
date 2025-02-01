@@ -1,37 +1,37 @@
 use crate::{
     config::WatchConfig,
     errors::BodoError,
-    graph::{Graph, NodeKind, TaskData},
+    graph::{Graph, NodeKind},
     plugin::{Plugin, PluginConfig},
     Result,
 };
 use async_trait::async_trait;
-use notify::{
-    event::ModifyKind, Config as NotifyConfig, Event, EventKind, RecommendedWatcher, RecursiveMode,
-    Watcher,
-};
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use notify::{Config as NotifyConfig, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
     any::Any,
     collections::HashSet,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::mpsc::{self, Receiver},
     time::{Duration, Instant},
 };
 
-/// Our updated WatchPlugin that actually watches files, then re-runs tasks.
+/// Our updated WatchPlugin that supports glob patterns like "src/**/*.rs".
+/// It watches each pattern's directory (recursively), then filters events
+/// by matching them against the glob/ignore sets.
 pub struct WatchPlugin {
-    // internal storage of patterns to watch
     watch_entries: Vec<WatchEntry>,
-    // The CLI "watch" flag, or any other data we need to decide if watch mode is active
     watch_mode: bool,
 }
 
-/// Each task that has watch config can add multiple patterns
 #[derive(Debug)]
 struct WatchEntry {
     task_name: String,
-    patterns: Vec<String>,
-    ignore_patterns: Vec<String>,
+    // We'll convert the user's patterns into a GlobSet for matching, and
+    // also keep a set of directories to actually watch.
+    glob_set: GlobSet,
+    ignore_set: Option<GlobSet>,
+    directories_to_watch: HashSet<PathBuf>,
     debounce_ms: u64,
 }
 
@@ -43,14 +43,12 @@ impl WatchPlugin {
         }
     }
 
-    /// Create the watcher + channel. Using the non-async `mpsc` approach for simplicity.
     fn create_watcher() -> Result<(RecommendedWatcher, Receiver<notify::Result<Event>>)> {
         let (tx, rx) = mpsc::channel();
         let watcher = RecommendedWatcher::new(
             move |res| {
-                tx.send(res).ok();
+                let _ = tx.send(res);
             },
-            // If needed, tweak the config
             NotifyConfig::default().with_poll_interval(Duration::from_secs(1)),
         )
         .map_err(|e| BodoError::PluginError(format!("Failed to create watcher: {}", e)))?;
@@ -58,73 +56,60 @@ impl WatchPlugin {
         Ok((watcher, rx))
     }
 
-    /// Extract changed paths from an event. For rename or remove, also handle old path etc.
-    fn extract_changed_paths(event: &Event) -> Vec<PathBuf> {
-        let mut paths = vec![];
-        if !event.paths.is_empty() {
-            for p in &event.paths {
-                paths.push(p.clone());
-            }
-        }
-        paths
+    /// Filters changed paths to those that match the watch patterns and do *not* match ignore globs.
+    /// Returns a vector of all paths that survive filtering.
+    fn filter_changed_paths(&self, changed_paths: &[PathBuf], entry: &WatchEntry) -> Vec<PathBuf> {
+        changed_paths
+            .iter()
+            .filter_map(|p| {
+                // If path is None or not valid UTF-8, skip
+                let path_str = p.to_str()?;
+                // Must match at least one "include" glob
+                if !entry.glob_set.is_match(path_str) {
+                    return None;
+                }
+                // If there's an ignore set, skip if matched
+                if let Some(ref ignore_set) = entry.ignore_set {
+                    if ignore_set.is_match(path_str) {
+                        return None;
+                    }
+                }
+                Some(p.clone())
+            })
+            .collect()
     }
 
-    /// Print the changed files. If too many, summarize.
-    fn print_changed_paths_summary(paths: &[PathBuf]) {
-        let len = paths.len();
-        if len == 0 {
-            return;
-        }
-        const MAX_SHOW: usize = 5;
-        if len <= MAX_SHOW {
-            println!("WatchPlugin: Detected file changes:");
-            for p in paths {
-                println!("   => {}", p.display());
-            }
-        } else {
-            println!(
-                "WatchPlugin: Detected {} changed files. Showing first {}:",
-                len, MAX_SHOW
-            );
-            for p in paths.iter().take(MAX_SHOW) {
-                println!("   => {}", p.display());
-            }
-        }
-    }
-
-    /// Actually re-run a task. We can re-use manager or however you do it.
+    /// Reruns the specified task synchronously. For a full re-run with concurrency, you'd call
+    /// the same logic used in ExecutionPlugin or the GraphManager. Here we just do a naive shell spawn.
     async fn rerun_task(&self, graph: &mut Graph, task_name: &str) -> Result<()> {
-        if let Some(node_id) = graph.task_registry.get(task_name) {
-            let node = &graph.nodes[*node_id as usize];
-            if let NodeKind::Task(task_data) = &node.kind {
-                println!("WatchPlugin: Running task: '{}'", task_data.name);
-                // For a direct approach, run a single command or concurrency.
-                // But typically you'd rely on the ExecutionPlugin or manager.
+        if let Some(&node_id) = graph.task_registry.get(task_name) {
+            if let NodeKind::Task(task_data) = &graph.nodes[node_id as usize].kind {
                 if let Some(cmd) = &task_data.command {
-                    // run a synchronous shell command ignoring errors
-                    // or you can spawn it via ProcessManager
+                    println!("WatchPlugin: Running task: '{t}'", t = task_data.name);
                     let status = std::process::Command::new("sh").arg("-c").arg(cmd).status();
-
-                    // If it fails, return error, but that won't kill our watch loop
-                    if let Ok(s) = status {
-                        if !s.success() {
+                    match status {
+                        Ok(s) if !s.success() => {
                             return Err(BodoError::PluginError(format!(
                                 "Task '{}' failed (exit={:?})",
                                 task_data.name,
                                 s.code()
                             )));
                         }
-                    } else if let Err(e) = status {
-                        return Err(BodoError::PluginError(format!(
-                            "Error spawning '{}': {}",
-                            task_data.name, e
-                        )));
+                        Err(e) => {
+                            return Err(BodoError::PluginError(format!(
+                                "Error spawning '{}': {}",
+                                task_data.name, e
+                            )));
+                        }
+                        _ => {}
                     }
                 }
             }
         } else {
-            // Possibly a concurrency group or command node, or just not found
-            return Err(BodoError::TaskNotFound(task_name.to_string()));
+            return Err(BodoError::PluginError(format!(
+                "Task '{}' not found for watch re-run",
+                task_name
+            )));
         }
         Ok(())
     }
@@ -143,108 +128,145 @@ impl Plugin for WatchPlugin {
     }
 
     fn priority(&self) -> i32 {
-        90 // Lower than ExecutionPlugin (95)
+        90 // Ensure it runs after concurrency transforms and before final execution
     }
 
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    /// In on_init, we can detect if watch mode was requested (e.g., from config.options).
     async fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
         self.watch_mode = config.watch;
         Ok(())
     }
 
-    /// In on_graph_build, collect tasks that have watch configs.
-    /// We store them in `watch_entries` so we can set up watchers in on_after_run.
+    /// Collect all tasks that have WatchConfig, build globsets and figure out which directories
+    /// to actually watch. We'll do the real watching in on_after_run.
     async fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
         if !self.watch_mode {
             return Ok(());
         }
 
-        // Collect watch info from tasks
         for node in &graph.nodes {
             if let NodeKind::Task(task_data) = &node.kind {
-                if let Some(watch_config) = &task_data.watch {
-                    // Save these patterns for when we actually set up watchers
+                if let Some(WatchConfig {
+                    patterns,
+                    debounce_ms,
+                    ignore_patterns,
+                }) = &task_data.watch
+                {
+                    let mut builder = GlobSetBuilder::new();
+                    for patt in patterns {
+                        // Build the glob
+                        let glob = Glob::new(patt).map_err(|e| {
+                            BodoError::PluginError(format!(
+                                "Invalid glob pattern '{}': {}",
+                                patt, e
+                            ))
+                        })?;
+                        builder.add(glob);
+                    }
+                    let glob_set = builder.build().map_err(|e| {
+                        BodoError::PluginError(format!("Could not build globset: {}", e))
+                    })?;
+
+                    // Build ignore set if any
+                    let mut ignore_builder = GlobSetBuilder::new();
+                    let mut have_ignores = false;
+                    for ignore in ignore_patterns {
+                        let ig = Glob::new(ignore).map_err(|e| {
+                            BodoError::PluginError(format!(
+                                "Invalid ignore pattern '{}': {}",
+                                ignore, e
+                            ))
+                        })?;
+                        ignore_builder.add(ig);
+                        have_ignores = true;
+                    }
+                    let ignore_set = if have_ignores {
+                        Some(ignore_builder.build().map_err(|e| {
+                            BodoError::PluginError(format!("Could not build ignore globset: {}", e))
+                        })?)
+                    } else {
+                        None
+                    };
+
+                    // From each pattern, extract a directory to watch. We watch recursively,
+                    // then filter inside the event. For example, "src/**/*.rs" => watch "src".
+                    let mut dirs_to_watch = HashSet::new();
+                    for patt in patterns {
+                        if let Some(dir) = find_base_directory(patt) {
+                            dirs_to_watch.insert(dir);
+                        }
+                    }
+
+                    // Collect this watch entry
                     let entry = WatchEntry {
                         task_name: task_data.name.clone(),
-                        patterns: watch_config.patterns.clone(),
-                        ignore_patterns: watch_config.ignore_patterns.clone(),
-                        debounce_ms: watch_config.debounce_ms,
+                        glob_set,
+                        ignore_set,
+                        directories_to_watch: dirs_to_watch,
+                        debounce_ms: *debounce_ms,
                     };
                     self.watch_entries.push(entry);
                 }
             }
         }
 
-        // Debug info about which tasks are watch-enabled
+        // Print some debug info if desired
         for entry in &self.watch_entries {
             println!(
-                "WatchPlugin: Will watch task '{}' with patterns: {:?}",
-                entry.task_name, entry.patterns
+                "WatchPlugin: Will watch task '{}' with directories: {:?}",
+                entry.task_name, entry.directories_to_watch
             );
         }
 
         Ok(())
     }
 
-    /// After everything is built and run once, we enter a loop:
-    /// watch the files, re-run the *same* tasks if changes occur.
-    /// We do NOT exit the process if they fail; just log and keep watching.
+    /// After everything runs once, we start the watch loop (if watch mode is on).
     async fn on_after_run(&mut self, graph: &mut Graph) -> Result<()> {
-        if !self.watch_mode {
+        if !self.watch_mode || self.watch_entries.is_empty() {
             return Ok(());
         }
 
-        // We need to pick which task we're re-running. Usually there's a single "target" task
-        // from plugin config or from the manager. We'll guess the user is re-running the same
-        // task they initially triggered. So we look for "task" in plugin options if you store it there.
-        // For the sake of example, let's just re-run *all* watch-enabled tasks.
-        let tasks_to_rerun: Vec<_> = self
-            .watch_entries
-            .iter()
-            .map(|e| e.task_name.clone())
-            .collect();
-
-        // If no tasks have watch patterns, just return
-        if tasks_to_rerun.is_empty() {
-            println!("WatchPlugin: No tasks with watch patterns. Exiting watch mode.");
-            return Ok(());
-        }
-
-        // Prepare watchers
+        // We'll watch the union of all directories from all watch_entries.
         let (mut watcher, rx) = Self::create_watcher()?;
-        let combined_debounce_ms = self
-            .watch_entries
-            .iter()
-            .map(|e| e.debounce_ms)
-            .max()
-            .unwrap_or(500);
-
-        // Add paths/patterns
-        // For real wildcard support, you'd need something like `globset` or handle expansions yourself.
-        // Here, we just watch each pattern as if it's a path.
-        // For simplicity, watch them in recursive mode.
+        let mut all_dirs = HashSet::new();
+        let mut max_debounce = 500;
         for entry in &self.watch_entries {
-            for patt in &entry.patterns {
-                let path = PathBuf::from(patt);
-                if let Err(e) = watcher.watch(&path, RecursiveMode::Recursive) {
-                    eprintln!("WatchPlugin: Failed to watch path '{}': {}", patt, e);
-                }
+            max_debounce = max_debounce.max(entry.debounce_ms);
+            for d in &entry.directories_to_watch {
+                all_dirs.insert(d.clone());
             }
         }
 
-        // Main watch loop
+        for dir in &all_dirs {
+            // If the user references ".", "src", or any folder that exists, watch recursively.
+            if dir.exists() && dir.is_dir() {
+                if let Err(e) = watcher.watch(dir, RecursiveMode::Recursive) {
+                    eprintln!(
+                        "WatchPlugin: Failed to watch directory '{}': {}",
+                        dir.display(),
+                        e
+                    );
+                }
+            } else {
+                eprintln!(
+                    "WatchPlugin: Directory '{}' does not exist or is not a directory.",
+                    dir.display()
+                );
+            }
+        }
+
         println!("WatchPlugin: Initial watch setup complete. Listening for changes...");
         let mut last_run = Instant::now();
 
+        // Main watch loop
         loop {
-            // 1) Block for an event
             let event = match rx.recv() {
                 Ok(e) => e,
-                Err(_e) => {
+                Err(_) => {
                     eprintln!("WatchPlugin: Watcher channel closed. Exiting watch loop.");
                     break;
                 }
@@ -257,40 +279,115 @@ impl Plugin for WatchPlugin {
                 }
             };
 
-            // 2) Debounce logic: We might want to gather multiple events
-            //    for combined_debounce_ms before re-running tasks.
-            //    For brevity, we do a simpler approach:
-            //    Wait out the debounce window if the last run was too recent.
             let now = Instant::now();
-            if now.duration_since(last_run) < Duration::from_millis(combined_debounce_ms) {
-                // read further events from the channel to skip duplicates in short time
+            if now.duration_since(last_run) < Duration::from_millis(max_debounce) {
+                // skip consecutive events in a short window
                 continue;
             }
             last_run = now;
 
-            // 3) Summarize the changed files. Some events may have multiple paths.
-            let changed_paths = Self::extract_changed_paths(&event);
-            Self::print_changed_paths_summary(&changed_paths);
+            let changed_paths = event.paths;
+            if changed_paths.is_empty() {
+                continue;
+            }
 
-            // 4) Re-run tasks. If they fail, do NOT exit.
-            //    Here we call the "manager" or whatever logic you use to run tasks again.
-            println!(
-                "WatchPlugin: Re-running watch-enabled tasks: {:?}",
-                tasks_to_rerun
-            );
-            for task_name in &tasks_to_rerun {
-                if let Err(err) = self.rerun_task(graph, task_name).await {
-                    eprintln!(
-                        "WatchPlugin: Task '{}' failed with error: {:?}",
-                        task_name, err
-                    );
-                    // Don't break, keep going for other tasks
+            // For each watch entry, see if anything matched
+            let mut any_match = false;
+            for entry in &self.watch_entries {
+                let matched = self.filter_changed_paths(&changed_paths, entry);
+                if !matched.is_empty() {
+                    any_match = true;
                 }
             }
 
-            // 5) Repeat, continuing to watch. We never exit until user Ctrl-C, etc.
+            if any_match {
+                println!(
+                    "WatchPlugin: Detected changes in at least one watched pattern. Re-running..."
+                );
+                // We re-run *all* watch-enabled tasks. Another approach:
+                // re-run only the tasks whose watchers matched something.
+                for entry in &self.watch_entries {
+                    let matched = self.filter_changed_paths(&changed_paths, entry);
+                    if !matched.is_empty() {
+                        if matched.len() < 6 {
+                            println!("WatchPlugin: Files changed for '{}':", entry.task_name);
+                            for p in &matched {
+                                println!("   -> {}", p.display());
+                            }
+                        } else {
+                            println!(
+                                "WatchPlugin: {} changes for task '{}', showing first 5:",
+                                matched.len(),
+                                entry.task_name
+                            );
+                            for p in matched.iter().take(5) {
+                                println!("   -> {}", p.display());
+                            }
+                        }
+                        if let Err(err) = self.rerun_task(graph, &entry.task_name).await {
+                            eprintln!(
+                                "WatchPlugin: Task '{}' failed with error: {:?}",
+                                entry.task_name, err
+                            );
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())
+    }
+}
+
+/// Attempt to figure out which directory to watch for the given glob pattern.
+/// Example:
+///   "src/**/*.rs" -> "src"
+///   "./tests/**/*.rs" -> "tests"
+///   "myfile.rs" -> "."
+fn find_base_directory(patt: &str) -> Option<PathBuf> {
+    // If there's a directory part, extract it. Otherwise default to "."
+    // For example, "src/**/*.rs" => "src"
+    // Use Path::parent logic after removing trailing wildcard segments.
+    let path = Path::new(patt);
+
+    // If pattern is something like "**/*.rs", we watch "."
+    if patt.contains("**/") && !patt.contains('/') {
+        return Some(PathBuf::from("."));
+    }
+
+    // If there's at least one slash, let's try everything before the first wildcard
+    // or the slash nearest the wildcard. Or we can do a simpler approach:
+    // look at the path up to the first wildcard component.
+    let components = path.components().collect::<Vec<_>>();
+    let first_wildcard = components
+        .iter()
+        .position(|c| c.as_os_str().to_string_lossy().contains('*'));
+
+    let base = if let Some(wc_idx) = first_wildcard {
+        // Join everything before wc_idx
+        if wc_idx == 0 {
+            // pattern starts with wildcard => watch "."
+            PathBuf::from(".")
+        } else {
+            PathBuf::from_iter(&components[..wc_idx])
+        }
+    } else {
+        // No wildcard => watch the parent directory if possible
+        if !path.is_dir() {
+            // e.g. "Cargo.toml" => watch "."
+            path.parent()
+                .map(|p| p.to_path_buf())
+                .or_else(|| Some(PathBuf::from(".")))?
+        } else {
+            // It's an actual directory with no wildcard
+            path.to_path_buf()
+        }
+    };
+
+    // If the resulting path is empty, default to "."
+    if base.as_os_str().is_empty() {
+        Some(PathBuf::from("."))
+    } else {
+        Some(base)
     }
 }

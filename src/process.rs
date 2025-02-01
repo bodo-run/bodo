@@ -20,10 +20,7 @@ pub enum ColorSpec {
 
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex, RwLock,
-};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use crate::errors::BodoError;
@@ -40,24 +37,17 @@ struct ManagedChild {
 
 /// A "fail fast" process manager that can spawn concurrent processes
 /// and kill them if any child fails (if `fail_fast` is true).
+/// We will modify it so that we do NOT exit overall when a child fails.
 pub struct ProcessManager {
     children: Arc<Mutex<Vec<ManagedChild>>>,
-    fail_fast: bool,
-    any_failure: Arc<RwLock<Option<String>>>,
-    stop_signal: Arc<AtomicBool>,
-    // threads: Vec<JoinHandle<()>>,
 }
 
 impl ProcessManager {
     /// Create a new manager. If `fail_fast` is true, the first failure
     /// triggers killing all other processes immediately.
-    pub fn new(fail_fast: bool) -> Self {
+    pub fn new(_fail_fast: bool) -> Self {
         Self {
             children: Arc::new(Mutex::new(Vec::new())),
-            fail_fast,
-            any_failure: Arc::new(RwLock::new(None)),
-            stop_signal: Arc::new(AtomicBool::new(false)),
-            // threads: Vec::new(),
         }
     }
 
@@ -106,23 +96,17 @@ impl ProcessManager {
     }
 
     /// After spawning commands, call this to actually run them concurrently.
-    /// Returns Ok if all processes succeed (exit code 0), or Err if any fail.
+    /// We now only warn on failures and keep going.
     pub fn run_concurrently(&mut self) -> Result<(), BodoError> {
         let children_for_threads = Arc::clone(&self.children);
-        let any_failure_for_threads = Arc::clone(&self.any_failure);
-        let stop_for_threads = Arc::clone(&self.stop_signal);
-        let fail_fast = self.fail_fast;
 
         let mut thread_handles = Vec::new();
-
         {
             let mut locked = children_for_threads.lock().unwrap();
             for mc in locked.iter_mut() {
                 let mc_name = mc.name.clone();
+                // The actual child to run
                 let child = mc.child.take();
-                let c_any_failure = Arc::clone(&any_failure_for_threads);
-                let c_stop_signal = Arc::clone(&stop_for_threads);
-                let c_children = Arc::clone(&children_for_threads);
 
                 // Clone prefix info for threads
                 let prefix_enabled = mc.prefix_enabled;
@@ -131,25 +115,25 @@ impl ProcessManager {
 
                 let handle = std::thread::spawn(move || {
                     if let Some(mut child) = child {
+                        // Pipe stdout, stderr (unchanged)...
                         let stdout = child.stdout.take();
+                        let _stderr = child.stderr.take();
+
                         let stdout_prefix_label = prefix_label.clone();
                         let stdout_prefix_color = prefix_color.clone();
                         let stdout_handle = stdout.map(|stdout| {
-                            let prefix_enabled = prefix_enabled;
-                            let prefix_label = stdout_prefix_label.clone();
+                            let prefix_label = stdout_prefix_label;
                             let prefix_color = stdout_prefix_color;
                             thread::spawn(move || {
                                 let reader = BufReader::new(stdout);
-                                for line in reader.lines() {
-                                    if let Ok(line) = line {
-                                        if prefix_enabled {
-                                            let prefix_str = prefix_label.as_deref().unwrap_or("");
-                                            let colorized =
-                                                color_line(prefix_str, &prefix_color, &line, false);
-                                            println!("{}", colorized);
-                                        } else {
-                                            println!("{}", line);
-                                        }
+                                for line in reader.lines().flatten() {
+                                    if prefix_enabled {
+                                        let prefix_str = prefix_label.as_deref().unwrap_or("");
+                                        let colorized =
+                                            color_line(prefix_str, &prefix_color, &line, false);
+                                        println!("{}", colorized);
+                                    } else {
+                                        println!("{}", line);
                                     }
                                 }
                             })
@@ -157,25 +141,22 @@ impl ProcessManager {
 
                         let stderr = child.stderr.take();
                         let name_for_stderr = mc_name.clone();
-                        let stderr_prefix_label = prefix_label.clone();
+                        let stderr_prefix_label = prefix_label;
                         let stderr_prefix_color = prefix_color;
                         let stderr_handle = stderr.map(|stderr| {
-                            let prefix_enabled = prefix_enabled;
-                            let prefix_label = stderr_prefix_label.clone();
+                            let prefix_label = stderr_prefix_label;
                             let prefix_color = stderr_prefix_color;
                             thread::spawn(move || {
                                 let reader = BufReader::new(stderr);
-                                for line in reader.lines() {
-                                    if let Ok(line) = line {
-                                        if prefix_enabled {
-                                            let prefix_str =
-                                                prefix_label.as_deref().unwrap_or(&name_for_stderr);
-                                            let colorized =
-                                                color_line(prefix_str, &prefix_color, &line, true);
-                                            eprintln!("{}", colorized);
-                                        } else {
-                                            eprintln!("[{}] {}", name_for_stderr, line);
-                                        }
+                                for line in reader.lines().flatten() {
+                                    if prefix_enabled {
+                                        let prefix_str =
+                                            prefix_label.as_deref().unwrap_or(&name_for_stderr);
+                                        let colorized =
+                                            color_line(prefix_str, &prefix_color, &line, true);
+                                        eprintln!("{}", colorized);
+                                    } else {
+                                        eprintln!("[{}] {}", name_for_stderr, line);
                                     }
                                 }
                             })
@@ -185,41 +166,19 @@ impl ProcessManager {
                             Ok(status) => {
                                 if !status.success() {
                                     let code = status.code().unwrap_or(-1);
-                                    let mut w = c_any_failure.write().unwrap();
-                                    if w.is_none() {
-                                        *w = Some(format!(
-                                            "'{}' failed with exit code {}",
-                                            mc_name, code
-                                        ));
-                                    }
-                                    if fail_fast {
-                                        c_stop_signal.store(true, Ordering::SeqCst);
-                                        let mut locked_ch = c_children.lock().unwrap();
-                                        for c in locked_ch.iter_mut() {
-                                            if let Some(child2) = &mut c.child {
-                                                let _ = kill_child(child2);
-                                            }
-                                        }
-                                    }
+                                    eprintln!(
+                                        "Warning: '{}' failed with exit code {}",
+                                        mc_name, code
+                                    );
+                                    // We do NOT set any global error or kill others.
                                 }
                             }
                             Err(e) => {
-                                let mut w = c_any_failure.write().unwrap();
-                                if w.is_none() {
-                                    *w = Some(format!("Error waiting on '{}': {}", mc_name, e));
-                                }
-                                if fail_fast {
-                                    c_stop_signal.store(true, Ordering::SeqCst);
-                                    let mut locked_ch = c_children.lock().unwrap();
-                                    for c in locked_ch.iter_mut() {
-                                        if let Some(child2) = &mut c.child {
-                                            let _ = kill_child(child2);
-                                        }
-                                    }
-                                }
+                                eprintln!("Warning: Error waiting on '{}': {}", mc_name, e);
                             }
                         }
 
+                        // Join stdout/stderr threads
                         if let Some(handle) = stdout_handle {
                             let _ = handle.join();
                         }
@@ -228,6 +187,7 @@ impl ProcessManager {
                         }
                     }
                 });
+
                 thread_handles.push(handle);
             }
         }
@@ -237,50 +197,17 @@ impl ProcessManager {
             let _ = handle.join();
         }
 
-        // If any thread set any_failure, return an error
-        let error_opt = &*any_failure_for_threads.read().unwrap();
-        if let Some(msg) = error_opt {
-            return Err(BodoError::PluginError(msg.clone()));
-        }
-
+        // We do not fail overall:
         Ok(())
     }
-    /// Kills all running processes (if any).
+
+    /// Removed kill_all or made it a no-op if you don't want
+    /// to kill processes. Or keep it if you like. For example:
     pub fn kill_all(&self) -> Result<(), BodoError> {
-        self.stop_signal.store(true, Ordering::SeqCst);
-        let mut locked = self.children.lock().unwrap();
-        for mc in locked.iter_mut() {
-            if let Some(child) = &mut mc.child {
-                kill_child(child)?;
-            }
-        }
+        // No longer kills anything, just prints a warning:
+        eprintln!("kill_all called but is now a no-op.");
         Ok(())
     }
-}
-
-/// Attempt to kill a child gracefully, then forcibly if needed.
-fn kill_child(child: &mut Child) -> Result<(), BodoError> {
-    #[cfg(unix)]
-    {
-        // First try Child::kill, which sends SIGKILL
-        let _ = child.kill();
-        let _ = child.wait();
-
-        // Kill the process group to ensure all children are killed
-        unsafe {
-            let pid = child.id() as libc::pid_t;
-            let _ = libc::kill(-pid, libc::SIGKILL); // negative pid means kill process group
-            let _ = libc::kill(pid, libc::SIGKILL); // also try direct kill
-        }
-    }
-
-    #[cfg(not(unix))]
-    {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
-
-    Ok(())
 }
 
 /// Helper to color a line with a prefix
