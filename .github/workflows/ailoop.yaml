@@ -1,0 +1,103 @@
+name: AI Loop
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to run"
+        required: true
+        default: "main"
+      attempts:
+        description: "Max attempts"
+        default: "40"
+        type: number
+      pr-on-fail:
+        description: "Create a PR on failure"
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  loop:
+    name: AI Loop
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      MAX_ATTEMPTS: ${{ github.event.inputs.attempts }}
+      BRANCH: ${{ github.event.inputs.branch }}
+
+    steps:
+      - name: Print inputs
+        run: |
+          echo "MAX_ATTEMPTS=${{ env.MAX_ATTEMPTS }}"
+          echo "BRANCH=${{ env.BRANCH }}"
+
+      - name: Install Bodo
+        run: curl -fsSL https://bodo.run/bodo.sh | bash
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          fetch-depth: 0
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --locked
+
+      - name: Run AI Loop
+        id: ai_loop
+        timeout-minutes: 360
+        continue-on-error: true
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          FIREWORKS_AI_API_KEY: ${{ secrets.FIREWORKS_AI_API_KEY }}
+          RUST_TEST_TIMEOUT: 300
+          MAX_ATTEMPTS: ${{ env.MAX_ATTEMPTS }}
+        run: |
+          deno run --allow-all scripts/ai/main.ts
+          echo "success=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Upload attempts log
+        uses: actions/upload-artifact@v4
+        with:
+          name: attempts-log
+          path: attempts.txt
+
+      - name: Create PR or Issue
+        if: always() && ${{ github.event.inputs.pr-on-fail }}
+        uses: peter-evans/create-pull-request@v5
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        with:
+          token: ${{ env.GH_TOKEN }}
+          commit-message: "AI Loop"
+          title: "AI Loop for ${{ env.BRANCH }} (Attempts: ${{ env.MAX_ATTEMPTS }})"
+          body: |
+            ## AI Loop Results
+            - Successfully fixed: ${{ steps.ai_loop.outputs.success == '0' && 'Yes' || 'No' }}
+            - Total attempts: ${{ env.MAX_ATTEMPTS }}
+            - Source branch: `${{ env.BRANCH }}`
+
+            Check the attempts.txt artifact for details.
+          branch: ${{ env.BRANCH }}-ai-loop
+          base: ${{ env.BRANCH }}
