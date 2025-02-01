@@ -19,13 +19,14 @@ tasks:
     description: "Run integration tests"
     command: cargo test --tests
 
-  watch:
+  auto-watch:
     description: "Watch Rust files and automatically run tests"
     command: cargo test
     watch:
       patterns:
         - "src/**/*.rs"
         - "tests/**/*.rs"
+      auto_watch: true
       debounce_ms: 1000
       ignore_patterns:
         - "target/**"

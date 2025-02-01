@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use validator::Validate;
 use walkdir::WalkDir;
 
 use crate::{
@@ -67,6 +68,9 @@ impl ScriptLoader {
     }
 
     pub fn build_graph(&mut self, config: BodoConfig) -> Result<Graph> {
+        // Validate the BodoConfig first
+        config.validate().map_err(BodoError::from)?;
+
         let mut graph = Graph::new();
         let mut paths_to_load = vec![];
         let mut root_script_abs: Option<PathBuf> = None;
@@ -138,6 +142,29 @@ impl ScriptLoader {
         Ok(graph)
     }
 
+    fn validate_task_config(
+        &self,
+        task_config: &TaskConfig,
+        task_name: &str,
+        path: &Path,
+    ) -> Result<()> {
+        // Set the task name for validation
+        let mut task = task_config.clone();
+        task._name_check = Some(task_name.to_string());
+
+        // Run validation
+        if let Err(e) = task.validate() {
+            warn!("Invalid task '{}' in {}: {}", task_name, path.display(), e);
+            return Err(BodoError::ValidationError(format!(
+                "Task '{}' in {} failed validation: {}",
+                task_name,
+                path.display(),
+                e
+            )));
+        }
+        Ok(())
+    }
+
     fn load_script(
         &mut self,
         graph: &mut Graph,
@@ -155,13 +182,7 @@ impl ScriptLoader {
             .insert(abs.clone(), script_id.to_string());
 
         let contents = fs::read_to_string(path)?;
-        let yaml: serde_yaml::Value = match serde_yaml::from_str(&contents) {
-            Ok(yaml) => yaml,
-            Err(e) => {
-                warn!("Skipping invalid YAML file {}: {}", path.display(), e);
-                return Ok(());
-            }
-        };
+        let yaml: serde_yaml::Value = serde_yaml::from_str(&contents)?;
 
         // [CASCADING CHANGE] Parse script-level env if present
         let script_env = if let Some(env_val) = yaml.get("env") {
@@ -205,13 +226,7 @@ impl ScriptLoader {
         let mut task_ids = Vec::new();
         if let Some(default_task) = yaml.get("default_task") {
             let mut task_config: TaskConfig =
-                match serde_yaml::from_value::<TaskConfig>(default_task.clone()) {
-                    Ok(config) => config,
-                    Err(e) => {
-                        warn!("Invalid default task in {}: {}", path.display(), e);
-                        return Ok(());
-                    }
-                };
+                serde_yaml::from_value::<TaskConfig>(default_task.clone())?;
 
             // Merge environments and exec_paths for default task
             task_config.env = Self::merge_envs(global_env, &script_env, &task_config.env);
@@ -220,6 +235,9 @@ impl ScriptLoader {
                 &script_exec_paths,
                 &task_config.exec_paths,
             );
+
+            // Validate default task
+            self.validate_task_config(&task_config, "default", path)?;
 
             let default_id = self.create_task_node(
                 graph,
@@ -232,45 +250,32 @@ impl ScriptLoader {
             task_ids.push((default_id, task_config));
         }
 
-        let tasks_map = yaml
-            .get("tasks")
-            .and_then(|v| v.as_mapping())
-            .map(|m| {
-                m.iter()
-                    .filter_map(|(k, v)| {
-                        let name = k.as_str().unwrap_or_default().to_string();
-                        match serde_yaml::from_value::<TaskConfig>(v.clone()) {
-                            Ok(mut config) => {
-                                // Merge environments and exec_paths for each task
-                                config.env = Self::merge_envs(global_env, &script_env, &config.env);
-                                config.exec_paths = Self::merge_exec_paths(
-                                    global_exec_paths,
-                                    &script_exec_paths,
-                                    &config.exec_paths,
-                                );
-                                Some(Ok((name, config)))
-                            }
-                            Err(e) => {
-                                warn!("Invalid task '{}' in {}: {}", name, path.display(), e);
-                                None
-                            }
-                        }
-                    })
-                    .collect::<Result<HashMap<String, TaskConfig>>>()
-            })
-            .transpose()?
-            .unwrap_or_default();
+        if let Some(tasks) = yaml.get("tasks").and_then(|v| v.as_mapping()) {
+            for (k, v) in tasks {
+                let name = k.as_str().unwrap_or_default().to_string();
+                let mut task_config: TaskConfig = serde_yaml::from_value::<TaskConfig>(v.clone())?;
 
-        for (name, task_config) in tasks_map {
-            let task_display_name = if script_id == "scripts" {
-                "".to_string()
-            } else {
-                script_display_name.clone()
-            };
-            let task_id =
-                self.create_task_node(graph, script_id, &task_display_name, &name, &task_config);
-            self.register_task(script_id, &name, task_id, graph)?;
-            task_ids.push((task_id, task_config));
+                // Merge environments and exec_paths for each task
+                task_config.env = Self::merge_envs(global_env, &script_env, &task_config.env);
+                task_config.exec_paths = Self::merge_exec_paths(
+                    global_exec_paths,
+                    &script_exec_paths,
+                    &task_config.exec_paths,
+                );
+
+                // Validate task config
+                self.validate_task_config(&task_config, &name, path)?;
+
+                let task_id = self.create_task_node(
+                    graph,
+                    script_id,
+                    &script_display_name,
+                    &name,
+                    &task_config,
+                );
+                self.register_task(script_id, &name, task_id, graph)?;
+                task_ids.push((task_id, task_config));
+            }
         }
 
         // Handle dependencies after all tasks are created

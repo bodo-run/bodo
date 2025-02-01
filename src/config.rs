@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use validator::{Validate, ValidationError};
 
-/// Helper function to check for reserved task names
+/// Helper function to check for reserved task names and additional constraints
 fn validate_task_name(name: &str) -> std::result::Result<(), ValidationError> {
     let reserved = [
         "watch",
@@ -13,11 +13,54 @@ fn validate_task_name(name: &str) -> std::result::Result<(), ValidationError> {
         "post_deps",
         "concurrently",
     ];
+
+    // Check reserved words
     if reserved.contains(&name) {
         let mut err = ValidationError::new("reserved_name");
         err.message = Some(format!("'{}' is a reserved task name", name).into());
         return Err(err);
     }
+
+    // Check length (1 to 100)
+    if name.len() < 1 || name.len() > 100 {
+        let mut err = ValidationError::new("invalid_length");
+        err.message = Some("Task name length must be between 1 and 100".into());
+        return Err(err);
+    }
+
+    // Disallow '/', '.' or '..'
+    if name.contains('/') || name.contains("..") || name.contains('.') {
+        let mut err = ValidationError::new("invalid_chars");
+        err.message = Some("Task name cannot contain '/', '.' or '..'".into());
+        return Err(err);
+    }
+
+    Ok(())
+}
+
+/// Multi-field validation for TaskConfig
+fn validate_task_config(task: &TaskConfig) -> std::result::Result<(), ValidationError> {
+    // If there's no command, at least one of pre_deps, post_deps, or concurrently must be non-empty
+    let no_command = task.command.is_none();
+    let no_pre = task.pre_deps.is_empty();
+    let no_post = task.post_deps.is_empty();
+    let no_concur = task.concurrently.is_empty();
+
+    if no_command && no_pre && no_post && no_concur {
+        let mut err = ValidationError::new("no_op");
+        err.message = Some("A task must have a command or some dependencies".into());
+        return Err(err);
+    }
+
+    // Validate timeout format if present
+    if let Some(timeout) = &task.timeout {
+        if let Err(_) = humantime::parse_duration(timeout) {
+            let mut err = ValidationError::new("invalid_timeout");
+            err.message = Some(format!("Invalid timeout format: {}", timeout).into());
+            return Err(err);
+        }
+    }
+
     Ok(())
 }
 
@@ -89,6 +132,7 @@ pub struct ConcurrentlyOptions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Validate, JsonSchema)]
+#[validate(schema(function = "validate_task_config"))]
 pub struct TaskConfig {
     /// Description of the task
     #[validate(length(min = 1, max = 128))]
