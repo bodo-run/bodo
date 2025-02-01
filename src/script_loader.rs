@@ -14,6 +14,9 @@ pub struct ScriptLoader {
     // Track tasks across all files: "script_id task_name" -> node ID
     pub name_to_id: HashMap<String, u64>,
     pub task_registry: HashMap<String, u64>,
+
+    // Track which scripts we've already loaded, plus a map from abs path to script name
+    loaded_scripts: HashMap<PathBuf, String>,
 }
 
 impl Default for ScriptLoader {
@@ -27,6 +30,7 @@ impl ScriptLoader {
         Self {
             name_to_id: HashMap::new(),
             task_registry: HashMap::new(),
+            loaded_scripts: HashMap::new(),
         }
     }
 
@@ -34,17 +38,13 @@ impl ScriptLoader {
     pub async fn build_graph(&mut self, config: BodoConfig) -> Result<Graph> {
         let mut graph = Graph::new();
         let mut paths_to_load = vec![];
-        // Store the canonicalized root script path if it exists
         let mut root_script_abs: Option<PathBuf> = None;
 
         // Load the root script if exists
         if let Some(ref root_script) = config.root_script {
             let root_path = PathBuf::from(root_script);
             if root_path.exists() {
-                // Save canonicalized path for later comparison
                 root_script_abs = Some(root_path.canonicalize()?);
-                // Instead of giving it a header display name, push it with an empty string.
-                // That tells the print plugin to print its tasks without a leading header.
                 paths_to_load.push((root_path, "".to_string()));
             }
         }
@@ -106,6 +106,16 @@ impl ScriptLoader {
     }
 
     fn load_script(&mut self, graph: &mut Graph, path: &Path, script_id: &str) -> Result<()> {
+        // If we've already loaded this script (by its absolute path), skip
+        let abs = path.canonicalize()?;
+        if self.loaded_scripts.contains_key(&abs) {
+            return Ok(());
+        }
+
+        // Mark it as loaded
+        self.loaded_scripts
+            .insert(abs.clone(), script_id.to_string());
+
         let contents = fs::read_to_string(path)?;
         let yaml = match serde_yaml::from_str::<serde_yaml::Value>(&contents) {
             Ok(yaml) => yaml,
@@ -197,7 +207,7 @@ impl ScriptLoader {
             for dep in task_config.pre_deps {
                 match dep {
                     Dependency::Task { task } => {
-                        let dep_id = self.resolve_dependency(&task, script_id, graph)?;
+                        let dep_id = self.resolve_dependency(&task, path, graph)?;
                         graph.add_edge(dep_id, task_id)?;
                     }
                     Dependency::Command { command } => {
@@ -217,7 +227,7 @@ impl ScriptLoader {
             for dep in task_config.post_deps {
                 match dep {
                     Dependency::Task { task } => {
-                        let dep_id = self.resolve_dependency(&task, script_id, graph)?;
+                        let dep_id = self.resolve_dependency(&task, path, graph)?;
                         graph.add_edge(task_id, dep_id)?;
                     }
                     Dependency::Command { command } => {
@@ -236,6 +246,7 @@ impl ScriptLoader {
 
         Ok(())
     }
+
     fn create_task_node(
         &self,
         graph: &mut Graph,
@@ -314,23 +325,132 @@ impl ScriptLoader {
         Ok(())
     }
 
-    fn resolve_dependency(&self, dep: &str, script_id: &str, graph: &Graph) -> Result<u64> {
-        // First try with full key (script_id task_name)
+    /// Helper to parse a cross-file reference like "../other.yaml/build"
+    /// and return (absolute_script_path, optional_task_name).
+    /// If there's no `/build` part, we treat it as default.
+    fn parse_cross_file_ref(
+        &self,
+        reference: &str,
+        referencing_file: &Path,
+    ) -> Option<(PathBuf, String)> {
+        // If not .yaml or .yml, it's not cross-file
+        if !(reference.contains(".yaml") || reference.contains(".yml")) {
+            return None;
+        }
+
+        // We'll treat everything up to ".yaml" or ".yml" as the file,
+        // and anything after the next slash as the task
+        // e.g. "foo/bar.yaml/baz" => file="foo/bar.yaml", task="baz"
+        // e.g. "../other.yml" => file="../other.yml", task=default
+        let full_ref = PathBuf::from(reference);
+        let referencing_dir = referencing_file.parent().unwrap_or_else(|| Path::new("."));
+
+        // Attempt to split the path into (someFile.yaml) + (subtask)
+        // Strategy: search from left to right for a .yaml or .yml extension
+        let mut found_yaml = false;
+        let mut path_part = PathBuf::new();
+        let mut task_part = None;
+
+        // We'll iterate components to find the file that has .yaml or .yml
+        let mut components = full_ref.components().peekable();
+        while let Some(comp) = components.next() {
+            path_part.push(comp);
+            if let Some(ext) = path_part.extension() {
+                let ext_s = ext.to_string_lossy().to_lowercase();
+                if ext_s == "yaml" || ext_s == "yml" {
+                    // we found the script file portion
+                    found_yaml = true;
+                    break;
+                }
+            }
+        }
+
+        if !found_yaml {
+            // There's .yaml in the string but we didn't parse it properly as extension?
+            return None;
+        }
+
+        // If there are leftover components after the .yaml / .yml, that's the subtask
+        let remaining: Vec<_> = components.collect();
+        if !remaining.is_empty() {
+            // subtask name is the join of all remaining components with "/"
+            let joined = remaining
+                .iter()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/");
+            task_part = Some(joined);
+        } else {
+            // no subtask => default
+            task_part = Some("default".to_string());
+        }
+
+        // Now we form the absolute path to the .yaml file
+        let abs_script = referencing_dir.join(path_part).canonicalize().ok()?;
+        let subtask = task_part.unwrap_or_else(|| "default".to_string());
+
+        Some((abs_script, subtask))
+    }
+
+    /// Modified: resolve_dependency checks if `dep` is cross-file.
+    /// If so, we load the external script (if needed) and return the correct node ID.
+    fn resolve_dependency(
+        &mut self,
+        dep: &str,
+        referencing_file: &Path,
+        graph: &mut Graph,
+    ) -> Result<u64> {
+        // 1) If there's a known local or global name, return it
         if let Some(&id) = graph.task_registry.get(dep) {
             return Ok(id);
         }
 
-        // Then try with current script_id
-        let full_key = format!("{} {}", script_id, dep);
-        if let Some(&id) = graph.task_registry.get(&full_key) {
+        // 2) Possibly it's a cross-file reference like "../other.yaml/build"
+        if let Some((script_path, subtask_name)) = self.parse_cross_file_ref(dep, referencing_file)
+        {
+            // Load the other script if not loaded
+            if !self.loaded_scripts.contains_key(&script_path) {
+                // Create a fallback display name from file stem
+                let fallback_name = script_path
+                    .file_stem()
+                    .map(|x| x.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "external".to_string());
+
+                self.load_script(graph, &script_path, &fallback_name)?;
+            }
+
+            // Now we have a script_id for that file
+            // get the "display name" we stored when first loaded
+            let loaded_id = self.loaded_scripts.get(&script_path).ok_or_else(|| {
+                BodoError::PluginError(format!(
+                    "Script not found after load: {}",
+                    script_path.display()
+                ))
+            })?;
+            // We'll build the registry key: "displayName task" or just "displayName" if default
+            let full_key = if subtask_name == "default" {
+                loaded_id.to_string()
+            } else {
+                format!("{} {}", loaded_id, subtask_name)
+            };
+
+            if let Some(&id) = graph.task_registry.get(&full_key) {
+                return Ok(id);
+            }
+            return Err(BodoError::PluginError(format!(
+                "Dependency not found in loaded script: {} (task '{}')",
+                script_path.display(),
+                subtask_name
+            )));
+        }
+
+        // 3) Last attempt: maybe "script_id task" style => already in registry?
+        let script_key = format!("{} {}", referencing_file.display(), dep);
+        if let Some(&id) = graph.task_registry.get(&script_key) {
             return Ok(id);
         }
 
-        // Finally try with just the task name
-        if let Some(&id) = graph.task_registry.get(dep) {
-            return Ok(id);
-        }
-
+        // 4) Fallback error
         Err(BodoError::PluginError(format!(
             "Dependency not found: {}",
             dep
