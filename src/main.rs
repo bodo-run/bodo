@@ -1,81 +1,83 @@
 use bodo::{
-    graph::{Graph, NodeKind, TaskData},
-    plugin::{PluginConfig, PluginManager},
+    cli::{get_task_name, Args},
+    config::BodoConfig,
+    manager::GraphManager,
+    plugin::PluginConfig,
     plugins::{
-        concurrency_plugin::ConcurrencyPlugin,
-        env_plugin::EnvPlugin,
-        execution_plugin::{execute_graph, ExecutionPlugin},
+        concurrent_plugin::ConcurrentPlugin, env_plugin::EnvPlugin,
+        execution_plugin::ExecutionPlugin, path_plugin::PathPlugin, prefix_plugin::PrefixPlugin,
+        print_list_plugin::PrintListPlugin, timeout_plugin::TimeoutPlugin,
+        watch_plugin::WatchPlugin,
     },
-    Result,
+    BodoError,
 };
-use serde_json::json;
-use std::collections::HashMap;
+use clap::Parser;
+use log::{error, LevelFilter};
+use std::{collections::HashMap, process::exit};
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    // Create a simple graph with two tasks
-    let mut graph = Graph::new();
+fn main() {
+    let args = Args::parse();
 
-    // Add a "build" task
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "build".into(),
-        description: Some("Build the project".into()),
-        command: Some("echo Building".into()),
-        working_dir: None,
-        env: HashMap::new(),
-        is_default: false,
-        script_name: None,
-    }));
-
-    // Add a "test" task
-    let test_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "test".into(),
-        description: Some("Run tests".into()),
-        command: Some("echo Testing".into()),
-        working_dir: None,
-        env: HashMap::new(),
-        is_default: false,
-        script_name: None,
-    }));
-
-    // Add concurrency metadata to the build task
-    {
-        let node = &mut graph.nodes[task_id as usize];
-        node.metadata.insert(
-            "concurrently".to_string(),
-            json!({
-                "children": [test_id],
-                "fail_fast": true
-            })
-            .to_string(),
-        );
+    if args.debug {
+        std::env::set_var("RUST_LOG", "bodo=debug");
+    } else if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "bodo=info");
     }
+    env_logger::Builder::from_default_env()
+        .filter_module(
+            "bodo",
+            if args.debug {
+                LevelFilter::Debug
+            } else {
+                LevelFilter::Info
+            },
+        )
+        .init();
 
-    // Create and configure plugins
-    let mut manager = PluginManager::new();
-    manager.register(Box::new(ConcurrencyPlugin));
-    manager.register(Box::new(EnvPlugin::new()));
-    manager.register(Box::new(ExecutionPlugin));
+    if let Err(e) = run(args) {
+        error!("Error: {}", e);
+        exit(1);
+    }
+}
 
-    // Configure global environment variables
-    let plugin_config = PluginConfig {
-        options: Some(
-            json!({
-                "env": {
-                    "RUST_LOG": "info"
-                }
-            })
-            .as_object()
-            .cloned()
-            .unwrap(),
-        ),
+fn run(args: Args) -> Result<(), BodoError> {
+    let watch_mode = if args.auto_watch { true } else { args.watch };
+
+    let config = BodoConfig {
+        root_script: None,
+        scripts_dirs: Some(vec!["scripts/".into()]),
+        tasks: HashMap::new(),
     };
 
-    // Run plugin lifecycle
-    manager.run_lifecycle(&mut graph, &plugin_config).await?;
+    let mut graph_manager = GraphManager::new();
+    graph_manager.build_graph(config)?;
 
-    // Execute the graph
-    execute_graph(&mut manager, &mut graph).await?;
+    if args.list {
+        graph_manager.register_plugin(Box::new(PrintListPlugin));
+        graph_manager.run_plugins(None)?;
+        return Ok(());
+    }
 
+    // Register all normal plugins
+    graph_manager.register_plugin(Box::new(EnvPlugin::new()));
+    graph_manager.register_plugin(Box::new(PathPlugin::new()));
+    graph_manager.register_plugin(Box::new(ConcurrentPlugin::new()));
+    graph_manager.register_plugin(Box::new(PrefixPlugin::new()));
+    graph_manager.register_plugin(Box::new(WatchPlugin::new(watch_mode, true)));
+    graph_manager.register_plugin(Box::new(ExecutionPlugin::new()));
+    graph_manager.register_plugin(Box::new(TimeoutPlugin::new()));
+
+    let task_name = get_task_name(&args, &graph_manager)?;
+    let mut options = serde_json::Map::new();
+    options.insert("task".into(), serde_json::Value::String(task_name.clone()));
+
+    let plugin_config = PluginConfig {
+        fail_fast: true,
+        watch: watch_mode,
+        list: false,
+        options: Some(options),
+    };
+
+    graph_manager.run_plugins(Some(plugin_config))?;
     Ok(())
 }

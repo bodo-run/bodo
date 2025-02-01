@@ -1,13 +1,21 @@
-description: Root level tasks
+description: "Root script"
 
 default_task:
-  command: "echo 'Hello from bodo!'"
-  description: "Default greeting"
+  command: echo "Hello from Bodo root!"
+  description: "Default greeting when running `bodo` with no arguments."
 
 tasks:
-  echo:
-    command: "echo 'Hello from `bodo echo`!'"
-    description: "echo task"
-  echo2:
-    command: "echo 'Hello from `bodo echo2`!'"
-    description: "echo2 task"
+  commit:
+    description: Commit everything
+    command: git add . && git commit
+
+  test-watch:
+    description: A test task that watches for file changes
+    command: cargo test
+    watch:
+      patterns:
+        - "src/**/*.rs"
+        - "tests/**/*.rs"
+      debounce_ms: 1000
+      ignore_patterns:
+        - "target/**"

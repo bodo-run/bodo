@@ -1,0 +1,31 @@
+name: "deploy"
+description: "Deployment tasks"
+
+env:
+  DEPLOY_ENV: "staging"
+  BODO_LOG_LEVEL: "debug"
+
+default_task:
+  description: "Deploy to the staging environment"
+  command: |
+    echo "Deploying to $DEPLOY_ENV..."
+    sleep 2
+    echo "Deployment finished."
+
+tasks:
+  prod:
+    description: "Deploy to production environment"
+    command: |
+      echo "Deploying to production..."
+      sleep 5
+      echo "Deployment complete."
+    env:
+      DEPLOY_ENV: "production"
+    timeout: "30s"
+
+  check-deploy:
+    description: "Check if deploy is possible"
+    command: |
+      echo "Checking environment: $DEPLOY_ENV"
+      sleep 1
+      echo "Deploy is possible!"
