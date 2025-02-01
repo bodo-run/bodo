@@ -2,7 +2,7 @@ use crate::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum Dependency {
     Task { task: String },
@@ -16,7 +16,7 @@ pub struct BodoConfig {
     pub tasks: HashMap<String, TaskConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct ConcurrentlyOptions {
     pub fail_fast: Option<bool>,
     pub max_concurrent_tasks: Option<usize>,
@@ -24,7 +24,7 @@ pub struct ConcurrentlyOptions {
     pub prefix_color: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct TaskConfig {
     pub description: Option<String>,
     pub command: Option<String>,
@@ -43,7 +43,7 @@ pub struct TaskConfig {
     pub env: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WatchConfig {
     pub patterns: Vec<String>,
     #[serde(default = "default_debounce_ms")]

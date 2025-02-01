@@ -8,3 +8,14 @@ tasks:
   commit:
     description: Commit everything
     command: git add . && git commit
+
+  test-watch:
+    description: A test task that watches for file changes
+    command: cargo test
+    watch:
+      patterns:
+        - "src/**/*.rs"
+        - "tests/**/*.rs"
+      debounce_ms: 1000
+      ignore_patterns:
+        - "target/**"

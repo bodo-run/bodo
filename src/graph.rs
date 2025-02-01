@@ -1,3 +1,4 @@
+use crate::config::WatchConfig;
 use crate::errors::BodoError;
 use crate::Result;
 use std::collections::HashMap;
@@ -32,8 +33,8 @@ pub struct TaskData {
     pub script_id: String,
     /// The display name of the script this task came from
     pub script_display_name: String,
-    /// Watch paths for file changes
-    pub watch: Option<Vec<String>>,
+    /// Watch configuration for file changes
+    pub watch: Option<WatchConfig>,
 }
 
 /// Represents data for a Command node.
