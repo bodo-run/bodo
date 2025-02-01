@@ -118,6 +118,12 @@ impl Plugin for ConcurrentPlugin {
             graph.add_edge(parent_id, group_id)?;
             for child_id in child_ids {
                 graph.add_edge(group_id, child_id)?;
+
+                // Mark children so ExecutionPlugin won't re-run them individually outside the group
+                let child_node = &mut graph.nodes[child_id as usize];
+                child_node
+                    .metadata
+                    .insert("skip_main_pass".to_string(), "true".to_string());
             }
         }
 

@@ -54,6 +54,12 @@ impl Plugin for ExecutionPlugin {
         // 2) Walk each node in topological order
         for node_id in sorted {
             let node = &graph.nodes[node_id as usize];
+
+            // Skip children that were marked by the concurrency plugin
+            if node.metadata.get("skip_main_pass") == Some(&"true".to_string()) {
+                continue;
+            }
+
             match &node.kind {
                 NodeKind::Task(task_data) => {
                     run_single_task(task_data)?;
