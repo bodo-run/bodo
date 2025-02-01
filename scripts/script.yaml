@@ -5,6 +5,6 @@ default_task:
   description: "Default greeting when running `bodo` with no arguments."
 
 tasks:
-  wip:
+  commit:
     description: Commit everything
-    command: git add . && git commit -m "wip"
+    command: git add . && git commit
