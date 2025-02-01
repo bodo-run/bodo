@@ -48,6 +48,7 @@ fn run(args: Args) -> Result<(), BodoError> {
         scripts_dirs: Some(vec!["scripts/".into()]),
         tasks: HashMap::new(),
         env: HashMap::new(),
+        exec_paths: vec![],
     };
 
     let mut graph_manager = GraphManager::new();

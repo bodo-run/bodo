@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::env;
 
 use crate::{
     graph::{Graph, NodeKind},
@@ -8,13 +9,39 @@ use crate::{
 
 pub struct PathPlugin {
     default_paths: Vec<String>,
+    preserve_path: bool,
 }
 
 impl PathPlugin {
     pub fn new() -> Self {
         Self {
             default_paths: Vec::new(),
+            preserve_path: true,
         }
+    }
+
+    fn build_path(&self, working_dir: Option<&String>, exec_paths: &[String]) -> String {
+        let mut paths = Vec::new();
+
+        // Add working directory first if present
+        if let Some(cwd) = working_dir {
+            paths.push(cwd.clone());
+        }
+
+        // Add default paths from plugin config
+        paths.extend(self.default_paths.iter().cloned());
+
+        // Add user-specified exec_paths
+        paths.extend(exec_paths.iter().cloned());
+
+        // Optionally preserve existing PATH
+        if self.preserve_path {
+            if let Ok(current_path) = env::var("PATH") {
+                paths.extend(current_path.split(':').map(String::from));
+            }
+        }
+
+        paths.join(":")
     }
 }
 
@@ -43,6 +70,11 @@ impl Plugin for PathPlugin {
                         .collect();
                 }
             }
+            if let Some(preserve) = options.get("preserve_path") {
+                if let Some(val) = preserve.as_bool() {
+                    self.preserve_path = val;
+                }
+            }
         }
         Ok(())
     }
@@ -51,22 +83,16 @@ impl Plugin for PathPlugin {
         for node in &mut graph.nodes {
             match &mut node.kind {
                 NodeKind::Task(task_data) => {
-                    let mut paths = self.default_paths.clone();
-                    if let Some(cwd) = &task_data.working_dir {
-                        paths.push(cwd.clone());
-                    }
-                    if !paths.is_empty() {
-                        let path_str = paths.join(":");
+                    let path_str =
+                        self.build_path(task_data.working_dir.as_ref(), &task_data.exec_paths);
+                    if !path_str.is_empty() {
                         task_data.env.insert("PATH".to_string(), path_str);
                     }
                 }
                 NodeKind::Command(cmd_data) => {
-                    let mut paths = self.default_paths.clone();
-                    if let Some(cwd) = &cmd_data.working_dir {
-                        paths.push(cwd.clone());
-                    }
-                    if !paths.is_empty() {
-                        let path_str = paths.join(":");
+                    // For commands, we'll just use default paths and working dir since they don't have exec_paths
+                    let path_str = self.build_path(cmd_data.working_dir.as_ref(), &[]);
+                    if !path_str.is_empty() {
                         cmd_data.env.insert("PATH".to_string(), path_str);
                     }
                 }

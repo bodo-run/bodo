@@ -16,6 +16,8 @@ pub struct BodoConfig {
     pub tasks: HashMap<String, TaskConfig>,
     #[serde(default)]
     pub env: HashMap<String, String>,
+    #[serde(default)]
+    pub exec_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -55,6 +57,8 @@ pub struct TaskConfig {
     pub timeout: Option<String>,
     #[serde(default)]
     pub env: HashMap<String, String>,
+    #[serde(default)]
+    pub exec_paths: Vec<String>,
 }
 
 impl BodoConfig {

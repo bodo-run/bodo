@@ -76,6 +76,7 @@ impl GraphManager {
             timeout: None,
             concurrently_options: Default::default(),
             concurrently: vec![],
+            exec_paths: task_data.exec_paths.clone(),
         })
     }
 
@@ -85,6 +86,7 @@ impl GraphManager {
             scripts_dirs: Some(vec!["scripts/".into()]),
             tasks: Default::default(),
             env: Default::default(),
+            exec_paths: Default::default(),
         };
         self.build_graph(config)?;
         Ok(())
