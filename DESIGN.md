@@ -20,14 +20,13 @@ The core of Bodo is a **Graph Manager** that builds/manages a graph representing
 
 ### 2.1 Core Plugins (Execution Order)
 
-1. **Resolver Plugin**: Resolves task references (`task: ../other.yaml/build`)
-2. **Env Plugin**: Merges environment variables
-3. **Path Plugin**: Computes `PATH` for each node
-4. **Concurrent Plugin**: Wraps concurrent tasks
-5. **Watch Plugin**: Adds file watchers
-6. **Execution Plugin**: Runs processes
-7. **Timeout Plugin**: Adds task timeouts
-8. **Interactive Plugin**: Enables TUI prompts
+1. **Env Plugin**: Merges environment variables
+2. **Path Plugin**: Computes `PATH` for each node
+3. **Concurrent Plugin**: Wraps concurrent tasks
+4. **Watch Plugin**: Adds file watchers
+5. **Execution Plugin**: Runs processes
+6. **Timeout Plugin**: Adds task timeouts
+7. **Print List Plugin**: Handles task listing
 
 ### 2.3 Plugin Lifecycle and Ordering
 
@@ -579,3 +578,88 @@ NOTES:
 4. Fail-fast groups marked with (fail_fast)
 5. Random delays shown as RANDOM
 6. Cross-file references use 🌐 emoji
+
+## 15. TODO
+
+### High Priority
+
+1. **Interactive Plugin (TUI)**
+   - Implement TUI for task selection (`--interactive` flag)
+   - Show available tasks with descriptions
+   - Allow fuzzy search/filtering
+   - Return chosen task name for execution
+
+2. **Graph Visualization**
+   - Implement `--graph` flag
+   - Create ASCII diagram of task dependencies
+   - Show in topological order
+   - Include task types, dependencies, and concurrent groups
+
+3. **Dry Run Mode**
+   - Add `--dry-run` flag support
+   - Modify ExecutionPlugin to skip actual command execution
+   - Log/print commands that would be run
+   - Show environment and path modifications
+
+4. **Task Name Validation**
+   - Add checks for reserved words in script_loader.rs
+   - Validate against: watch, default_task, pre_deps, post_deps, concurrently
+   - Provide clear error messages for invalid names
+
+### Medium Priority
+
+5. **User-Friendly Errors**
+   - Add "Did you mean?" suggestions for unknown tasks
+   - Implement Levenshtein distance checks
+   - Enhance TaskNotFound error handling
+   - Add context to common error scenarios
+
+6. **Windows Support**
+   - Replace hardcoded `sh` with platform-specific shells
+   - Support cmd.exe on Windows
+   - Implement cross-shell command execution
+   - Test on various Windows environments
+
+7. **Custom Plugin Support**
+   - Design stable plugin trait interface
+   - Enable third-party plugin loading
+   - Document plugin development process
+   - Provide example custom plugins
+
+### Lower Priority
+
+8. **Documentation Generator**
+   - Implement `bodo docs` command
+   - Generate Markdown/HTML documentation
+   - Include task descriptions and dependencies
+   - Add examples and usage patterns
+
+9. **Test Coverage**
+   - Unit tests for each plugin
+   - Integration tests for task execution
+   - E2E tests with CLI snapshots
+   - Cross-platform testing
+
+10. **Sandbox Mode**
+    - Research sandboxing approaches
+    - Implement filesystem/network restrictions
+    - Add `--sandbox` flag
+    - Document security implications
+
+### Misc Improvements
+
+11. **Environment Variable Support**
+    - Implement BODO_KILL_SIGNAL for process termination
+    - Add more environment variable configurations
+    - Document all supported variables
+
+12. **Output Formatting**
+    - Extend PrefixPlugin for non-concurrent tasks
+    - Add more color customization options
+    - Improve error message formatting
+
+13. **Performance Optimizations**
+    - Profile task execution
+    - Optimize graph traversal
+    - Improve concurrent task handling
+    - Reduce memory usage for large task graphs

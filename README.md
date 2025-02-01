@@ -8,14 +8,18 @@
 
 # `bodo`
 
-Read the [Design Document](./DESIGN.md) to see what am I cooking. 👨🏽‍🍳
-
 > [!WARNING]
 > This project is currently in development and is not ready for production use. It's open source just so I can use free CI!
 
-A task runner with intuitive organization and powerful features.
+Read the [Design Document](./DESIGN.md) to see what am I cooking. 👨🏽‍🍳
 
-> The name "bodo" comes from Farsi, meaning "run" and it's fast to type on a QWERTY keyboard.
+If you are adventurous, read the [Usage Document](./USAGE.md) to see what you can do with Bodo today.
+
+
+
+Bodo is a task runner with intuitive organization and powerful features.
+
+> The name "bodo" بدو comes from Farsi, meaning "run" and it's fast to type on a QWERTY keyboard.
 
 ## Who is this for?
 
