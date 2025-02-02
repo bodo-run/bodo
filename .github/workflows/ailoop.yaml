@@ -31,6 +31,7 @@ jobs:
       CARGO_TERM_COLOR: always
       RUSTFLAGS: "-Cinstrument-coverage"
       LLVM_PROFILE_FILE: "coverage/bodo-%p-%m.profraw"
+      BRANCH: ${{ github.event.inputs.branch }}
 
     steps:
       - name: Print inputs
@@ -82,6 +83,7 @@ jobs:
         run: |
           deno run --allow-all scripts/ai/main.ts
           echo "success=$?" >> "$GITHUB_OUTPUT"
+          echo "last_attempt=${{ env.LAST_ATTEMPT }}" >> "$GITHUB_OUTPUT"
 
       - name: Upload attempts log
         uses: actions/upload-artifact@v4
@@ -97,17 +99,17 @@ jobs:
         with:
           token: ${{ env.GH_TOKEN }}
           commit-message: "AI Loop"
-          title: "AI Loop for ${{ github.head_ref }} (Attempts: ${{ env.MAX_ATTEMPTS }})"
+          title: "AI Loop for ${{ env.BRANCH }} (Attempts: ${{ steps.ai_loop.outputs.last_attempt }} / ${{ env.MAX_ATTEMPTS }})"
           body: |
             ## AI Loop Results
             - Successfully fixed: ${{ steps.ai_loop.outputs.success == '0' && 'Yes' || 'No' }}
             - Total attempts: ${{ env.MAX_ATTEMPTS }}
-            - Source branch: `${{ github.head_ref }}`
-
+            - Source branch: `${{ env.BRANCH }}`
+            - Last attempt: ${{ steps.ai_loop.outputs.last_attempt }}
             ### Link to run
-            [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+              [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
             ### Attempts log
             [View attempts log](https://github.com/${{ github.repository }}/actions/artifacts/${{ steps.attempts-log.outputs.artifact_id }}/attempts.txt)
-          branch: ${{ github.head_ref }}-ai-loop
-          base: ${{ github.head_ref }}
+          branch: ${{ env.BRANCH }}-ai-loop-${{ github.run_id }}
+          base: ${{ env.BRANCH }}
