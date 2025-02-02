@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: "Branch to run"
+        description: "Base branch to run"
         required: true
         default: "main"
       attempts:
@@ -23,6 +23,7 @@ on:
         options:
           - openai
           - fireworks
+          - deepseek
 
 permissions:
   contents: write
@@ -36,23 +37,24 @@ jobs:
     timeout-minutes: 360
     env:
       MAX_ATTEMPTS: ${{ github.event.inputs.attempts }}
+      BASE_BRANCH: ${{ github.event.inputs.branch }}
+      NEW_BRANCH: ${{ github.event.inputs.branch }}-ai-loop-${{ github.run_id }}
       CARGO_TERM_COLOR: always
       RUSTFLAGS: "-Cinstrument-coverage"
       LLVM_PROFILE_FILE: "coverage/bodo-%p-%m.profraw"
-      BRANCH: ${{ github.event.inputs.branch }}
       AI_PROVIDER: ${{ github.event.inputs.provider }}
 
     steps:
       - name: Print inputs
         run: |
           echo "MAX_ATTEMPTS=${{ env.MAX_ATTEMPTS }}"
+          echo "BASE_BRANCH=${{ env.BASE_BRANCH }}"
+          echo "NEW_BRANCH=${{ env.NEW_BRANCH }}"
 
-      - name: Install Bodo
-        run: curl -fsSL https://bodo.run/bodo.sh | bash
-
-      - name: Checkout
+      - name: Checkout base branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ env.BASE_BRANCH }}
           fetch-depth: 0
 
       - name: Cache Rust dependencies
@@ -83,6 +85,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Create new branch
+        run: |
+          git checkout -b ${{ env.NEW_BRANCH }}
+
       - name: Run AI Loop
         id: ai_loop
         timeout-minutes: 360
@@ -93,16 +99,15 @@ jobs:
           FIREWORKS_AI_API_KEY: ${{ secrets.FIREWORKS_AI_API_KEY }}
           MAX_ATTEMPTS: ${{ env.MAX_ATTEMPTS }}
           AI_PROVIDER: ${{ env.AI_PROVIDER }}
-          BASE_BRANCH: ${{ env.BRANCH }}
-          FIX_BRANCH: ${{ env.BRANCH }}-ai-loop-${{ github.run_id }}
+          BASE_BRANCH: ${{ env.BASE_BRANCH }}
+          NEW_BRANCH: ${{ env.NEW_BRANCH }}
         run: |
-          git checkout -b $FIX_BRANCH
           for i in $(seq 1 $MAX_ATTEMPTS); do
             echo "===== Attempt $i ====="
             deno run --allow-all scripts/ai/main.ts
             git add -A
             git commit -m "AI Loop attempt $i"
-            git push origin $FIX_BRANCH
+            git push -u origin $NEW_BRANCH
             echo "last_attempt=${i}" >> "$GITHUB_OUTPUT"
           done
           echo "success=${SUCCESS}" >> "$GITHUB_OUTPUT"
@@ -116,10 +121,10 @@ jobs:
         with:
           token: ${{ env.GH_TOKEN }}
           commit-message: "AI Loop"
-          title: "AI tests for `${{ env.BRANCH }}` branch"
+          title: "AI tests for \\`${{ env.BASE_BRANCH }}\\` branch"
           body: |
             - Successful: ${{ steps.ai_loop.outputs.success != 0 }}
             - Attempts: `${{ steps.ai_loop.outputs.last_attempt }} / ${{ env.MAX_ATTEMPTS }}`
             - [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          branch: ${{ env.BRANCH }}-ai-loop-${{ github.run_id }}
-          base: ${{ env.BRANCH }}
+          branch: ${{ env.NEW_BRANCH }}
+          base: ${{ env.BASE_BRANCH }}

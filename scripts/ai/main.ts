@@ -38,6 +38,12 @@ function getOpenAiClient() {
     const openai = new OpenAI({ apiKey });
     const modelName = "o1-preview";
     return { openai, modelName };
+  } else if (provider === "deepseek") {
+    const apiKey = Deno.env.get("DEEPSEEK_API_KEY");
+    if (!apiKey) throw new Error("Missing DEEPSEEK_API_KEY env var.");
+    const openai = new OpenAI({ apiKey });
+    const modelName = "deepseek-reasoner";
+    return { openai, modelName, baseURL: "https://api.deepseek.com/v1" };
   }
   throw new Error(`Unknown AI provider: ${provider}`);
 }
