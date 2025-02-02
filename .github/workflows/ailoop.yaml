@@ -95,6 +95,7 @@ jobs:
 
       - name: Upload attempts log
         uses: actions/upload-artifact@v4
+        id: upload_artifacts
         with:
           name: attempts-log
           path: attempts.txt
@@ -114,6 +115,6 @@ jobs:
             - Source branch: `${{ env.BRANCH }}`
             - Last attempt: ${{ steps.ai_loop.outputs.last_attempt }}
             - [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            - [View attempts log](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.attempts-log.outputs.artifact_id }})
+            - [View attempts log](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)
           branch: ${{ env.BRANCH }}-ai-loop-${{ github.run_id }}
           base: ${{ env.BRANCH }}

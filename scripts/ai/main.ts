@@ -8,7 +8,7 @@ const AI_PROMPT = `
 You are given the full respository, results of the test run, and the coverage report.
 Your task is first to fix the tests that are failing. DO NOT remove any existing implementations to make the tests pass.
 If all tests are passing, pay attention to the coverage report and add new tests to add more 
-coverage as needed. Code coverage should be 100%;
+coverage as needed. Code coverage should be executed 100%;
 If all tests pass, and coverage is at 100%, return "DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD".
 Provide only and only code updates. Do not provide any other text. You response can be multiple files.
 
@@ -41,15 +41,6 @@ function getOpenAiClient() {
     return { openai, modelName };
   }
   throw new Error(`Unknown AI provider: ${provider}`);
-}
-
-function existsSync(filePath: string): boolean {
-  try {
-    Deno.statSync(filePath);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 async function writeFileContent(filePath: string, content: string) {
@@ -95,24 +86,13 @@ async function main() {
   for (let i = 1; i <= MAX_ATTEMPTS; i++) {
     console.log(`\n=== Iteration #${i} ===`);
     // Run cargo-llvm-cov in one shot
-    const { code, stdout, stderr } = await runCommand("cargo", [
-      "llvm-cov",
-      "--json",
-      "--output-path",
-      "coverage/coverage.json",
-    ]);
-
-    const coveragePath = "coverage/coverage.json";
-    let coverageJson = "";
-    if (existsSync(coveragePath)) {
-      coverageJson = await Deno.readTextFile(coveragePath);
-    }
+    const { code, stdout, stderr } = await runCommand("cargo", ["llvm-cov"]);
 
     // If everything passed and coverage is presumably fine
     // cargo-llvm-cov will exit 0. We can check coverage JSON if we want.
     if (code === 0) {
       console.log("cargo llvm-cov completed with exit code 0.");
-      // You could parse coverageJson to verify coverage thresholds if needed.
+      // You could parse coverageReport to verify coverage thresholds if needed.
       // For now, let's see if AI says it's "DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD"
     }
 
@@ -123,8 +103,6 @@ async function main() {
       stdout,
       `STDERR:`,
       stderr,
-      `Coverage JSON:`,
-      coverageJson,
       `Instructions:`,
       AI_PROMPT,
     ]
@@ -135,7 +113,7 @@ async function main() {
     // Append to attempts.txt
     await Deno.writeTextFile(
       `attempts.txt`,
-      `Attempt ${i} Request:\n\n${textToAi}\n\n`,
+      `===== Attempt ${i} Request:\n\n${textToAi} =====\n\n`,
       {
         append: true,
       }
@@ -152,7 +130,7 @@ async function main() {
     // Append to attempts.txt
     await Deno.writeTextFile(
       `attempts.txt`,
-      `Attempt ${i} Response:\n\n${aiContent}\n\n`,
+      `===== Attempt ${i} Response:\n\n${aiContent} =====\n\n`,
       {
         append: true,
       }
