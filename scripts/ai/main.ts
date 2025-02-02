@@ -1,11 +1,12 @@
 #!/usr/bin/env -S deno run --allow-all
 
 import OpenAI from "npm:openai";
+import stripAnsi from "npm:strip-ansi";
 import type { ChatCompletionCreateParams } from "npm:openai/resources/chat/completions";
 
 const AI_PROMPT = `
 We have a single command output below (cargo llvm-cov) which includes any test failures and coverage info. 
-Fix failing tests or add coverage as needed. 
+Fix failing tests or add coverage as needed. Code coverage should be 100%;
 If all tests pass, and coverage is good, return "DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD".
 
 When you return updated code, format your response as follows:
@@ -110,6 +111,7 @@ async function main() {
       `Instructions:`,
       AI_PROMPT,
     ]
+      .map((line) => stripAnsi(line))
       .join("\n")
       .trim();
 
@@ -139,6 +141,8 @@ async function main() {
         append: true,
       }
     );
+
+    Deno.env.set("LAST_ATTEMPT", i.toString());
 
     // If the AI says coverage is good, we're done
     if (aiContent.includes("DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD")) {
