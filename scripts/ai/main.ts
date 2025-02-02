@@ -7,6 +7,7 @@ import type {
 } from "npm:openai/resources/chat/completions";
 import * as path from "https://deno.land/std/path/mod.ts";
 import process from "node:process";
+import stripAnsi from "npm:strip-ansi";
 
 //
 // ────────────────────────────────────────────────────────────────────────────────
@@ -33,8 +34,8 @@ Your task is to add or expand Rust tests to improve coverage in the specified fi
 9. Aim for high coverage but do not compromise code readability or maintainability.
 10. Focus only on the file you are given.
 11. Always put tests in the tests/ directory.
-
-When providing your response, wrap the complete file content as follows:
+12. Make sure output is formatted correctly.
+13. When providing your response, wrap the complete file content as follows:
 
 ${FILENAME_TAG}
 <the relative path to the file>
@@ -52,8 +53,8 @@ Keep these rules in mind:
 3. Write concise, clear changes. If an extensive refactor is required, explain why in the code.
 4. Do not alter unrelated logic or style unless it directly affects test results.
 5. Return the complete file content with your fixes.
-
-When providing your response, wrap the complete file content as follows:
+6. Make sure output is formatted correctly.
+7. When providing your response, wrap the complete file content as follows:
 
 ${FILENAME_TAG}
 <the relative path to the file>
@@ -170,20 +171,7 @@ async function runCommand(
     stdin: "inherit",
     env: envOverride,
   });
-  const { code, stdout, stderr } = await proc.output();
-
-  // Special handling for test and clippy commands
-  if (code !== 0) {
-    if (cmd === "cargo" && args[0] === "test") return { code, stdout, stderr };
-    if (cmd === "cargo" && args[0] === "clippy") {
-      console.log("Clippy failed but continuing...");
-      return { code, stdout, stderr };
-    }
-    throw new Error(
-      `Command "${cmd} ${args.join(" ")}" failed with code ${code}`
-    );
-  }
-  return { code, stdout, stderr };
+  return await proc.output();
 }
 
 async function serializeRepo(maxTokens: number): Promise<string> {
@@ -197,11 +185,7 @@ async function serializeRepo(maxTokens: number): Promise<string> {
   const text = new TextDecoder().decode(stdout);
 
   // Remove ANSI escape sequences (if present) using a regex
-  const ansiRegex = new RegExp(
-    "[\\u001B\\u009B][[\\]()#;?]*(?:(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><])",
-    "g"
-  );
-  return text.replace(ansiRegex, "");
+  return stripAnsi(text);
 }
 
 //
@@ -525,6 +509,7 @@ async function makeAiRequest(params: AiRequestParams): Promise<string> {
       console.error("Error processing stream:", err);
       return "";
     }
+    // get final response
     console.log("\nFinal AI response:\n", completeResponse);
     return completeResponse;
   } else {
@@ -667,6 +652,7 @@ async function improveCoverageForFile(
   while (iteration < maxIterations && !coverageReached) {
     iteration++;
     console.log(`\n=== Iteration #${iteration} for ${fileName} ===`);
+    Deno.env.set("LAST_ITERATION", iteration.toString());
 
     await generateTestsForFile(fileName, repoSnapshot);
     await runCommand("cargo", ["fmt"]);
