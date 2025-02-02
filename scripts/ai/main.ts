@@ -113,6 +113,15 @@ async function main() {
       .join("\n")
       .trim();
 
+    // Append to attempts.txt
+    await Deno.writeTextFile(
+      `attempts.txt`,
+      `Attempt ${i} Request:\n\n${textToAi}\n\n`,
+      {
+        append: true,
+      }
+    );
+
     const chatParams: ChatCompletionCreateParams = {
       model: MODEL_NAME,
       max_tokens: 165000,
@@ -121,6 +130,15 @@ async function main() {
     console.log("Sending request to AI...");
     const response = await openai.chat.completions.create(chatParams);
     const aiContent = response.choices?.[0]?.message?.content ?? "";
+
+    // Append to attempts.txt
+    await Deno.writeTextFile(
+      `attempts.txt`,
+      `Attempt ${i} Response:\n\n${aiContent}\n\n`,
+      {
+        append: true,
+      }
+    );
 
     // If the AI says coverage is good, we're done
     if (aiContent.includes("DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD")) {
