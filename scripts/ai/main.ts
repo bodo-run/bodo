@@ -5,9 +5,11 @@ import stripAnsi from "npm:strip-ansi";
 import type { ChatCompletionCreateParams } from "npm:openai/resources/chat/completions";
 
 const AI_PROMPT = `
-We have a single command output below (cargo llvm-cov) which includes any test failures and coverage info. 
-Fix failing tests or add coverage as needed. Code coverage should be 100%;
-If all tests pass, and coverage is good, return "DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD".
+You are given the full respository, results of the test run, and the coverage report.
+Your task is first to fix the tests that are failing. DO NOT remove any existing implementations to make the tests pass.
+If all tests are passing, pay attention to the coverage report and add coverage as needed. Code coverage should be 100%;
+If all tests pass, and coverage is at 100%, return "DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD".
+Provide only and only code updates. Do not provide any other text. You response can be multiple files.
 
 When you return updated code, format your response as follows:
 
