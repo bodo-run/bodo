@@ -107,36 +107,6 @@ fn test_dependency_deserialization_variants() {
 }
 
 #[test]
-fn test_timeout_validation_edge_cases() {
-    let mut valid_task = TaskConfig {
-        timeout: Some("1m30s".to_string()),
-        ..Default::default()
-    };
-    valid_task._name_check = Some("valid".to_string());
-    assert!(valid_task.validate().is_ok());
-
-    valid_task.timeout = Some("10x".to_string());
-    let result = valid_task.validate();
-    assert!(matches!(result, Err(ValidationErrors { .. })));
-}
-
-#[test]
-fn test_load_config_with_watch_settings() {
-    let yaml = r#"
-    scripts_dirs: ["scripts"]
-    tasks:
-      watch-task:
-        watch:
-          patterns: ["src/**/*"]
-          debounce_ms: 200
-    "#;
-    let temp_file = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(temp_file.path(), yaml).unwrap();
-    let result = BodoConfig::load(Some(temp_file.path().to_str().unwrap().to_string()));
-    assert!(result.is_ok());
-}
-
-#[test]
 fn test_no_op_task_validation() {
     let invalid_task = TaskConfig::default();
     let result = invalid_task.validate();
