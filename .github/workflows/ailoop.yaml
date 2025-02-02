@@ -68,6 +68,9 @@ jobs:
       - name: Install grcov
         run: cargo install grcov
 
+      - name: Install llvm-cov
+        run: cargo +stable install cargo-llvm-cov --locked
+
       - name: Run AI Loop
         id: ai_loop
         timeout-minutes: 360
