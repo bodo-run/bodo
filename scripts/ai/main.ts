@@ -301,6 +301,11 @@ async function collectCoverage(): Promise<void> {
     outputFormat: "covdir",
   });
 
+  // ensure coverage.json exists
+  if (!existsSync(path.join(coverageDir, "coverage.json"))) {
+    throw new Error("No coverage.json produced. Check grcov usage.");
+  }
+
   console.log("Coverage data collected.");
 }
 
@@ -353,6 +358,11 @@ function parseCoverageData(threshold: number): {
   }
 
   console.log("Below-threshold files:", belowThresholdFiles);
+  if (!belowThresholdFiles.length) {
+    console.log({
+      coverageData,
+    });
+  }
   return { coverageData, belowThresholdFiles };
 }
 
@@ -389,7 +399,7 @@ async function reCollectCoverage(): Promise<CoverageData> {
 
 function processCoverageData(jsonPath: string): CoverageData {
   const coverageStr = Deno.readTextFileSync(jsonPath);
-  const coverageData = JSON.parse(coverageStr);
+  const coverageData = JSON.parse(coverageStr) as any;
 
   // If we have the modern structure, return as-is
   if (coverageData.children?.src?.children) {
@@ -397,22 +407,23 @@ function processCoverageData(jsonPath: string): CoverageData {
   }
 
   // Otherwise we do a fallback normalization
-  const normalizedData = {
+  const normalizedData: CoverageData = {
     children: {
       src: {
         children: Object.fromEntries(
           Object.entries(coverageData.children || coverageData.files || {})
             .filter(([file]) => file.startsWith("src/"))
-            .map(([k, v]) => [
-              k,
-              { coveragePercent: (v as any).coveragePercent as number },
-            ])
+            .filter(
+              (entry): entry is [string, { coveragePercent: number }] =>
+                typeof entry[1]?.coveragePercent === "number"
+            )
+            .map(([k, v]) => [k, { coveragePercent: v.coveragePercent }])
         ),
       },
     },
   };
 
-  return normalizedData;
+  return normalizedData as CoverageData;
 }
 
 //
@@ -513,7 +524,8 @@ async function makeAiRequest(params: AiRequestParams): Promise<string> {
     console.log("\nFinal AI response:\n", completeResponse);
     return completeResponse;
   } else {
-    const responseContent = response.choices?.[0]?.message?.content ?? "";
+    const responseContent =
+      (response as ChatCompletion).choices?.[0]?.message?.content ?? "";
 
     Deno.writeTextFileSync("attempts.txt", "==== Response ====", {
       append: true,
