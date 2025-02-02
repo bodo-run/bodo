@@ -70,6 +70,10 @@ fn run(args: Args) -> Result<(), BodoError> {
     graph_manager.register_plugin(Box::new(TimeoutPlugin::new()));
 
     let task_name = get_task_name(&args, &graph_manager)?;
+
+    // Apply any CLI arguments to the task before running plugins
+    graph_manager.apply_task_arguments(&task_name, &args.args)?;
+
     let mut options = serde_json::Map::new();
     options.insert("task".into(), serde_json::Value::String(task_name.clone()));
 

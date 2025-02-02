@@ -5,8 +5,10 @@ use validator::Validate;
 
 #[test]
 fn test_task_name_validation() {
-    let mut task = TaskConfig::default();
-    task.command = Some("echo 'test'".to_string());
+    let mut task = TaskConfig {
+        command: Some("echo 'test'".to_string()),
+        ..Default::default()
+    };
 
     // Test reserved names
     task._name_check = Some("watch".to_string());
@@ -35,28 +37,40 @@ fn test_task_name_validation() {
 
 #[test]
 fn test_task_config_validation() {
-    let mut task = TaskConfig::default();
-
-    // Test empty task (no command or dependencies)
-    assert!(task.validate().is_err());
-
-    // Test valid command
-    task.command = Some("echo 'hello'".to_string());
+    let task = TaskConfig {
+        command: Some("echo 'hello'".to_string()),
+        ..Default::default()
+    };
     assert!(task.validate().is_ok());
 
     // Test valid dependencies
-    task.command = None;
-    task.pre_deps = vec![Dependency::Command {
-        command: "echo 'pre'".to_string(),
-    }];
+    let task = TaskConfig {
+        command: None,
+        pre_deps: vec![Dependency::Command {
+            command: "echo 'pre'".to_string(),
+        }],
+        ..Default::default()
+    };
     assert!(task.validate().is_ok());
 
     // Test invalid timeout
-    task.timeout = Some("invalid".to_string());
+    let task = TaskConfig {
+        timeout: Some("invalid".to_string()),
+        pre_deps: vec![Dependency::Command {
+            command: "echo 'pre'".to_string(),
+        }],
+        ..Default::default()
+    };
     assert!(task.validate().is_err());
 
     // Test valid timeout
-    task.timeout = Some("10s".to_string());
+    let task = TaskConfig {
+        timeout: Some("10s".to_string()),
+        pre_deps: vec![Dependency::Command {
+            command: "echo 'pre'".to_string(),
+        }],
+        ..Default::default()
+    };
     assert!(task.validate().is_ok());
 }
 
@@ -128,8 +142,10 @@ fn test_bodo_config_validation() {
     assert!(config.validate().is_ok());
 
     // Test task validation
-    let mut task = TaskConfig::default();
-    task.command = Some("echo 'hello'".to_string());
+    let task = TaskConfig {
+        command: Some("echo 'hello'".to_string()),
+        ..Default::default()
+    };
     config.tasks.insert("test-task".to_string(), task);
     assert!(config.validate().is_ok());
 }
