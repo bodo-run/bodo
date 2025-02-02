@@ -142,7 +142,6 @@ async function main() {
 
     const chatParams: ChatCompletionCreateParams = {
       model: modelName,
-      max_tokens: 165000,
       messages: [{ role: "user", content: textToAi }],
     };
     console.log("Sending request to AI...");
