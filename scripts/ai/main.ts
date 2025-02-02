@@ -491,6 +491,7 @@ async function makeAiRequest(params: AiRequestParams): Promise<string> {
   const chatParams: ChatCompletionCreateParams = {
     model: MODEL_NAME,
     stream: params.stream ?? false,
+    max_tokens: 165000,
     messages: [
       {
         role: "user",
@@ -510,6 +511,7 @@ async function makeAiRequest(params: AiRequestParams): Promise<string> {
   Deno.writeTextFileSync("attempts.txt", content, { append: true });
 
   const response = await openai.chat.completions.create(chatParams);
+
   if (params.stream) {
     let completeResponse = "";
     try {
@@ -523,9 +525,7 @@ async function makeAiRequest(params: AiRequestParams): Promise<string> {
       console.error("Error processing stream:", err);
       return "";
     }
-
-    console.log("\nFinal AI response:");
-    console.log(completeResponse);
+    console.log("\nFinal AI response:\n", completeResponse);
     return completeResponse;
   } else {
     const responseContent = response.choices?.[0]?.message?.content ?? "";

@@ -223,3 +223,136 @@ impl BodoConfig {
         serde_json::to_string_pretty(&schema).unwrap_or_default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use validator::ValidationErrors;
+
+    #[test]
+    fn test_validate_task_name_reserved() {
+        let mut config = TaskConfig::default();
+        config._name_check = Some("watch".to_string());
+        let result = config.validate();
+        assert!(matches!(result, Err(ValidationErrors { .. })));
+    }
+
+    #[test]
+    fn test_validate_task_name_invalid_chars() {
+        let mut config = TaskConfig::default();
+        config._name_check = Some("invalid/name".to_string());
+        let result = config.validate();
+        assert!(matches!(result, Err(ValidationErrors { .. })));
+    }
+
+    #[test]
+    fn test_validate_task_name_length() {
+        let mut config = TaskConfig::default();
+        config._name_check = Some("a".repeat(101));
+        let result = config.validate();
+        assert!(matches!(result, Err(ValidationErrors { .. })));
+    }
+
+    #[test]
+    fn test_task_config_validation_valid_with_command() {
+        let config = TaskConfig {
+            command: Some("echo valid".to_string()),
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_task_config_validation_valid_with_deps() {
+        let config = TaskConfig {
+            pre_deps: vec![Dependency::Command {
+                command: "echo pre".to_string(),
+            }],
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_task_config_validation_invalid_no_op() {
+        let config = TaskConfig::default();
+        assert!(matches!(config.validate(), Err(ValidationErrors { .. })));
+    }
+
+    #[test]
+    fn test_task_argument_validation() {
+        let valid_arg = TaskArgument {
+            name: "valid".to_string(),
+            ..Default::default()
+        };
+        assert!(valid_arg.validate().is_ok());
+
+        let invalid_name = TaskArgument {
+            name: "a".repeat(65),
+            ..Default::default()
+        };
+        assert!(invalid_name.validate().is_err());
+    }
+
+    #[test]
+    fn test_concurrently_options_validation() {
+        let mut options = ConcurrentlyOptions::default();
+        options.max_concurrent_tasks = Some(0);
+        assert!(options.validate().is_err());
+    }
+
+    #[test]
+    fn test_watch_config_validation() {
+        let invalid_watch = WatchConfig {
+            patterns: vec![],
+            ..Default::default()
+        };
+        assert!(invalid_watch.validate().is_err());
+    }
+
+    #[test]
+    fn test_bodo_config_load_valid() {
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(temp_file.path(), "scripts_dirs: ['scripts']").unwrap();
+        let result = BodoConfig::load(Some(temp_file.path().to_str().unwrap().to_string()));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_bodo_config_load_invalid() {
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(temp_file.path(), "invalid_key: value").unwrap();
+        let result = BodoConfig::load(Some(temp_file.path().to_str().unwrap().to_string()));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_timeout_validation() {
+        let mut config = TaskConfig {
+            timeout: Some("30x".to_string()),
+            ..Default::default()
+        };
+        assert!(config.validate().is_err());
+
+        config.timeout = Some("30s".to_string());
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_dependency_deserialization() {
+        let yaml = r#"
+        - task: test-task
+        - command: echo hello
+        "#;
+        let deps: Vec<Dependency> = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(deps.len(), 2);
+        assert!(matches!(deps[0], Dependency::Task { .. }));
+        assert!(matches!(deps[1], Dependency::Command { .. }));
+    }
+
+    #[test]
+    fn test_generate_schema_no_panic() {
+        let schema = BodoConfig::generate_schema();
+        assert!(!schema.is_empty());
+    }
+}
