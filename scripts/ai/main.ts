@@ -12,6 +12,8 @@ coverage as needed. Code coverage should be executed 100%;
 If all tests pass, and coverage is at 100%, return "DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD".
 Provide only and only code updates. Do not provide any other text. You response can be multiple files.
 
+Important: Add test files to the tests/ directory. Do not add tests in src/ files
+
 When you return updated code, format your response as follows:
 
 __FILENAME__
