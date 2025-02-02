@@ -29,6 +29,9 @@ jobs:
     env:
       MAX_ATTEMPTS: ${{ github.event.inputs.attempts }}
       BRANCH: ${{ github.event.inputs.branch }}
+      CARGO_TERM_COLOR: always
+      RUSTFLAGS: "-Cinstrument-coverage"
+      LLVM_PROFILE_FILE: "coverage/bodo-%p-%m.profraw"
 
     steps:
       - name: Print inputs
@@ -61,8 +64,16 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build
-        run: cargo build --locked
+      - name: Install Yek
+        run: |
+          curl -fsSL https://bodo.run/yek.sh | bash
+
+      - name: Install grcov
+        run: cargo install grcov
+
+      # Remove any extra build/test steps so everything is done by the AI script
+      # If you want a separate check before the AI script, just remember to re-clean
+      # and re-instrument in the AI step to avoid coverage mismatch.
 
       - name: Run AI Loop
         id: ai_loop
@@ -98,6 +109,10 @@ jobs:
             - Total attempts: ${{ env.MAX_ATTEMPTS }}
             - Source branch: `${{ env.BRANCH }}`
 
-            Check the attempts.txt artifact for details.
+            ### Link to run
+            [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            ### Attempts log
+            [View attempts log](https://github.com/${{ github.repository }}/actions/artifacts/${{ steps.attempts-log.outputs.artifact_id }}/attempts.txt)
           branch: ${{ env.BRANCH }}-ai-loop
           base: ${{ env.BRANCH }}
