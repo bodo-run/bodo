@@ -88,17 +88,19 @@ jobs:
           FIREWORKS_AI_API_KEY: ${{ secrets.FIREWORKS_AI_API_KEY }}
           MAX_ATTEMPTS: ${{ env.MAX_ATTEMPTS }}
           AI_PROVIDER: ${{ env.AI_PROVIDER }}
+          BASE_BRANCH: ${{ env.BRANCH }}
+          FIX_BRANCH: ${{ env.BRANCH }}-ai-loop-${{ github.run_id }}
         run: |
-          deno run --allow-all scripts/ai/main.ts
+          git checkout -b $FIX_BRANCH
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            echo "===== Attempt $i ====="
+            deno run --allow-all scripts/ai/main.ts
+            git add -A
+            git commit -m "AI Loop attempt $i"
+            git push origin $FIX_BRANCH
+            echo "last_attempt=${i}" >> "$GITHUB_OUTPUT"
+          done
           echo "success=${SUCCESS}" >> "$GITHUB_OUTPUT"
-          echo "last_attempt=${LAST_ATTEMPT}" >> "$GITHUB_OUTPUT"
-
-      - name: Upload attempts log
-        uses: actions/upload-artifact@v4
-        id: upload_artifacts
-        with:
-          name: attempts-log
-          path: attempts.txt
 
       - name: Create PR or Issue
         if: always() && ${{ github.event.inputs.pr-on-fail }}
@@ -114,6 +116,5 @@ jobs:
             - Successful: ${{ steps.ai_loop.outputs.success != 0 }}
             - Attempts: `${{ steps.ai_loop.outputs.last_attempt }} / ${{ env.MAX_ATTEMPTS }}`
             - [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            - [View AI logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)
           branch: ${{ env.BRANCH }}-ai-loop-${{ github.run_id }}
           base: ${{ env.BRANCH }}
