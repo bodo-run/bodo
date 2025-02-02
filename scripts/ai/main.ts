@@ -6,6 +6,7 @@ import type {
   ChatCompletionChunk,
 } from "npm:openai/resources/chat/completions";
 import * as path from "https://deno.land/std/path/mod.ts";
+import process from "node:process";
 
 //
 // ────────────────────────────────────────────────────────────────────────────────
@@ -74,19 +75,21 @@ If the changes are insufficient or break something, respond with NOT GOOD anywhe
 Respond only with PASS or NOT GOOD. Nothing else.
 `.trim();
 
-const MODEL_NAME = "o1-preview";
-
 //
 // ────────────────────────────────────────────────────────────────────────────────
 //   ENV & OPENAI CLIENT SETUP
 // ────────────────────────────────────────────────────────────────────────────────
 //
 
-const apiKey = Deno.env.get("OPENAI_API_KEY");
+const apiKey = Deno.env.get("FIREWORKS_AI_API_KEY");
 if (!apiKey) {
-  throw new Error("Missing OPENAI_API_KEY env var.");
+  throw new Error("Missing FIREWORKS_AI_API_KEY env var.");
 }
-const openai = new OpenAI({ apiKey });
+const baseURL = "https://api.fireworks.ai/inference/v1/";
+const openai = new OpenAI({ apiKey, baseURL });
+const MODEL_NAME = "accounts/fireworks/models/deepseek-r1";
+const MAX_REPO_TOKENS = 100_000;
+const MAX_ATTEMPTS = Number.parseInt(Deno.env.get("MAX_ATTEMPTS") ?? "3", 10);
 
 //
 // ────────────────────────────────────────────────────────────────────────────────
@@ -136,19 +139,36 @@ async function runCommand(
   options?: { showOutput?: boolean }
 ): Promise<{ code: number; stdout: Uint8Array; stderr: Uint8Array }> {
   console.log("$", `${cmd} ${args.join(" ")}`);
+
+  // All coverage environment is set here
+  const envOverride = {
+    ...Deno.env.toObject(),
+    FORCE_COLOR: "1",
+    CARGO_TERM_COLOR: "always",
+    RUST_BACKTRACE: "1",
+    LLVM_PROFILE_FILE: path.join(coverageDir, "%p-%m.profraw"),
+  };
+
+  if (options?.showOutput) {
+    const proc = new Deno.Command(cmd, {
+      cwd: repoRoot,
+      args,
+      stdout: "inherit",
+      stderr: "inherit",
+      stdin: "inherit",
+      env: envOverride,
+    });
+    const { code } = await proc.output();
+    return { code, stdout: new Uint8Array(), stderr: new Uint8Array() };
+  }
+
   const proc = new Deno.Command(cmd, {
     cwd: repoRoot,
     args,
-    stdout: options?.showOutput ? "inherit" : "piped",
-    stderr: options?.showOutput ? "inherit" : "piped",
+    stdout: "piped",
+    stderr: "piped",
     stdin: "inherit",
-    env: {
-      ...Deno.env.toObject(),
-      FORCE_COLOR: "1",
-      CARGO_TERM_COLOR: "always",
-      RUST_BACKTRACE: "1",
-      LLVM_PROFILE_FILE: path.join(coverageDir, "%p-%m.profraw"),
-    },
+    env: envOverride,
   });
   const { code, stdout, stderr } = await proc.output();
 
@@ -166,9 +186,22 @@ async function runCommand(
   return { code, stdout, stderr };
 }
 
-function serializeRepo(maxTokens: number): string {
-  // Placeholder for the repository context.
-  return `Repository context would be here (limited to ~${maxTokens} tokens)...`;
+async function serializeRepo(maxTokens: number): Promise<string> {
+  // run `yek --tokens ${maxTokens}` and get the output as a Uint8Array
+  const { stdout } = await runCommand("yek", [
+    "--tokens",
+    maxTokens.toString(),
+  ]);
+
+  // Convert the Uint8Array to a string
+  const text = new TextDecoder().decode(stdout);
+
+  // Remove ANSI escape sequences (if present) using a regex
+  const ansiRegex = new RegExp(
+    "[\\u001B\\u009B][[\\]()#;?]*(?:(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><])",
+    "g"
+  );
+  return text.replace(ansiRegex, "");
 }
 
 //
@@ -186,8 +219,9 @@ function parseAiResponse(
       content.includes(FILE_CONTENT_START_TAG) &&
       content.includes(FILE_CONTENT_END_TAG)
     )
-  )
+  ) {
     return null;
+  }
 
   const parts = content.split(FILENAME_TAG);
   if (!parts[1]) return null;
@@ -210,8 +244,9 @@ function parseAiResponse(
     const fenceEnd = fileContent.indexOf("\n");
     if (fenceEnd !== -1) fileContent = fileContent.slice(fenceEnd + 1);
   }
-  if (fileContent.endsWith("```"))
+  if (fileContent.endsWith("```")) {
     fileContent = fileContent.slice(0, -3).trim();
+  }
 
   return { filename, content: fileContent };
 }
@@ -253,7 +288,7 @@ async function runGrcov(options: GrcovOptions): Promise<void> {
   ]);
 }
 
-async function runTests(
+function runTests(
   jsonFormat = false,
   showOutput = false
 ): Promise<{
@@ -268,19 +303,14 @@ async function runTests(
   return runCommand("cargo", args, { showOutput });
 }
 
-async function collectCoverage(_: number): Promise<void> {
+async function collectCoverage(): Promise<void> {
   console.log("Running tests to generate coverage profiles...");
   try {
     await runTests();
   } catch {
-    console.log("Tests failed - generating partial coverage data...");
+    console.log("Tests failed - generating partial coverage data anyway...");
   }
   console.log("Converting coverage data using grcov...");
-
-  await runGrcov({
-    outputPath: path.join(coverageDir, "lcov.info"),
-    outputFormat: "lcov",
-  });
 
   await runGrcov({
     outputPath: path.join(coverageDir, "coverage.json"),
@@ -300,6 +330,7 @@ function parseCoverageData(threshold: number): {
   }
   const coverageStr = Deno.readTextFileSync(coveragePath);
   const coverageData = JSON.parse(coverageStr);
+
   const belowThresholdFiles: string[] = [];
 
   if (coverageData.children?.src?.children) {
@@ -309,7 +340,9 @@ function parseCoverageData(threshold: number): {
         { coveragePercent: number }
       >
     )) {
-      if (info.coveragePercent < threshold) belowThresholdFiles.push(file);
+      if (info.coveragePercent < threshold) {
+        belowThresholdFiles.push(file);
+      }
     }
   } else if (coverageData.children) {
     for (const [file, info] of Object.entries(
@@ -323,16 +356,18 @@ function parseCoverageData(threshold: number): {
     console.log(`Overall coverage: ${coverageData.coveragePercent}%`);
     if (coverageData.coveragePercent < threshold) {
       console.log("Coverage below threshold, analyzing individual files...");
-      belowThresholdFiles.push(
-        ...Object.keys(coverageData.files || {})
-          .filter((f) => f.startsWith("src/"))
-          .filter((f) => {
-            const fileCov = coverageData.files[f].coveragePercent;
-            return typeof fileCov === "number" && fileCov < threshold;
-          })
-      );
+      // fallback logic for older GRCOV
+      const filesList: string[] = Object.keys(coverageData.files || {});
+      for (const f of filesList) {
+        if (!f.startsWith("src/")) continue;
+        const fileCov = coverageData.files[f].coveragePercent;
+        if (typeof fileCov === "number" && fileCov < threshold) {
+          belowThresholdFiles.push(f);
+        }
+      }
     }
   }
+
   console.log("Below-threshold files:", belowThresholdFiles);
   return { coverageData, belowThresholdFiles };
 }
@@ -372,10 +407,12 @@ function processCoverageData(jsonPath: string): CoverageData {
   const coverageStr = Deno.readTextFileSync(jsonPath);
   const coverageData = JSON.parse(coverageStr);
 
+  // If we have the modern structure, return as-is
   if (coverageData.children?.src?.children) {
     return coverageData;
   }
 
+  // Otherwise we do a fallback normalization
   const normalizedData = {
     children: {
       src: {
@@ -431,7 +468,6 @@ function parseTestFailures(output: string, errors: string): TestFailure[] {
     .filter((test): test is TestFailure => test !== null);
 }
 
-// Add these types and functions after the existing imports
 interface AiRequestParams {
   fileName: string;
   currentContent: string;
@@ -440,45 +476,48 @@ interface AiRequestParams {
   stream?: boolean;
 }
 
-interface StreamChunk {
-  choices: Array<{
-    delta: {
-      content?: string;
-    };
-  }>;
-}
-
 async function makeAiRequest(params: AiRequestParams): Promise<string> {
+  const content = [
+    "==== Repo ====",
+    params.repoSnapshot,
+    "==== File ====",
+    params.fileName,
+    "==== Current content ====",
+    params.currentContent,
+    "==== Instructions ====",
+    params.prompt,
+  ].join("\n\n");
+
   const chatParams: ChatCompletionCreateParams = {
     model: MODEL_NAME,
     stream: params.stream ?? false,
     messages: [
       {
         role: "user",
-        content: [
-          "==== Repo ====",
-          params.repoSnapshot,
-          "==== File ====",
-          params.fileName,
-          "==== Current content ====",
-          params.currentContent,
-          "==== Instructions ====",
-          params.prompt,
-        ].join("\n\n"),
+        content,
       },
     ],
   };
 
-  if (params.stream) {
-    const streamResponse = await openai.chat.completions.create(chatParams);
-    let completeResponse = "";
+  console.log(
+    "Sending",
+    JSON.stringify(chatParams).length.toLocaleString(),
+    "bytes to AI..."
+  );
 
+  // append the request to attempts.txt
+  Deno.writeTextFileSync("attempts.txt", "==== Request ====", { append: true });
+  Deno.writeTextFileSync("attempts.txt", content, { append: true });
+
+  const response = await openai.chat.completions.create(chatParams);
+  if (params.stream) {
+    let completeResponse = "";
     try {
-      const stream = streamResponse as AsyncIterable<ChatCompletionChunk>;
+      const stream = response as AsyncIterable<ChatCompletionChunk>;
       for await (const part of stream) {
-        const content = part.choices?.[0]?.delta?.content ?? "";
-        process.stdout.write(content);
-        completeResponse += content;
+        const chunk = part.choices?.[0]?.delta?.content ?? "";
+        process.stdout.write(chunk);
+        completeResponse += chunk;
       }
     } catch (err) {
       console.error("Error processing stream:", err);
@@ -489,12 +528,17 @@ async function makeAiRequest(params: AiRequestParams): Promise<string> {
     console.log(completeResponse);
     return completeResponse;
   } else {
-    const completion = await openai.chat.completions.create(chatParams);
-    return completion.choices[0].message?.content ?? "";
+    const responseContent = response.choices?.[0]?.message?.content ?? "";
+
+    Deno.writeTextFileSync("attempts.txt", "==== Response ====", {
+      append: true,
+    });
+    Deno.writeTextFileSync("attempts.txt", responseContent, { append: true });
+
+    return responseContent;
   }
 }
 
-// Replace the existing AI interaction functions with:
 async function generateTestsForFile(
   fileName: string,
   repoSnapshot: string
@@ -519,7 +563,7 @@ async function generateTestsForFile(
 
 async function fixTestsForFile(
   fileName: string,
-  errorOutput: string,
+  _errorOutput: string,
   repoSnapshot: string
 ): Promise<void> {
   const currentContent = readFileForCoverage(fileName);
@@ -539,10 +583,7 @@ async function fixTestsForFile(
   }
 }
 
-async function aiCodeReview(
-  fileName: string,
-  repoSnapshot: string
-): Promise<string> {
+function aiCodeReview(fileName: string, repoSnapshot: string): Promise<string> {
   const currentContent = readFileForCoverage(fileName);
   return makeAiRequest({
     fileName,
@@ -552,20 +593,19 @@ async function aiCodeReview(
   });
 }
 
-// Add back the fixTests function
 async function fixTests(
   failedTestsJson: string,
   repoSnapshot: string
 ): Promise<boolean> {
   try {
-    // Run normal tests for detailed output.
+    // Run normal tests for detailed output
     const normalTest = await runTests(false, true);
     console.log(
       "Test output (if not already visible):",
       new TextDecoder().decode(normalTest.stderr)
     );
 
-    // Run tests with JSON output.
+    // Then run JSON tests to parse
     const { code, stdout, stderr } = await runTests(true);
     if (code === 0) return true;
 
@@ -575,7 +615,7 @@ async function fixTests(
 
     if (failedTests.length > 0) {
       console.log("Detected failed tests:", failedTests);
-      // Group failures by file.
+      // Group failures by file
       const testsByFile = failedTests.reduce<Record<string, TestFailure[]>>(
         (acc, test) => {
           if (test.path) {
@@ -587,13 +627,11 @@ async function fixTests(
       );
 
       for (const [filePath, tests] of Object.entries(testsByFile)) {
-        const errorOutput = tests
-          .map((t) => `${t.name}: ${t.message}`)
-          .join("\n");
-        await fixTestsForFile(filePath, errorOutput, repoSnapshot);
+        const errorOut = tests.map((t) => `${t.name}: ${t.message}`).join("\n");
+        await fixTestsForFile(filePath, errorOut, repoSnapshot);
       }
 
-      // Lint and format.
+      // Lint and format
       await runCommand("cargo", ["fmt"]);
       try {
         await runCommand("cargo", ["clippy", "--fix", "--allow-dirty"]);
@@ -610,17 +648,18 @@ async function fixTests(
 
 //
 // ────────────────────────────────────────────────────────────────────────────────
-//   MAIN PIPELINE & FINALIZATION
+//   MAIN PIPELINE
 // ────────────────────────────────────────────────────────────────────────────────
 //
 
 async function improveCoverageForFile(
   filePath: string,
   threshold: number,
-  maxIterations = 10
+  maxIterations = MAX_ATTEMPTS
 ): Promise<void> {
   const fileName = filePath.startsWith("src/") ? filePath : `src/${filePath}`;
-  const repoSnapshot = serializeRepo(5000);
+  const repoSnapshot = await serializeRepo(MAX_REPO_TOKENS);
+
   let iteration = 0;
   let coverageReached = false;
   let testsPass = false;
@@ -649,7 +688,7 @@ async function improveCoverageForFile(
         continue;
       }
     } catch {
-      console.log("Git commit encountered an issue; proceeding...");
+      console.log("Git commit encountered an issue; ignoring...");
     }
 
     const reviewVerdict = await aiCodeReview(fileName, repoSnapshot);
@@ -699,19 +738,24 @@ async function finalFormatting(): Promise<void> {
 
 try {
   let testPass = false;
-  const MAX_RETRIES = 3;
   let retryCount = 0;
 
-  while (!testPass && retryCount < MAX_RETRIES) {
+  // Make sure coverage instrumentation environment is set
+  Deno.env.set("RUSTFLAGS", "-Cinstrument-coverage");
+  Deno.env.set("LLVM_PROFILE_FILE", "coverage/bodo-%p-%m.profraw");
+
+  while (!testPass && retryCount < MAX_ATTEMPTS) {
     retryCount++;
     console.log(`\nAttempt ${retryCount} to fix failing tests...`);
 
+    // 1) Normal test
     const normalTest = await runTests(false, true);
     console.log(
       "Test output (if not already visible):",
       new TextDecoder().decode(normalTest.stderr)
     );
 
+    // 2) JSON test output to parse which tests are failing
     const { code, stdout } = await runTests(true);
     if (code === 0) {
       testPass = true;
@@ -723,7 +767,7 @@ try {
         console.log(
           `Found ${failedTests.length} failed tests on attempt ${retryCount}`
         );
-        const repoSnapshot = serializeRepo(12000);
+        const repoSnapshot = await serializeRepo(MAX_REPO_TOKENS);
         try {
           testPass = await fixTests(JSON.stringify(failedTests), repoSnapshot);
         } catch (err) {
@@ -735,7 +779,7 @@ try {
     if (!testPass) {
       console.log(
         `Test fix attempt ${retryCount} failed. ${
-          retryCount < MAX_RETRIES ? "Retrying..." : "Giving up."
+          retryCount < MAX_ATTEMPTS ? "Retrying..." : "Giving up."
         }`
       );
     }
@@ -747,9 +791,11 @@ try {
     );
   }
 
-  await collectCoverage(90);
-  const { belowThresholdFiles } = parseCoverageData(100);
+  // Collect coverage
+  await collectCoverage();
 
+  // Get files below threshold
+  const { belowThresholdFiles } = parseCoverageData(100);
   if (belowThresholdFiles.length > 0) {
     for (const file of belowThresholdFiles) {
       await improveCoverageForFile(file, 100);
@@ -758,7 +804,9 @@ try {
     console.log("All files meet the coverage threshold.");
   }
 
+  // Final formatting
   await finalFormatting();
+
   console.log("Pipeline complete.");
   Deno.exit(0);
 } catch (err) {
