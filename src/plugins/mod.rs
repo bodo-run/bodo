@@ -1,11 +1,11 @@
-pub use crate::plugin::{Plugin, PluginConfig, PluginManager};
+mod plugin;
 
-pub mod concurrent_plugin;
-pub mod env_plugin;
-pub mod execution_plugin;
-pub mod failing_plugin;
-pub mod path_plugin;
-pub mod prefix_plugin;
-pub mod print_list_plugin;
-pub mod timeout_plugin;
-pub mod watch_plugin;
+pub use self::plugin::{Plugin, PluginConfig, PluginManager};
+
+mod concurrent_plugin;
+mod env_plugin;
+mod execution_plugin;
+mod path_plugin; 
+mod prefix_plugin;
+mod print_list_plugin;
+mod timeout_plugin;
