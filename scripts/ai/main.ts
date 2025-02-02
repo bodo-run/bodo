@@ -3,6 +3,7 @@
 import OpenAI from "npm:openai";
 import stripAnsi from "npm:strip-ansi";
 import type { ChatCompletionCreateParams } from "npm:openai/resources/chat/completions";
+import path from "node:path";
 
 const AI_PROMPT = `
 You are given the full respository, results of the test run, and the coverage report.
@@ -47,6 +48,9 @@ function getOpenAiClient() {
 
 async function writeFileContent(filePath: string, content: string) {
   console.log("Writing updated content to:", filePath);
+  // make sure directories exists first
+  const dir = path.dirname(filePath);
+  Deno.mkdirSync(dir, { recursive: true });
   await Deno.writeTextFile(filePath, content);
 }
 
