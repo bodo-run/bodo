@@ -15,9 +15,9 @@ import process from "node:process";
 //
 
 // Use emojis
-const FILENAME_TAG = "📁FILENAME";
-const FILE_CONTENT_START_TAG = "🗄️FILE_CONTENT_START🗄️";
-const FILE_CONTENT_END_TAG = "🔚FILE_CONTENT_END🔚";
+const FILENAME_TAG = "__FILENAME__";
+const FILE_CONTENT_START_TAG = "__FILE_CONTENT_START__";
+const FILE_CONTENT_END_TAG = "__FILE_CONTENT_END__";
 
 const ADD_TESTS_PROMPT = `
 Your task is to add or expand Rust tests to improve coverage in the specified file. Focus on edge cases, error handling, and untested paths. Follow these guidelines:
