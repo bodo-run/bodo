@@ -96,8 +96,12 @@ async function main() {
       // For now, let's see if AI says it's "DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD"
     }
 
+    const { stdout: repo } = await runCommand("yek", ["--tokens", "120k"]);
+
     // Send AI the entire cargo llvm-cov output + coverage JSON
     const textToAi = [
+      `Repository:`,
+      repo,
       `cargo llvm-cov exit code: ${code}`,
       `STDOUT:`,
       stdout,
@@ -113,7 +117,7 @@ async function main() {
     // Append to attempts.txt
     await Deno.writeTextFile(
       `attempts.txt`,
-      `===== Attempt ${i} Request:\n\n${textToAi} =====\n\n`,
+      `===== Attempt ${i}/${MAX_ATTEMPTS} Request: =====\n\n${textToAi}\n\n`,
       {
         append: true,
       }
@@ -130,7 +134,7 @@ async function main() {
     // Append to attempts.txt
     await Deno.writeTextFile(
       `attempts.txt`,
-      `===== Attempt ${i} Response:\n\n${aiContent} =====\n\n`,
+      `===== Attempt ${i}/${MAX_ATTEMPTS} Response: =====\n\n${aiContent}\n\n`,
       {
         append: true,
       }
@@ -147,8 +151,8 @@ async function main() {
     // Otherwise, parse out any updated code
     const updatedFiles = parseUpdatedFiles(aiContent);
     if (!updatedFiles.length) {
-      console.log("No updated files from AI. Exiting...");
-      Deno.exit(0);
+      console.log("No updated files from AI. Trying again...");
+      continue;
     }
 
     // Write new content
