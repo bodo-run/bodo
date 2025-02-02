@@ -5,23 +5,28 @@ import stripAnsi from "npm:strip-ansi";
 import type { ChatCompletionCreateParams } from "npm:openai/resources/chat/completions";
 import path from "node:path";
 
+const BASE_BRANCH = "main"; // TODO make this configurable
+const FILE_TAG = "__FILENAME__";
+const START_TAG = "__FILE_CONTENT_START__";
+const END_TAG = "__FILE_CONTENT_END__";
+const ALL_GOOD_TAG = "DONE_ALL_TESTS_PASS_AND_COVERAGE_IS_GOOD";
 const AI_PROMPT = `
 You are given the full respository, results of the test run, and the coverage report.
 Your task is first to fix the tests that are failing. DO NOT remove any existing implementations to make the tests pass.
 If all tests are passing, pay attention to the coverage report and add new tests to add more 
 coverage as needed. Code coverage should be executed 100%;
-If all tests pass, and coverage is at 100%, return "DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD".
+If all tests pass, and coverage is at 100%, return "${ALL_GOOD_TAG}".
 Provide only and only code updates. Do not provide any other text. You response can be multiple files.
 
 Important: Add test files to the tests/ directory. Do not add tests in src/ files
 
 When you return updated code, format your response as follows:
 
-__FILENAME__
+${FILE_TAG}
 <relative/path/to/file>
-__FILE_CONTENT_START__
+${START_TAG}
 <complete updated file content>
-__FILE_CONTENT_END__
+${END_TAG}
 `.trim();
 
 function getOpenAiClient() {
@@ -82,8 +87,18 @@ async function runCommand(
   };
 }
 
-async function main() {
+async function callAi(text: string) {
   const { openai, modelName } = getOpenAiClient();
+  const chatParams: ChatCompletionCreateParams = {
+    model: modelName,
+    messages: [{ role: "user", content: text }],
+  };
+  console.log("Sending request to AI...");
+  const response = await openai.chat.completions.create(chatParams);
+  return response.choices?.[0]?.message?.content ?? "";
+}
+
+async function main() {
   const MAX_ATTEMPTS = Number(Deno.env.get("MAX_ATTEMPTS")) || 5;
 
   // make sure coverage dir exists
@@ -93,21 +108,30 @@ async function main() {
     console.log(`\n=== Iteration #${i} ===`);
     // Run cargo-llvm-cov in one shot
     const { code, stdout, stderr } = await runCommand("cargo", ["llvm-cov"]);
-
-    // If everything passed and coverage is presumably fine
-    // cargo-llvm-cov will exit 0. We can check coverage JSON if we want.
-    if (code === 0) {
-      console.log("cargo llvm-cov completed with exit code 0.");
-      // You could parse coverageReport to verify coverage thresholds if needed.
-      // For now, let's see if AI says it's "DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD"
-    }
-
+    // Serialize repo
     const { stdout: repo } = await runCommand("yek", ["--tokens", "120k"]);
+    // Get a summary of changes made so far
+    const { stdout: changes } = await runCommand("git", ["diff", BASE_BRANCH]);
+    console.log("Asking AI to summarize changes...");
+    const summaryAndThinking = await callAi(
+      [
+        `Repository:`,
+        repo,
+        `Changes:`,
+        changes,
+        `Instructions: Summerize the changes made so far in the repo. In bullet points. Short and concise.`,
+      ].join("\n")
+    );
 
-    // Send AI the entire cargo llvm-cov output + coverage JSON
+    // remove the thinking part
+    const summary = summaryAndThinking.replace(/<think>\n.*?\n<\/think>/s, "");
+
+    // Ask AI to write code
     const textToAi = [
       `Repository:`,
       repo,
+      `Summary of changes we made so far:`,
+      summary,
       `cargo llvm-cov exit code: ${code}`,
       `STDOUT:`,
       stdout,
@@ -129,13 +153,7 @@ async function main() {
       }
     );
 
-    const chatParams: ChatCompletionCreateParams = {
-      model: modelName,
-      messages: [{ role: "user", content: textToAi }],
-    };
-    console.log("Sending request to AI...");
-    const response = await openai.chat.completions.create(chatParams);
-    const aiContent = response.choices?.[0]?.message?.content ?? "";
+    const aiContent = await callAi(textToAi);
 
     // Append to attempts.txt
     await Deno.writeTextFile(
@@ -148,9 +166,7 @@ async function main() {
 
     Deno.env.set("LAST_ATTEMPT", i.toString());
     // If the AI says coverage is good, we're done
-    const isFullySuccessful = aiContent.includes(
-      "DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD"
-    );
+    const isFullySuccessful = aiContent.includes(ALL_GOOD_TAG);
     if (isFullySuccessful) {
       console.log("All tests pass and coverage is good. Done.");
       Deno.env.set("SUCCESS", isFullySuccessful ? "0" : "1");
@@ -183,9 +199,6 @@ function parseUpdatedFiles(
   content: string
 ): Array<{ filename: string; content: string }> {
   // Quick and simple parse for multiple updates in one message
-  const FILE_TAG = "__FILENAME__";
-  const START_TAG = "__FILE_CONTENT_START__";
-  const END_TAG = "__FILE_CONTENT_END__";
 
   const results: Array<{ filename: string; content: string }> = [];
 
