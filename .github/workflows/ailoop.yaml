@@ -28,7 +28,6 @@ jobs:
     timeout-minutes: 360
     env:
       MAX_ATTEMPTS: ${{ github.event.inputs.attempts }}
-      BRANCH: ${{ github.event.inputs.branch }}
       CARGO_TERM_COLOR: always
       RUSTFLAGS: "-Cinstrument-coverage"
       LLVM_PROFILE_FILE: "coverage/bodo-%p-%m.profraw"
@@ -37,7 +36,6 @@ jobs:
       - name: Print inputs
         run: |
           echo "MAX_ATTEMPTS=${{ env.MAX_ATTEMPTS }}"
-          echo "BRANCH=${{ env.BRANCH }}"
 
       - name: Install Bodo
         run: curl -fsSL https://bodo.run/bodo.sh | bash
@@ -45,7 +43,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.BRANCH }}
           fetch-depth: 0
 
       - name: Cache Rust dependencies
@@ -71,10 +68,6 @@ jobs:
       - name: Install grcov
         run: cargo install grcov
 
-      # Remove any extra build/test steps so everything is done by the AI script
-      # If you want a separate check before the AI script, just remember to re-clean
-      # and re-instrument in the AI step to avoid coverage mismatch.
-
       - name: Run AI Loop
         id: ai_loop
         timeout-minutes: 360
@@ -82,7 +75,6 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           FIREWORKS_AI_API_KEY: ${{ secrets.FIREWORKS_AI_API_KEY }}
-          RUST_TEST_TIMEOUT: 300
           MAX_ATTEMPTS: ${{ env.MAX_ATTEMPTS }}
         run: |
           deno run --allow-all scripts/ai/main.ts
@@ -102,17 +94,17 @@ jobs:
         with:
           token: ${{ env.GH_TOKEN }}
           commit-message: "AI Loop"
-          title: "AI Loop for ${{ env.BRANCH }} (Attempts: ${{ env.MAX_ATTEMPTS }})"
+          title: "AI Loop for ${{ github.head_ref }} (Attempts: ${{ env.MAX_ATTEMPTS }})"
           body: |
             ## AI Loop Results
             - Successfully fixed: ${{ steps.ai_loop.outputs.success == '0' && 'Yes' || 'No' }}
             - Total attempts: ${{ env.MAX_ATTEMPTS }}
-            - Source branch: `${{ env.BRANCH }}`
+            - Source branch: `${{ github.head_ref }}`
 
             ### Link to run
             [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
             ### Attempts log
             [View attempts log](https://github.com/${{ github.repository }}/actions/artifacts/${{ steps.attempts-log.outputs.artifact_id }}/attempts.txt)
-          branch: ${{ env.BRANCH }}-ai-loop
-          base: ${{ env.BRANCH }}
+          branch: ${{ github.head_ref }}-ai-loop
+          base: ${{ github.head_ref }}
