@@ -71,6 +71,9 @@ async function runCommand(
 async function main() {
   const MAX_ATTEMPTS = Number(Deno.env.get("MAX_ATTEMPTS")) || 5;
 
+  // make sure coverage dir exists
+  Deno.mkdirSync("coverage", { recursive: true });
+
   for (let i = 1; i <= MAX_ATTEMPTS; i++) {
     console.log(`\n=== Iteration #${i} ===`);
     // Run cargo-llvm-cov in one shot
