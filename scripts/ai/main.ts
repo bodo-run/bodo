@@ -147,10 +147,13 @@ async function main() {
     );
 
     Deno.env.set("LAST_ATTEMPT", i.toString());
-
     // If the AI says coverage is good, we're done
-    if (aiContent.includes("DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD")) {
+    const isFullySuccessful = aiContent.includes(
+      "DONE_ALL_TESTS_PASS_AND_COVERAGE_GOOD"
+    );
+    if (isFullySuccessful) {
       console.log("All tests pass and coverage is good. Done.");
+      Deno.env.set("SUCCESS", isFullySuccessful ? "0" : "1");
       Deno.exit(0);
     }
 

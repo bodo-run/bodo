@@ -90,8 +90,8 @@ jobs:
           AI_PROVIDER: ${{ env.AI_PROVIDER }}
         run: |
           deno run --allow-all scripts/ai/main.ts
-          echo "success=$?" >> "$GITHUB_OUTPUT"
-          echo "last_attempt=$LAST_ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "success=${SUCCESS}" >> "$GITHUB_OUTPUT"
+          echo "last_attempt=${LAST_ATTEMPT}" >> "$GITHUB_OUTPUT"
 
       - name: Upload attempts log
         uses: actions/upload-artifact@v4
@@ -105,16 +105,15 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          MAX_ATTEMPTS: ${{ env.MAX_ATTEMPTS }}
         with:
           token: ${{ env.GH_TOKEN }}
           commit-message: "AI Loop"
-          title: "AI Loop for ${{ env.BRANCH }} (Attempts: ${{ steps.ai_loop.outputs.last_attempt }} / ${{ env.MAX_ATTEMPTS }})"
+          title: "AI tests for `${{ env.BRANCH }}` branch"
           body: |
-            - Successfully fixed: ${{ steps.ai_loop.outputs.success == '0' && 'Yes' || 'No' }}
-            - Total attempts: ${{ env.MAX_ATTEMPTS }}
-            - Source branch: `${{ env.BRANCH }}`
-            - Last attempt: ${{ steps.ai_loop.outputs.last_attempt }}
+            - Successful: ${{ steps.ai_loop.outputs.success != 0 }}
+            - Attempts: `${{ steps.ai_loop.outputs.last_attempt }} / ${{ env.MAX_ATTEMPTS }}`
             - [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            - [View attempts log](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)
+            - [View AI logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)
           branch: ${{ env.BRANCH }}-ai-loop-${{ github.run_id }}
           base: ${{ env.BRANCH }}
