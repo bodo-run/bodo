@@ -88,8 +88,27 @@ async function callAi(text: string) {
   return response.choices?.[0]?.message?.content ?? "";
 }
 
-async function main() {
+async function getChangesSummary(repo: string) {
   const baseBranch = Deno.env.get("BASE_BRANCH") || "main";
+  const { stdout: changes } = await runCommand("git", ["diff", baseBranch]);
+  if (!changes) return "No changes";
+  console.log("Asking AI to summarize changes...");
+  const summaryAndThinking = await callAi(
+    [
+      `Repository:`,
+      repo,
+      `Changes:`,
+      changes,
+      `Instructions: Summerize the changes made so far in the repo. In bullet points. Short and concise.`,
+    ].join("\n")
+  );
+
+  // remove the thinking part
+  const summary = summaryAndThinking.replace(/<think>\n.*?\n<\/think>/s, "");
+  return summary;
+}
+
+async function main() {
   // make sure coverage dir exists
   Deno.mkdirSync("coverage", { recursive: true });
 
@@ -107,21 +126,7 @@ async function main() {
     "docs/**/*",
   ]);
   // Get a summary of changes made so far
-  const { stdout: changes } = await runCommand("git", ["diff", baseBranch]);
-  console.log("Asking AI to summarize changes...");
-  const summaryAndThinking = await callAi(
-    [
-      `Repository:`,
-      repo,
-      `Changes:`,
-      changes,
-      `Instructions: Summerize the changes made so far in the repo. In bullet points. Short and concise.`,
-    ].join("\n")
-  );
-
-  // remove the thinking part
-  const summary = summaryAndThinking.replace(/<think>\n.*?\n<\/think>/s, "");
-
+  const summary = await getChangesSummary(repo);
   console.log("Changes summary:", summary);
 
   const aiPrompt = Deno.env.get("AI_PROMPT") || DEFAULT_PROMPT;
@@ -157,18 +162,10 @@ async function main() {
 
   console.log("AI response:", aiContent);
 
-  // If the AI says coverage is good, we're done
-  const isFullySuccessful = aiContent.includes(ALL_GOOD_TAG);
-  if (isFullySuccessful) {
-    console.log("All tests pass and coverage is good. Done.");
-    Deno.env.set("SUCCESS", isFullySuccessful ? "0" : "1");
-    Deno.exit(0);
-  }
-
   // Otherwise, parse out any updated code
   const updatedFiles = parseUpdatedFiles(aiContent);
   if (!updatedFiles.length) {
-    console.log("No updated files from AI. Trying again...");
+    console.log("No updated files from AI");
     return;
   }
 
@@ -182,8 +179,6 @@ async function main() {
   await runCommand("cargo", ["clippy", "--fix", "--allow-dirty"], {
     showOutput: true,
   });
-
-  console.log("Reached maximum attempts without success.");
 }
 
 function parseUpdatedFiles(
