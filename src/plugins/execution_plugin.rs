@@ -71,6 +71,41 @@ impl Default for ExecutionPlugin {
     }
 }
 
+/// Simple expansion of `$KEY` with the environment map's values. Not robust for all shells.
+fn expand_env_vars(original: &str, env_map: &std::collections::HashMap<String, String>) -> String {
+    let mut result = String::new();
+    let mut chars = original.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '$' {
+            // attempt to read a variable name
+            let mut var_name = String::new();
+            while let Some(peek_ch) = chars.peek() {
+                if peek_ch.is_alphanumeric() || *peek_ch == '_' {
+                    var_name.push(*peek_ch);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            if !var_name.is_empty() {
+                if let Some(val) = env_map.get(&var_name) {
+                    result.push_str(val);
+                } else {
+                    // no match in env, leave as is
+                    result.push('$');
+                    result.push_str(&var_name);
+                }
+            } else {
+                // just a lone '$'
+                result.push('$');
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+    result
+}
+
 impl Plugin for ExecutionPlugin {
     fn name(&self) -> &'static str {
         "ExecutionPlugin"
@@ -125,9 +160,10 @@ impl Plugin for ExecutionPlugin {
                 NodeKind::Task(task_data) => {
                     if let Some(cmd) = &task_data.command {
                         debug!("Executing task: {}", task_data.name);
-                        self.print_command(cmd);
+                        let final_cmd = expand_env_vars(cmd, &task_data.env);
+                        self.print_command(&final_cmd);
                         let mut pm = ProcessManager::new(false);
-                        pm.spawn_command(&task_data.name, cmd, false, None, None)
+                        pm.spawn_command(&task_data.name, &final_cmd, false, None, None)
                             .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
                         pm.run_concurrently()
                             .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
@@ -135,10 +171,11 @@ impl Plugin for ExecutionPlugin {
                 }
                 NodeKind::Command(cmd_data) => {
                     debug!("Executing command node: {}", node_id);
-                    self.print_command(&cmd_data.raw_command);
+                    let final_cmd = expand_env_vars(&cmd_data.raw_command, &cmd_data.env);
+                    self.print_command(&final_cmd);
                     let mut pm = ProcessManager::new(false);
                     let label = format!("cmd-{}", node_id);
-                    pm.spawn_command(&label, &cmd_data.raw_command, false, None, None)
+                    pm.spawn_command(&label, &final_cmd, false, None, None)
                         .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
                     pm.run_concurrently()
                         .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
@@ -179,9 +216,10 @@ fn run_concurrent_group(
         match &child_node.kind {
             NodeKind::Task(t) => {
                 if let Some(cmd) = &t.command {
+                    let final_cmd = expand_env_vars(cmd, &t.env);
                     pm.spawn_command(
                         &t.name,
-                        cmd,
+                        &final_cmd,
                         prefix_enabled,
                         prefix_label.clone(),
                         prefix_color.clone(),
@@ -192,9 +230,10 @@ fn run_concurrent_group(
             }
             NodeKind::Command(cmd) => {
                 let label = format!("cmd-{}", child_node.id);
+                let final_cmd = expand_env_vars(&cmd.raw_command, &cmd.env);
                 pm.spawn_command(
                     &label,
-                    &cmd.raw_command,
+                    &final_cmd,
                     prefix_enabled,
                     prefix_label.clone(),
                     prefix_color.clone(),
@@ -203,7 +242,6 @@ fn run_concurrent_group(
                 pending.push(label);
             }
             NodeKind::ConcurrentGroup(sub_group) => {
-                // Nested concurrency
                 run_concurrent_group(sub_group, graph, plugin)?;
             }
         }

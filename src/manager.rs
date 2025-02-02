@@ -77,6 +77,7 @@ impl GraphManager {
             concurrently_options: Default::default(),
             concurrently: vec![],
             exec_paths: task_data.exec_paths.clone(),
+            arguments: Vec::new(),
             _name_check: None,
         })
     }
@@ -169,5 +170,74 @@ impl GraphManager {
                 _ => None,
             })
             .collect()
+    }
+
+    /// Called before plugin pipeline to apply any CLI arguments to the relevant task.
+    /// The `args` list is the leftover CLI arguments (Args.args).
+    /// If the task defines arguments in YAML, we parse them here, check for required vs. optional,
+    /// apply defaults, and inject final values into the TaskData.env as $VARIABLE expansions.
+    pub fn apply_task_arguments(&mut self, task_name: &str, cli_args: &[String]) -> Result<()> {
+        let node_id = *self
+            .graph
+            .task_registry
+            .get(task_name)
+            .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?;
+
+        let node = self.graph.nodes.get_mut(node_id as usize).ok_or_else(|| {
+            BodoError::PluginError(format!("Invalid node ID for task '{}'", task_name))
+        })?;
+
+        // Get the arguments list from the BodoConfig tasks or from node metadata
+        let config_args = {
+            if let Some(task_cfg) = self.config.tasks.get(task_name) {
+                task_cfg.arguments.clone()
+            } else {
+                // Could be "script_id task_name" or fallback
+                let full_key = task_name.to_string();
+                // Attempt to see if that matches. Otherwise, empty
+                let maybe_cfg = self.config.tasks.get(&full_key);
+                maybe_cfg.map_or_else(std::vec::Vec::new, |c| c.arguments.clone())
+            }
+        };
+
+        // If not found in config.tasks, it might be from a sub-script. We won't overcomplicate.
+        // We'll just see if we find it. If not, no arguments to parse. Done.
+        if config_args.is_empty() {
+            // No arguments to handle
+            return Ok(());
+        }
+
+        // Fill them in based on cli_args
+        let mut final_values: Vec<(String, String)> = Vec::new(); // (arg_name, value)
+        let mut cli_index = 0;
+
+        for arg_def in &config_args {
+            if cli_index < cli_args.len() {
+                let value = cli_args[cli_index].clone();
+                cli_index += 1;
+                final_values.push((arg_def.name.clone(), value));
+            } else {
+                // no CLI value
+                if arg_def.required {
+                    return Err(BodoError::PluginError(format!(
+                        "Missing required argument '{}'",
+                        arg_def.name
+                    )));
+                }
+                // else use default
+                let default_val = arg_def.default.clone().unwrap_or_default();
+                final_values.push((arg_def.name.clone(), default_val));
+            }
+        }
+
+        // If CLI leftover arguments remain beyond definitions, that's user-provided extras. We let them pass.
+
+        // Now inject these into the node's environment so the command can do `$argName`
+        if let NodeKind::Task(task_data) = &mut node.kind {
+            for (k, v) in final_values {
+                task_data.env.insert(k, v);
+            }
+        }
+        Ok(())
     }
 }

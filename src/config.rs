@@ -22,7 +22,7 @@ fn validate_task_name(name: &str) -> std::result::Result<(), ValidationError> {
     }
 
     // Check length (1 to 100)
-    if name.len() < 1 || name.len() > 100 {
+    if name.is_empty() || name.len() > 100 {
         let mut err = ValidationError::new("invalid_length");
         err.message = Some("Task name length must be between 1 and 100".into());
         return Err(err);
@@ -54,7 +54,7 @@ fn validate_task_config(task: &TaskConfig) -> std::result::Result<(), Validation
 
     // Validate timeout format if present
     if let Some(timeout) = &task.timeout {
-        if let Err(_) = humantime::parse_duration(timeout) {
+        if humantime::parse_duration(timeout).is_err() {
             let mut err = ValidationError::new("invalid_timeout");
             err.message = Some(format!("Invalid timeout format: {}", timeout).into());
             return Err(err);
@@ -131,6 +131,25 @@ pub struct ConcurrentlyOptions {
     pub prefix_color: Option<String>,
 }
 
+/// Represents a CLI argument that can be passed to a task
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, JsonSchema, PartialEq)]
+pub struct TaskArgument {
+    /// Name of the argument (used as environment variable)
+    #[validate(length(min = 1, max = 64))]
+    pub name: String,
+
+    /// Description of what the argument is for
+    #[validate(length(min = 0, max = 128))]
+    pub description: Option<String>,
+
+    /// Whether this argument must be provided
+    #[serde(default)]
+    pub required: bool,
+
+    /// Default value if not provided
+    pub default: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Validate, JsonSchema)]
 #[validate(schema(function = "validate_task_config"))]
 pub struct TaskConfig {
@@ -165,16 +184,20 @@ pub struct TaskConfig {
     #[validate]
     pub watch: Option<WatchConfig>,
 
-    /// Timeout for the task
+    /// Timeout duration (e.g. "30s", "1m")
     pub timeout: Option<String>,
 
-    /// Environment variables to set for the task
+    /// Environment variables for the task
     #[serde(default)]
     pub env: HashMap<String, String>,
 
-    /// Paths to add to the PATH environment variable for the task
+    /// Additional paths to add to PATH
     #[serde(default)]
     pub exec_paths: Vec<String>,
+
+    /// CLI arguments that can be passed to this task
+    #[serde(default, rename = "args")]
+    pub arguments: Vec<TaskArgument>,
 
     #[serde(skip)]
     #[validate(custom = "validate_task_name")]
