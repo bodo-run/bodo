@@ -1,8 +1,7 @@
-use crate::config::WatchConfig;
-use crate::errors::BodoError;
-use crate::Result;
-use log::debug;
 use std::collections::HashMap;
+
+use crate::config::WatchConfig;
+use crate::errors::Result;
 
 pub type NodeId = u64;
 
@@ -27,7 +26,7 @@ pub struct TaskData {
     pub watch: Option<WatchConfig>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct CommandData {
     pub raw_command: String,
     pub description: Option<String>,
@@ -66,15 +65,11 @@ pub struct Graph {
 
 impl Graph {
     pub fn new() -> Self {
-        Self {
-            nodes: Vec::new(),
-            edges: Vec::new(),
-            task_registry: HashMap::new(),
-        }
+        Self::default()
     }
 
     pub fn add_node(&mut self, kind: NodeKind) -> NodeId {
-        let id = self.nodes.len() as NodeId;
+        let id = self.nodes.len() as u64;
         self.nodes.push(Node {
             id,
             kind,
@@ -84,181 +79,111 @@ impl Graph {
     }
 
     pub fn add_edge(&mut self, from: NodeId, to: NodeId) -> Result<()> {
-        if from as usize >= self.nodes.len() || to as usize >= self.nodes.len() {
-            return Err(BodoError::PluginError("Invalid node ID".to_string()));
+        if from >= self.nodes.len() as u64 || to >= self.nodes.len() as u64 {
+            return Err(crate::errors::BodoError::PluginError(
+                "Invalid node ID".into(),
+            ));
         }
         self.edges.push(Edge { from, to });
         Ok(())
     }
 
-    pub fn print_debug(&self) {
-        debug!("\nGraph Debug Info:");
-        debug!("Nodes: {}", self.nodes.len());
-        for node in &self.nodes {
-            match &node.kind {
-                NodeKind::Task(task) => {
-                    debug!("  Task[{}]: {}", node.id, task.name);
-                    if let Some(desc) = &task.description {
-                        debug!("    Description: {}", desc);
-                    }
-                    if let Some(cmd) = &task.command {
-                        debug!("    Command: {}", cmd);
-                    }
-                    if let Some(dir) = &task.working_dir {
-                        debug!("    Working Dir: {}", dir);
-                    }
-                    if !task.env.is_empty() {
-                        debug!("    Environment:");
-                        for (k, v) in &task.env {
-                            debug!("      {}={}", k, v);
-                        }
-                    }
-                }
-                NodeKind::Command(cmd) => {
-                    debug!("  Command[{}]: {}", node.id, cmd.raw_command);
-                }
-                NodeKind::ConcurrentGroup(group) => {
-                    debug!("  ConcurrentGroup[{}]:", node.id);
-                    debug!("    Children: {:?}", group.child_nodes);
-                    debug!("    Fail Fast: {}", group.fail_fast);
-                    if let Some(max) = group.max_concurrent {
-                        debug!("    Max Concurrent: {}", max);
-                    }
-                    if let Some(timeout) = group.timeout_secs {
-                        debug!("    Timeout: {}s", timeout);
-                    }
-                }
-            }
-            if !node.metadata.is_empty() {
-                debug!("    Metadata:");
-                for (k, v) in &node.metadata {
-                    debug!("      {}={}", k, v);
-                }
-            }
-        }
-        debug!("\nEdges: {}", self.edges.len());
-        for edge in &self.edges {
-            debug!("  {} -> {}", edge.from, edge.to);
-        }
-        debug!("");
-    }
-
     pub fn detect_cycle(&self) -> Option<Vec<NodeId>> {
         let mut visited = vec![false; self.nodes.len()];
-        let mut stack = vec![false; self.nodes.len()];
-        let mut parent = vec![None; self.nodes.len()];
+        let mut rec_stack = vec![false; self.nodes.len()];
+        let mut node_stack = Vec::new();
 
-        fn dfs(
-            graph: &Graph,
-            u: usize,
-            visited: &mut [bool],
-            stack: &mut [bool],
-            parent: &mut [Option<usize>],
-        ) -> Option<(usize, usize)> {
-            visited[u] = true;
-            stack[u] = true;
-
-            for e in &graph.edges {
-                if e.from as usize == u {
-                    let v = e.to as usize;
-                    if !visited[v] {
-                        parent[v] = Some(u);
-                        if let Some(cycle) = dfs(graph, v, visited, stack, parent) {
-                            return Some(cycle);
-                        }
-                    } else if stack[v] {
-                        return Some((u, v));
-                    }
-                }
-            }
-            stack[u] = false;
-            None
-        }
-
-        for i in 0..self.nodes.len() {
-            if !visited[i] {
-                if let Some((from, to)) = dfs(self, i, &mut visited, &mut stack, &mut parent) {
-                    return Some(self.reconstruct_cycle(from, to, &parent));
-                }
+        for node in 0..self.nodes.len() {
+            if self.is_cyclic(node as u64, &mut visited, &mut rec_stack, &mut node_stack) {
+                return Some(node_stack);
             }
         }
         None
     }
 
-    fn reconstruct_cycle(
+    fn is_cyclic(
         &self,
-        mut from: usize,
-        to: usize,
-        parent: &[Option<usize>],
-    ) -> Vec<NodeId> {
-        let mut path = vec![from as NodeId];
-        while from != to {
-            from = parent[from].unwrap();
-            path.push(from as NodeId);
+        node: NodeId,
+        visited: &mut [bool],
+        rec_stack: &mut [bool],
+        stack: &mut Vec<NodeId>,
+    ) -> bool {
+        let node_idx = node as usize;
+        if !visited[node_idx] {
+            visited[node_idx] = true;
+            rec_stack[node_idx] = true;
+            stack.push(node);
+
+            for edge in &self.edges {
+                if edge.from == node {
+                    let adjacent = edge.to;
+                    if !visited[adjacent as usize]
+                        && self.is_cyclic(adjacent, visited, rec_stack, stack)
+                        || rec_stack[adjacent as usize]
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            stack.pop();
+            rec_stack[node_idx] = false;
         }
-        path.reverse();
-        path
+        false
     }
 
     pub fn format_cycle_error(&self, cycle: &[NodeId]) -> String {
-        let mut error = String::from("error: found cyclical dependency involving:\n");
-        for window in cycle.windows(2) {
-            let from = window[0] as usize;
-            let to = window[1] as usize;
-            let from_name = self.get_node_name(from);
-            let to_name = self.get_node_name(to);
-            error.push_str(&format!("   --> {} depends on {}\n", from_name, to_name));
-        }
-        let last = cycle[cycle.len() - 1] as usize;
-        let first = cycle[0] as usize;
-        let last_name = self.get_node_name(last);
-        let first_name = self.get_node_name(first);
-        error.push_str(&format!("   --> {} depends on {}\n", last_name, first_name));
-        error
-    }
-
-    fn get_node_name(&self, node_id: usize) -> String {
-        match &self.nodes[node_id].kind {
-            NodeKind::Task(task) => {
-                if task.script_display_name.is_empty() {
-                    task.name.clone()
-                } else {
-                    format!("{}/{}", task.script_display_name, task.name)
+        let mut names = Vec::new();
+        for node_id in cycle {
+            if let Some(node) = self.nodes.get(*node_id as usize) {
+                if let NodeKind::Task(task) = &node.kind {
+                    names.push(task.name.clone());
                 }
             }
-            NodeKind::Command(cmd) => format!("command[{}]", cmd.raw_command),
-            NodeKind::ConcurrentGroup(_) => format!("concurrent_group[{}]", node_id),
         }
+        format!("Circular dependency detected: {}", names.join(" -> "))
     }
 
     pub fn topological_sort(&self) -> Result<Vec<NodeId>> {
-        let mut in_degree = vec![0; self.nodes.len()];
-        for e in &self.edges {
-            in_degree[e.to as usize] += 1;
+        let mut in_degree = HashMap::new();
+        let mut queue = Vec::new();
+        let mut result = Vec::new();
+
+        // Initialize in-degree
+        for node in 0..self.nodes.len() as u64 {
+            in_degree.insert(node, 0);
         }
-        let mut queue = std::collections::VecDeque::new();
-        for (i, &deg) in in_degree.iter().enumerate() {
-            if deg == 0 {
-                queue.push_back(i);
+        for edge in &self.edges {
+            *in_degree.entry(edge.to).or_insert(0) += 1;
+        }
+
+        // Find nodes with zero in-degree
+        for (node, &degree) in &in_degree {
+            if degree == 0 {
+                queue.push(*node);
             }
         }
-        let mut sorted = Vec::new();
-        while let Some(u) = queue.pop_front() {
-            sorted.push(u as u64);
-            for e in &self.edges {
-                if e.from as usize == u {
-                    in_degree[e.to as usize] -= 1;
-                    if in_degree[e.to as usize] == 0 {
-                        queue.push_back(e.to as usize);
+
+        // Kahn's algorithm
+        while let Some(node) = queue.pop() {
+            result.push(node);
+            for edge in &self.edges {
+                if edge.from == node {
+                    let entry = in_degree.entry(edge.to).or_default();
+                    *entry -= 1;
+                    if *entry == 0 {
+                        queue.push(edge.to);
                     }
                 }
             }
         }
-        if sorted.len() != self.nodes.len() {
-            return Err(BodoError::PluginError(
-                "Graph has cycles or is disconnected".to_string(),
-            ));
+
+        if result.len() != self.nodes.len() {
+            Err(crate::errors::BodoError::PluginError(
+                "Graph has a cycle".into(),
+            ))
+        } else {
+            Ok(result)
         }
-        Ok(sorted)
     }
 }

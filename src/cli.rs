@@ -3,7 +3,7 @@ use crate::manager::GraphManager;
 use clap::Parser;
 use std::fmt::Debug;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default)] // Added Default here
 #[command(author, version, about, long_about = None)]
 pub struct Args {
     /// List all available tasks

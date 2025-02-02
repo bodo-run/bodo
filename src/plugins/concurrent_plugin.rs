@@ -34,6 +34,10 @@ impl Plugin for ConcurrentPlugin {
         self
     }
 
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
         let mut nodes_to_process = Vec::new();
         for node in &graph.nodes {

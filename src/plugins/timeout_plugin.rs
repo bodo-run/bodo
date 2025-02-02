@@ -51,10 +51,14 @@ impl Plugin for TimeoutPlugin {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
-fn parse_timeout(s: &str) -> Result<u64> {
-    let duration = parse_duration(s)
-        .map_err(|e| BodoError::PluginError(format!("Invalid timeout duration '{}': {}", s, e)))?;
-    Ok(duration.as_secs())
+fn parse_timeout(timeout_str: &str) -> Result<u64> {
+    parse_duration(timeout_str)
+        .map(|d| d.as_secs())
+        .map_err(|e| BodoError::PluginError(format!("Invalid timeout format: {}", e)))
 }

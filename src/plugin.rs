@@ -7,6 +7,7 @@ pub trait Plugin: Send {
     fn name(&self) -> &'static str;
     fn priority(&self) -> i32;
     fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 
     /// Called after plugin is created, before building the graph.
     fn on_init(&mut self, _config: &PluginConfig) -> Result<()> {
@@ -38,7 +39,7 @@ pub struct PluginConfig {
 }
 
 pub struct PluginManager {
-    plugins: Vec<Box<dyn Plugin>>,
+    pub plugins: Vec<Box<dyn Plugin>>,
 }
 
 impl PluginManager {

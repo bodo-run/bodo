@@ -47,46 +47,35 @@ impl Plugin for PrefixPlugin {
         90
     }
 
+    fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
+        for node in &mut graph.nodes {
+            let label = match &node.kind {
+                NodeKind::Task(task) => Some(task.name.clone()),
+                NodeKind::Command(cmd) => cmd.description.clone().or_else(|| {
+                    cmd.raw_command
+                        .split_whitespace()
+                        .next()
+                        .map(|s| s.to_string())
+                }),
+                NodeKind::ConcurrentGroup(_) => None,
+            };
+
+            if let Some(label_str) = label {
+                let color = self.next_color();
+                node.metadata
+                    .insert("prefix_enabled".to_string(), "true".to_string());
+                node.metadata.insert("prefix_label".to_string(), label_str);
+                node.metadata.insert("prefix_color".to_string(), color);
+            }
+        }
+        Ok(())
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn on_graph_build(&mut self, graph: &mut Graph) -> Result<()> {
-        let mut updates = Vec::new();
-        for node in graph.nodes.iter() {
-            if let NodeKind::ConcurrentGroup(group_data) = &node.kind {
-                let prefix_output = node
-                    .metadata
-                    .get("prefix_output")
-                    .map(|s| s == "true")
-                    .unwrap_or(false);
-
-                if prefix_output {
-                    let user_color = node.metadata.get("prefix_color").cloned();
-                    for &child_id in &group_data.child_nodes {
-                        let child_node = &graph.nodes[child_id as usize];
-                        let (label, default_color) = match &child_node.kind {
-                            NodeKind::Task(t) => (t.name.clone(), self.next_color()),
-                            NodeKind::Command(_) => {
-                                (format!("cmd-{}", child_id), self.next_color())
-                            }
-                            NodeKind::ConcurrentGroup(_) => {
-                                (format!("group-{}", child_id), self.next_color())
-                            }
-                        };
-                        let chosen_color = user_color.clone().unwrap_or(default_color);
-                        updates.push((child_id as usize, label, chosen_color));
-                    }
-                }
-            }
-        }
-        for (node_idx, label, color) in updates {
-            let node = &mut graph.nodes[node_idx];
-            node.metadata
-                .insert("prefix_enabled".to_string(), "true".to_string());
-            node.metadata.insert("prefix_label".to_string(), label);
-            node.metadata.insert("prefix_color".to_string(), color);
-        }
-        Ok(())
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

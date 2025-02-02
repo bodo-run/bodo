@@ -35,6 +35,10 @@ impl Plugin for EnvPlugin {
         self
     }
 
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
         if let Some(options) = &config.options {
             if let Some(val) = options.get("env") {
