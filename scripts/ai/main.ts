@@ -20,14 +20,27 @@ __FILE_CONTENT_START__
 __FILE_CONTENT_END__
 `.trim();
 
-const apiKey = Deno.env.get("FIREWORKS_AI_API_KEY");
-if (!apiKey) throw new Error("Missing FIREWORKS_AI_API_KEY env var.");
+function getOpenAiClient() {
+  const provider = Deno.env.get("AI_PROVIDER");
+  if (provider === "fireworks") {
+    const apiKey = Deno.env.get("FIREWORKS_AI_API_KEY");
+    if (!apiKey) throw new Error("Missing FIREWORKS_AI_API_KEY env var.");
 
-const openai = new OpenAI({
-  apiKey,
-  baseURL: "https://api.fireworks.ai/inference/v1/",
-});
-const MODEL_NAME = "accounts/fireworks/models/deepseek-r1";
+    const openai = new OpenAI({
+      apiKey,
+      baseURL: "https://api.fireworks.ai/inference/v1/",
+    });
+    const modelName = "accounts/fireworks/models/deepseek-r1";
+    return { openai, modelName };
+  } else if (provider === "openai") {
+    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!apiKey) throw new Error("Missing OPENAI_API_KEY env var.");
+    const openai = new OpenAI({ apiKey });
+    const modelName = "o1-preview";
+    return { openai, modelName };
+  }
+  throw new Error(`Unknown AI provider: ${provider}`);
+}
 
 function existsSync(filePath: string): boolean {
   try {
@@ -72,6 +85,7 @@ async function runCommand(
 }
 
 async function main() {
+  const { openai, modelName } = getOpenAiClient();
   const MAX_ATTEMPTS = Number(Deno.env.get("MAX_ATTEMPTS")) || 5;
 
   // make sure coverage dir exists
@@ -127,7 +141,7 @@ async function main() {
     );
 
     const chatParams: ChatCompletionCreateParams = {
-      model: MODEL_NAME,
+      model: modelName,
       max_tokens: 165000,
       messages: [{ role: "user", content: textToAi }],
     };

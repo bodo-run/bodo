@@ -15,6 +15,14 @@ on:
         description: "Create a PR on failure"
         default: false
         type: boolean
+      provider:
+        description: "AI provider"
+        default: "fireworks"
+        required: true
+        type: choice
+        options:
+          - openai
+          - fireworks
 
 permissions:
   contents: write
@@ -32,6 +40,7 @@ jobs:
       RUSTFLAGS: "-Cinstrument-coverage"
       LLVM_PROFILE_FILE: "coverage/bodo-%p-%m.profraw"
       BRANCH: ${{ github.event.inputs.branch }}
+      AI_PROVIDER: ${{ github.event.inputs.provider }}
 
     steps:
       - name: Print inputs
@@ -66,9 +75,6 @@ jobs:
         run: |
           curl -fsSL https://bodo.run/yek.sh | bash
 
-      - name: Install grcov
-        run: cargo install grcov
-
       - name: Install llvm-cov
         run: cargo +stable install cargo-llvm-cov --locked
 
@@ -80,6 +86,7 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           FIREWORKS_AI_API_KEY: ${{ secrets.FIREWORKS_AI_API_KEY }}
           MAX_ATTEMPTS: ${{ env.MAX_ATTEMPTS }}
+          AI_PROVIDER: ${{ env.AI_PROVIDER }}
         run: |
           deno run --allow-all scripts/ai/main.ts
           echo "success=$?" >> "$GITHUB_OUTPUT"
