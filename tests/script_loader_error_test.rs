@@ -25,8 +25,8 @@ tasks:
 
     let result = loader.build_graph(config);
     assert!(
-        matches!(result, Err(BodoError::YamlError(_))),
-        "Expected YamlError due to duplicate task names"
+        matches!(result, Err(BodoError::PluginError(_))),
+        "Expected PluginError due to duplicate task names"
     );
 }
 
