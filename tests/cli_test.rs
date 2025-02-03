@@ -67,10 +67,9 @@ fn test_get_task_name_default_task() {
     let mut manager = GraphManager::new();
 
     let config_yaml = r#"
-    tasks:
-      default:
-        command: echo "Default Task"
-    "#;
+default_task:
+  command: echo "Default Task"
+"#;
 
     let config: BodoConfig = serde_yaml::from_str(config_yaml).unwrap();
     manager.build_graph(config).unwrap();
