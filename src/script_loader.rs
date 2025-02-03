@@ -139,7 +139,7 @@ impl ScriptLoader {
             )?;
         }
 
-        // [New code] Process tasks from config.tasks
+        // Process tasks from config.tasks
         if !config.tasks.is_empty() {
             let script_id = "config".to_string();
             let script_display_name = "config".to_string();
@@ -159,20 +159,20 @@ impl ScriptLoader {
                 self.validate_task_config(&task_config, &name, Path::new("config"))?;
 
                 // Create task node
-                let task_data = TaskData {
-                    name: name.clone(),
-                    description: task_config.description.clone(),
-                    command: task_config.command.clone(),
-                    working_dir: task_config.cwd.clone(),
-                    env,
-                    exec_paths,
-                    is_default: name == "default",
-                    script_id: script_id.clone(),
-                    script_display_name: script_display_name.clone(),
-                    watch: task_config.watch.clone(),
-                };
+                let task_id = self.create_task_node(
+                    &mut graph,
+                    &script_id,
+                    &script_display_name,
+                    &name,
+                    &task_config,
+                );
 
-                let task_id = graph.add_node(NodeKind::Task(task_data));
+                // Update the task data with merged env and exec_paths
+                if let NodeKind::Task(ref mut task_data) = graph.nodes[task_id as usize].kind {
+                    task_data.env = env;
+                    task_data.exec_paths = exec_paths;
+                }
+
                 self.register_task(&script_id, &name, task_id, &mut graph)?;
 
                 // Handle dependencies
@@ -248,13 +248,87 @@ impl ScriptLoader {
         &mut self,
         graph: &mut Graph,
         path: &Path,
-        script_id: &str,
+        script_display_name: &str,
         global_env: &HashMap<String, String>,
         global_exec_paths: &[String],
     ) -> Result<()> {
-        // ...
-        // Existing implementation of load_script...
-        // Omitted here for brevity
+        // Read and parse the script file
+        let content = fs::read_to_string(path)?;
+        let script_config: BodoConfig = serde_yaml::from_str(&content)?;
+
+        let script_env = script_config.env.clone();
+        let script_exec_paths = script_config.exec_paths.clone();
+
+        // For each task in the script, create nodes in the graph
+        let script_id = path.display().to_string();
+        for (task_name, task_config) in script_config.tasks {
+            self.validate_task_config(&task_config, &task_name, path)?;
+
+            // Merge environments and exec_paths
+            let env = Self::merge_envs(global_env, &script_env, &task_config.env);
+            let exec_paths = Self::merge_exec_paths(
+                global_exec_paths,
+                &script_exec_paths,
+                &task_config.exec_paths,
+            );
+
+            let node_id = self.create_task_node(
+                graph,
+                &script_id,
+                script_display_name,
+                &task_name,
+                &task_config,
+            );
+
+            // Update the task data with merged env and exec_paths
+            if let NodeKind::Task(ref mut task_data) = graph.nodes[node_id as usize].kind {
+                task_data.env = env;
+                task_data.exec_paths = exec_paths;
+            }
+
+            self.register_task(&script_id, &task_name, node_id, graph)?;
+
+            // Handle dependencies
+            for dep in &task_config.pre_deps {
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(task, path, graph)?;
+                        graph.add_edge(*dep_id, node_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command.clone(),
+                            description: None,
+                            working_dir: None,
+                            env: HashMap::new(),
+                            watch: None,
+                        }));
+                        graph.add_edge(cmd_node_id, node_id)?;
+                    }
+                }
+            }
+
+            for dep in &task_config.post_deps {
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(task, path, graph)?;
+                        graph.add_edge(node_id, *dep_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command.clone(),
+                            description: None,
+                            working_dir: None,
+                            env: HashMap::new(),
+                            watch: None,
+                        }));
+                        graph.add_edge(node_id, cmd_node_id)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn create_task_node(
@@ -339,11 +413,26 @@ impl ScriptLoader {
         referencing_file: &Path,
         graph: &mut Graph,
     ) -> Result<&u64> {
-        if let Some((script_path, fallback_name)) = self.parse_cross_file_ref(dep, referencing_file)
-        {
+        if let Some((script_path, task_name)) = self.parse_cross_file_ref(dep, referencing_file) {
             // Create empty global env for cross-file references
             let empty_global_env = HashMap::new();
-            self.load_script(graph, &script_path, &fallback_name, &empty_global_env, &[])?;
+            let empty_exec_paths = vec![];
+            let script_display_name = script_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("script")
+                .to_string();
+            self.load_script(
+                graph,
+                &script_path,
+                &script_display_name,
+                &empty_global_env,
+                &empty_exec_paths,
+            )?;
+            let full_key = format!("{} {}", script_path.display(), task_name);
+            if let Some(id) = graph.task_registry.get(&full_key) {
+                return Ok(id);
+            }
         }
 
         if let Some(id) = graph.task_registry.get(dep) {
@@ -361,5 +450,24 @@ impl ScriptLoader {
         )))
     }
 
-    // Other methods unchanged...
+    fn parse_cross_file_ref(
+        &self,
+        dep: &str,
+        referencing_file: &Path,
+    ) -> Option<(PathBuf, String)> {
+        if dep.contains('/') {
+            let parts: Vec<&str> = dep.splitn(2, '/').collect();
+            let script_path_part = parts[0];
+            let task_name_part = parts.get(1).cloned().unwrap_or("default");
+
+            let script_path = referencing_file
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .join(script_path_part);
+
+            Some((script_path, task_name_part.to_string()))
+        } else {
+            None
+        }
+    }
 }
