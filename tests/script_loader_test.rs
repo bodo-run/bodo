@@ -1,9 +1,10 @@
+// tests/script_loader_test.rs
 use bodo::config::BodoConfig;
 use bodo::errors::BodoError;
-use bodo::manager::GraphManager;
+use bodo::graph::{Graph, NodeKind, TaskData};
 use bodo::script_loader::ScriptLoader;
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 use tempfile::tempdir;
 
 #[test]
@@ -100,42 +101,55 @@ fn test_task_dependencies() {
 }
 
 #[test]
+fn test_parse_cross_file_ref() {
+    let loader = ScriptLoader::new();
+    let referencing_file = Path::new("dir/script.yaml");
+    let dep = "../other.yaml/some-task";
+    let result = loader.parse_cross_file_ref(dep, referencing_file);
+    assert!(result.is_some());
+    let (script_path, task_name) = result.unwrap();
+    assert_eq!(script_path, Path::new("dir/../other.yaml"));
+    assert_eq!(task_name, "some-task".to_string());
+}
+
+#[test]
 fn test_cycle_detection() {
-    let temp_dir = tempdir().unwrap();
-    let script_path = temp_dir.path().join("script.yaml");
+    let mut graph = Graph::new();
+    let node_id1 = graph.add_node(NodeKind::Task(TaskData {
+        name: "task1".to_string(),
+        description: None,
+        command: None,
+        working_dir: None,
+        env: Default::default(),
+        exec_paths: vec![],
+        is_default: false,
+        script_id: "script".to_string(),
+        script_display_name: "script".to_string(),
+        watch: None,
+    }));
+    let node_id2 = graph.add_node(NodeKind::Task(TaskData {
+        name: "task2".to_string(),
+        description: None,
+        command: None,
+        working_dir: None,
+        env: Default::default(),
+        exec_paths: vec![],
+        is_default: false,
+        script_id: "script".to_string(),
+        script_display_name: "script".to_string(),
+        watch: None,
+    }));
+    graph.add_edge(node_id1, node_id2).unwrap();
+    graph.add_edge(node_id2, node_id1).unwrap();
 
-    let script_content = r#"
-    tasks:
-      task1:
-        command: echo "Task 1"
-        pre_deps:
-          - task: task2
-      task2:
-        command: echo "Task 2"
-        pre_deps:
-          - task: task1
-    "#;
+    let cycle = graph.detect_cycle();
+    assert!(cycle.is_some());
 
-    fs::write(&script_path, script_content).unwrap();
-
-    let mut config = BodoConfig::default();
-    config.scripts_dirs = Some(vec![temp_dir.path().to_string_lossy().to_string()]);
-
-    // This should result in a cycle in the graph
-    let mut manager = GraphManager::new();
-    let result = manager.build_graph(config);
-
-    assert!(result.is_err(), "Cycle was not detected");
-    match result {
-        Err(BodoError::PluginError(msg)) => {
-            assert!(
-                msg.contains("found cyclical dependency"),
-                "Incorrect error message: {}",
-                msg
-            );
-        }
-        _ => panic!("Expected PluginError due to cycle"),
-    }
+    let error_msg = graph.format_cycle_error(&cycle.unwrap());
+    assert!(
+        error_msg.contains("task1") && error_msg.contains("task2"),
+        "Error message should include task1 and task2"
+    );
 }
 
 #[test]
@@ -174,22 +188,21 @@ fn test_invalid_task_config() {
 }
 
 #[test]
-fn test_parse_cross_file_ref() {
+fn test_parse_cross_file_ref_no_slash() {
     let loader = ScriptLoader::new();
-    let referencing_file = PathBuf::from("dir/script.yaml");
-    let dep = "../other.yaml/some-task";
-    let result = loader.parse_cross_file_ref(dep, &referencing_file);
-    assert!(result.is_some());
-    let (script_path, task_name) = result.unwrap();
-    assert_eq!(script_path, PathBuf::from("dir/../other.yaml"));
-    assert_eq!(task_name, "some-task".to_string());
+    let referencing_file = Path::new("dir/script.yaml");
+    let dep = "task-name";
+    let result = loader.parse_cross_file_ref(dep, referencing_file);
+    assert!(result.is_none());
 }
 
 #[test]
-fn test_parse_cross_file_ref_no_slash() {
-    let loader = ScriptLoader::new();
-    let referencing_file = PathBuf::from("dir/script.yaml");
-    let dep = "task-name";
-    let result = loader.parse_cross_file_ref(dep, &referencing_file);
-    assert!(result.is_none());
+fn test_generate_schema() {
+    let schema = BodoConfig::generate_schema();
+    assert!(!schema.is_empty(), "Schema should not be empty");
+    // Optionally, verify that the schema contains certain expected strings
+    assert!(
+        schema.contains("\"title\": \"BodoConfig\""),
+        "Schema should contain BodoConfig title"
+    );
 }
