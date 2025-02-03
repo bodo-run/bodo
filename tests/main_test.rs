@@ -1,33 +1,62 @@
 // tests/main_test.rs
 
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
+use tempfile::tempdir;
 
 #[test]
 fn test_bodo_default() {
-    // First, ensure 'bodo' binary is built
-    let status = Command::new("cargo")
-        .args(["build", "--bin", "bodo"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .status()
-        .expect("Failed to execute cargo build command");
-    assert!(status.success(), "Cargo build failed");
-
     // Build the path to the built 'bodo' executable
-    let exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("debug")
-        .join("bodo");
+    let current_exe = std::env::current_exe().expect("Failed to get current exe path");
+
+    // Assuming the path to the built 'bodo' binary is `current_exe/../../../debug/bodo`
+    let target_dir = current_exe
+        .parent() // deps/
+        .and_then(|p| p.parent()) // debug/
+        .and_then(|p| p.parent()) // target/
+        .expect("Failed to get target directory");
+
+    let exe_path = target_dir.join("debug").join("bodo");
     #[cfg(windows)]
-    exe_path.set_extension("exe");
+    let exe_path = exe_path.with_extension("exe");
+
+    assert!(
+        exe_path.exists(),
+        "bodo executable not found at {:?}",
+        exe_path
+    );
+
+    // Create a temp directory
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+
+    // Write the scripts/script.yaml file
+    let scripts_dir = temp_dir.path().join("scripts");
+    std::fs::create_dir_all(&scripts_dir).expect("Failed to create scripts directory");
+
+    let script_content = r#"
+default_task:
+  command: echo "Hello from Bodo root!"
+  description: "Default greeting when running `bodo` with no arguments."
+"#;
+
+    let script_path = scripts_dir.join("script.yaml");
+    std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
+
+    // Set environment variables to point to our temp scripts directory
+    let root_script_env = scripts_dir
+        .join("script.yaml")
+        .to_string_lossy()
+        .into_owned();
+    let scripts_dirs_env = scripts_dir.to_string_lossy().into_owned();
 
     let mut child = Command::new(exe_path)
-        .arg("default")
+        // .arg("default") // No need to specify 'default' since we're testing the default task
         .env("RUST_LOG", "info")
         .env("BODO_NO_WATCH", "1")
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("BODO_ROOT_SCRIPT", &root_script_env)
+        .env("BODO_SCRIPTS_DIRS", &scripts_dirs_env)
+        .current_dir(temp_dir.path())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -42,11 +71,11 @@ fn test_bodo_default() {
             Ok(Some(status)) => {
                 // Process has exited
                 let output = child.wait_with_output().expect("Failed to wait on child");
-                assert!(status.success());
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 println!("STDOUT:\n{}", stdout);
                 println!("STDERR:\n{}", stderr);
+                assert!(status.success(), "Process exited with status {}", status);
                 let output_combined = format!("{}{}", stdout, stderr);
                 assert!(
                     output_combined.contains("Hello from Bodo root!"),
@@ -70,27 +99,65 @@ fn test_bodo_default() {
 
 #[test]
 fn test_bodo_list() {
-    // First, ensure 'bodo' binary is built
-    let status = Command::new("cargo")
-        .args(["build", "--bin", "bodo"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .status()
-        .expect("Failed to execute cargo build command");
-    assert!(status.success(), "Cargo build failed");
-
     // Build the path to the built 'bodo' executable
-    let mut exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    exe_path.push("target");
-    exe_path.push("debug");
-    exe_path.push("bodo");
+    let current_exe = std::env::current_exe().expect("Failed to get current exe path");
+
+    // Assuming the path to the built 'bodo' binary is `current_exe/../../../debug/bodo`
+    let target_dir = current_exe
+        .parent() // deps/
+        .and_then(|p| p.parent()) // debug/
+        .and_then(|p| p.parent()) // target/
+        .expect("Failed to get target directory");
+
+    let exe_path = target_dir.join("debug").join("bodo");
     #[cfg(windows)]
-    exe_path.set_extension("exe");
+    let exe_path = exe_path.with_extension("exe");
+
+    assert!(
+        exe_path.exists(),
+        "bodo executable not found at {:?}",
+        exe_path
+    );
+
+    // Create a temp directory
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+
+    // Write the scripts/script.yaml file
+    let scripts_dir = temp_dir.path().join("scripts");
+    std::fs::create_dir_all(&scripts_dir).expect("Failed to create scripts directory");
+
+    let script_content = r#"
+default_task:
+  command: echo "Hello from Bodo root!"
+  description: "Default greeting when running `bodo` with no arguments."
+
+tasks:
+  test:
+    command: echo "Running tests"
+    description: "Run all tests"
+  build:
+    command: echo "Building project"
+    description: "Build the project"
+"#;
+
+    let script_path = scripts_dir.join("script.yaml");
+    std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
+
+    // Set environment variables to point to our temp scripts directory
+    let root_script_env = scripts_dir
+        .join("script.yaml")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let scripts_dirs_env = scripts_dir.to_str().unwrap().to_string();
 
     let mut child = Command::new(exe_path)
         .arg("--list")
         .env("RUST_LOG", "info")
         .env("BODO_NO_WATCH", "1")
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("BODO_ROOT_SCRIPT", &root_script_env)
+        .env("BODO_SCRIPTS_DIRS", &scripts_dirs_env)
+        .current_dir(temp_dir.path())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -105,15 +172,23 @@ fn test_bodo_list() {
             Ok(Some(status)) => {
                 // Process has exited
                 let output = child.wait_with_output().expect("Failed to wait on child");
-                assert!(status.success());
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 println!("STDOUT:\n{}", stdout);
                 println!("STDERR:\n{}", stderr);
+                assert!(status.success(), "Process exited with status {}", status);
                 let output_combined = format!("{}{}", stdout, stderr);
                 assert!(
                     output_combined
                         .contains("Default greeting when running `bodo` with no arguments."),
+                    "Output does not contain expected task descriptions"
+                );
+                assert!(
+                    output_combined.contains("Run all tests"),
+                    "Output does not contain expected task descriptions"
+                );
+                assert!(
+                    output_combined.contains("Build the project"),
                     "Output does not contain expected task descriptions"
                 );
                 return;

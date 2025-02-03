@@ -1,11 +1,12 @@
 use crate::{
     config::{BodoConfig, TaskConfig},
     errors::BodoError,
-    graph::{Graph, NodeKind, TaskData},
+    graph::{Graph, NodeKind},
     plugin::{PluginConfig, PluginManager},
     script_loader::ScriptLoader,
     Result,
 };
+use std::collections::HashMap;
 
 pub struct GraphManager {
     pub config: BodoConfig,
@@ -36,7 +37,6 @@ impl GraphManager {
         self.config = config.clone();
         let mut loader = ScriptLoader::new();
         self.graph = loader.build_graph(config)?;
-
         if let Some(cycle) = self.graph.detect_cycle() {
             let error_msg = self.graph.format_cycle_error(&cycle);
             return Err(BodoError::PluginError(error_msg));
@@ -77,7 +77,7 @@ impl GraphManager {
             concurrently_options: Default::default(),
             concurrently: vec![],
             exec_paths: task_data.exec_paths.clone(),
-            arguments: Vec::new(),
+            arguments: task_data.arguments.clone(),
             _name_check: None,
         })
     }
@@ -86,6 +86,7 @@ impl GraphManager {
         let config = BodoConfig {
             root_script: Some("scripts/main.yaml".into()),
             scripts_dirs: Some(vec!["scripts/".into()]),
+            default_task: None,
             tasks: Default::default(),
             env: Default::default(),
             exec_paths: Default::default(),
@@ -100,144 +101,50 @@ impl GraphManager {
         Ok(())
     }
 
-    pub fn get_tasks(&self) -> Vec<&TaskData> {
-        self.graph
-            .nodes
-            .iter()
-            .filter_map(|n| {
-                if let NodeKind::Task(t) = &n.kind {
-                    Some(t)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    pub fn get_task_by_name(&self, task_name: &str) -> Option<&TaskData> {
-        for node in &self.graph.nodes {
-            if let NodeKind::Task(t) = &node.kind {
-                if t.name == task_name {
-                    return Some(t);
-                }
-            }
-        }
-        None
-    }
-
-    pub fn get_default_task(&self) -> Option<&TaskData> {
-        for node in &self.graph.nodes {
-            if let NodeKind::Task(t) = &node.kind {
-                if t.is_default {
-                    return Some(t);
-                }
-            }
-        }
-        None
-    }
-
-    pub fn get_task_script_name(&self, task_name: &str) -> Option<String> {
-        self.get_task_by_name(task_name)
-            .map(|t| t.script_id.clone())
-    }
-
-    pub fn run_task(&mut self, task_name: &str) -> Result<()> {
-        // If we wanted a simpler entry point to run a single task (bypassing the plugin pipeline).
-        // Currently not used, but you could call it in watch plugin if desired.
-        let _node_id = *self
-            .graph
-            .task_registry
-            .get(task_name)
-            .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?;
-        // your synchronous run logic here or reuse plugin approach
-        Ok(())
-    }
-
-    pub fn get_task_name_by_name(&self, task_name: &str) -> Option<String> {
-        self.get_task_by_name(task_name).map(|t| t.name.clone())
-    }
-
     pub fn task_exists(&self, task_name: &str) -> bool {
         self.graph.task_registry.contains_key(task_name)
     }
 
-    pub fn get_all_tasks(&self) -> Vec<&TaskData> {
-        self.graph
-            .nodes
-            .iter()
-            .filter_map(|n| match &n.kind {
-                NodeKind::Task(t) => Some(t),
-                _ => None,
-            })
-            .collect()
-    }
+    pub fn apply_task_arguments(&mut self, task_name: &str, args: &[String]) -> Result<()> {
+        let task_config = self.get_task_config(task_name)?;
 
-    /// Called before plugin pipeline to apply any CLI arguments to the relevant task.
-    /// The `args` list is the leftover CLI arguments (Args.args).
-    /// If the task defines arguments in YAML, we parse them here, check for required vs. optional,
-    /// apply defaults, and inject final values into the TaskData.env as $VARIABLE expansions.
-    pub fn apply_task_arguments(&mut self, task_name: &str, cli_args: &[String]) -> Result<()> {
-        let node_id = *self
+        // Take the arguments from the task_config.arguments
+        let arg_defs = task_config.arguments;
+
+        // Map arguments to env variables
+        let mut env_vars = HashMap::new();
+
+        for (i, arg_def) in arg_defs.iter().enumerate() {
+            if i < args.len() {
+                env_vars.insert(arg_def.name.clone(), args[i].clone());
+            } else if let Some(default) = &arg_def.default {
+                env_vars.insert(arg_def.name.clone(), default.clone());
+            } else if arg_def.required {
+                return Err(BodoError::PluginError(format!(
+                    "Missing required argument: {}",
+                    arg_def.name
+                )));
+            }
+        }
+
+        // Update the task's env in the graph
+        let node_id = self
             .graph
             .task_registry
             .get(task_name)
             .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?;
 
-        let node = self.graph.nodes.get_mut(node_id as usize).ok_or_else(|| {
-            BodoError::PluginError(format!("Invalid node ID for task '{}'", task_name))
-        })?;
-
-        // Get the arguments list from the BodoConfig tasks or from node metadata
-        let config_args = {
-            if let Some(task_cfg) = self.config.tasks.get(task_name) {
-                task_cfg.arguments.clone()
-            } else {
-                // Could be "script_id task_name" or fallback
-                let full_key = task_name.to_string();
-                // Attempt to see if that matches. Otherwise, empty
-                let maybe_cfg = self.config.tasks.get(&full_key);
-                maybe_cfg.map_or_else(std::vec::Vec::new, |c| c.arguments.clone())
-            }
-        };
-
-        // If not found in config.tasks, it might be from a sub-script. We won't overcomplicate.
-        // We'll just see if we find it. If not, no arguments to parse. Done.
-        if config_args.is_empty() {
-            // No arguments to handle
-            return Ok(());
+        if let NodeKind::Task(task_data) = &mut self.graph.nodes[*node_id as usize].kind {
+            task_data.env.extend(env_vars);
+        } else {
+            return Err(BodoError::PluginError(format!(
+                "Node '{}' is not a Task node",
+                task_name
+            )));
         }
 
-        // Fill them in based on cli_args
-        let mut final_values: Vec<(String, String)> = Vec::new(); // (arg_name, value)
-        let mut cli_index = 0;
-
-        for arg_def in &config_args {
-            if cli_index < cli_args.len() {
-                let value = cli_args[cli_index].clone();
-                cli_index += 1;
-                final_values.push((arg_def.name.clone(), value));
-            } else {
-                // no CLI value
-                if arg_def.required {
-                    return Err(BodoError::PluginError(format!(
-                        "Missing required argument '{}'",
-                        arg_def.name
-                    )));
-                }
-                // else use default
-                let default_val = arg_def.default.clone().unwrap_or_default();
-                final_values.push((arg_def.name.clone(), default_val));
-            }
-        }
-
-        // If CLI leftover arguments remain beyond definitions, that's user-provided extras. We let them pass.
-
-        // Now inject these into the node's environment so the command can do `$argName`
-        if let NodeKind::Task(task_data) = &mut node.kind {
-            for (k, v) in final_values {
-                task_data.env.insert(k, v);
-            }
-        }
         Ok(())
     }
+
+    // Rest of the code remains unchanged.
 }

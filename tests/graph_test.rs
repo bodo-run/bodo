@@ -13,6 +13,7 @@ fn test_add_node() {
         working_dir: None,
         env: Default::default(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -32,6 +33,7 @@ fn test_graph_add_nodes_and_edges() {
         command: Some("echo task1".to_string()),
         working_dir: None,
         env: HashMap::new(),
+        arguments: vec![],
         exec_paths: vec![],
         is_default: false,
         script_id: "script".to_string(),
@@ -46,6 +48,7 @@ fn test_graph_add_nodes_and_edges() {
         command: Some("echo task2".to_string()),
         working_dir: None,
         env: HashMap::new(),
+        arguments: vec![],
         exec_paths: vec![],
         is_default: false,
         script_id: "script".to_string(),
@@ -71,6 +74,7 @@ fn test_detect_cycle() {
         command: None,
         working_dir: None,
         env: Default::default(),
+        arguments: vec![],
         exec_paths: vec![],
         is_default: false,
         script_id: "script".to_string(),
@@ -83,6 +87,7 @@ fn test_detect_cycle() {
         command: None,
         working_dir: None,
         env: Default::default(),
+        arguments: vec![],
         exec_paths: vec![],
         is_default: false,
         script_id: "script".to_string(),
@@ -99,12 +104,14 @@ fn test_detect_cycle() {
 #[test]
 fn test_topological_sort() {
     let mut graph = Graph::new();
+
     let node_a = graph.add_node(NodeKind::Task(TaskData {
         name: "A".to_string(),
         description: None,
         command: None,
         working_dir: None,
         env: Default::default(),
+        arguments: vec![],
         exec_paths: vec![],
         is_default: false,
         script_id: "".to_string(),
@@ -117,6 +124,7 @@ fn test_topological_sort() {
         command: None,
         working_dir: None,
         env: Default::default(),
+        arguments: vec![],
         exec_paths: vec![],
         is_default: false,
         script_id: "".to_string(),
@@ -129,6 +137,7 @@ fn test_topological_sort() {
         command: None,
         working_dir: None,
         env: Default::default(),
+        arguments: vec![],
         exec_paths: vec![],
         is_default: false,
         script_id: "".to_string(),
@@ -159,6 +168,7 @@ fn test_format_cycle_error() {
         command: None,
         working_dir: None,
         env: Default::default(),
+        arguments: vec![],
         exec_paths: vec![],
         is_default: false,
         script_id: "script".to_string(),
@@ -171,6 +181,7 @@ fn test_format_cycle_error() {
         command: None,
         working_dir: None,
         env: Default::default(),
+        arguments: vec![],
         exec_paths: vec![],
         is_default: false,
         script_id: "script".to_string(),
@@ -183,4 +194,41 @@ fn test_format_cycle_error() {
     let cycle = graph.detect_cycle().unwrap();
     let error_message = graph.format_cycle_error(&cycle);
     assert!(error_message.contains("found cyclical dependency"));
+}
+
+#[test]
+fn test_topological_sort_with_cycle() {
+    let mut graph = Graph::new();
+    let node_a = graph.add_node(NodeKind::Task(TaskData {
+        name: "A".to_string(),
+        description: None,
+        command: None,
+        working_dir: None,
+        env: Default::default(),
+        arguments: vec![],
+        exec_paths: vec![],
+        is_default: false,
+        script_id: "".to_string(),
+        script_display_name: "".to_string(),
+        watch: None,
+    }));
+    let node_b = graph.add_node(NodeKind::Task(TaskData {
+        name: "B".to_string(),
+        description: None,
+        command: None,
+        working_dir: None,
+        env: Default::default(),
+        arguments: vec![],
+        exec_paths: vec![],
+        is_default: false,
+        script_id: "".to_string(),
+        script_display_name: "".to_string(),
+        watch: None,
+    }));
+    graph.add_edge(node_a, node_b).unwrap();
+    graph.add_edge(node_b, node_a).unwrap();
+
+    let sorted = graph.topological_sort();
+
+    assert!(sorted.is_err(), "Expected an error due to cycle in graph");
 }
