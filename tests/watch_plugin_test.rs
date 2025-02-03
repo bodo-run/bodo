@@ -195,7 +195,7 @@ fn test_find_base_directory() {
 fn test_filter_changed_paths() {
     use globset::{Glob, GlobSetBuilder};
     use std::fs;
-    
+
     use tempfile::tempdir;
 
     // Create a temporary directory
