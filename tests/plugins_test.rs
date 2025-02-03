@@ -24,6 +24,7 @@ fn test_env_plugin() {
     plugin.on_init(&config).unwrap();
 
     let mut graph = Graph::new();
+
     let task_data = TaskData {
         name: "test_task".to_string(),
         description: None,
@@ -116,8 +117,8 @@ fn test_execution_plugin_with_concurrent_group() {
     let output_file2 = temp_dir_path.join("bodo_test_output_child2");
 
     // Adjust path strings to use in commands
-    let output_file1_str = output_file1.to_str().unwrap().replace('\\', "/");
-    let output_file2_str = output_file2.to_str().unwrap().replace('\\', "/");
+    let output_file1_str = output_file1.to_str().unwrap();
+    let output_file2_str = output_file2.to_str().unwrap();
 
     let command1 = format!("echo Hello from child 1 > \"{}\"", output_file1_str);
     let command2 = format!("echo Hello from child 2 > \"{}\"", output_file2_str);
