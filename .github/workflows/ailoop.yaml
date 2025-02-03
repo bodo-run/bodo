@@ -124,7 +124,7 @@ jobs:
         run: |
           for i in $(seq 1 $MAX_ATTEMPTS); do
             echo "===== Attempt $i ====="
-            deno run --allow-all scripts/ai/main.ts
+            deno run --allow-all scripts/ai/main.ts || echo "Failed to run AI Loop at attempt $i"
             git add -A
             git commit -m "AI Loop attempt $i"
             git push -u origin $NEW_BRANCH
