@@ -54,6 +54,7 @@ jobs:
       RUSTFLAGS: "-Cinstrument-coverage"
       LLVM_PROFILE_FILE: "coverage/bodo-%p-%m.profraw"
       AI_PROVIDER: ${{ github.event.inputs.provider }}
+      AI_MODEL: ${{ github.event.inputs.model }}
 
     steps:
       - name: Print inputs
@@ -113,6 +114,7 @@ jobs:
           FIREWORKS_AI_API_KEY: ${{ secrets.FIREWORKS_AI_API_KEY }}
           MAX_ATTEMPTS: ${{ env.MAX_ATTEMPTS }}
           AI_PROVIDER: ${{ env.AI_PROVIDER }}
+          AI_MODEL: ${{ env.AI_MODEL }}
           BASE_BRANCH: ${{ env.BASE_BRANCH }}
           NEW_BRANCH: ${{ env.NEW_BRANCH }}
         run: |
@@ -131,11 +133,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           MAX_ATTEMPTS: ${{ env.MAX_ATTEMPTS }}
+          AI_PROVIDER: ${{ env.AI_PROVIDER }}
+          AI_MODEL: ${{ env.AI_MODEL }}
         run: |
           gh pr create \
             --title "AI tests for \`${{ env.BASE_BRANCH }}\` branch" \
             --body "- Successful: ${{ steps.ai_loop.outputs.success != 0 }}
             - Attempts: \`${{ steps.ai_loop.outputs.last_attempt }} / ${{ env.MAX_ATTEMPTS }}\`
+            - AI Provider: \`${{ env.AI_PROVIDER }}\`
+            - AI Model: \`${{ env.AI_MODEL }}\`
             - [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" \
             --base "${{ env.BASE_BRANCH }}" \
             --head "${{ env.NEW_BRANCH }}"
