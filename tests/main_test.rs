@@ -1,27 +1,30 @@
 // tests/main_test.rs
 
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
 
 #[test]
 fn test_bodo_default() {
-    // First, ensure 'bodo' binary is built
-    let status = Command::new("cargo")
-        .args(["build", "--bin", "bodo", "--all-features"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .status()
-        .expect("Failed to execute cargo build command");
-    assert!(status.success(), "Cargo build failed");
-
     // Build the path to the built 'bodo' executable
-    let exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("debug")
-        .join("bodo");
+    let current_exe = std::env::current_exe().expect("Failed to get current exe path");
+
+    // Assuming the path to the built 'bodo' binary is `current_exe/../../../debug/bodo`
+    let target_dir = current_exe
+        .parent() // deps/
+        .and_then(|p| p.parent()) // debug/
+        .and_then(|p| p.parent()) // target/
+        .expect("Failed to get target directory");
+
+    let exe_path = target_dir.join("debug").join("bodo");
     #[cfg(windows)]
     exe_path.set_extension("exe");
+
+    assert!(
+        exe_path.exists(),
+        "bodo executable not found at {:?}",
+        exe_path
+    );
 
     let mut child = Command::new(exe_path)
         .arg("default")
@@ -70,21 +73,25 @@ fn test_bodo_default() {
 
 #[test]
 fn test_bodo_list() {
-    // First, ensure 'bodo' binary is built
-    let status = Command::new("cargo")
-        .args(["build", "--bin", "bodo", "--all-features"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .status()
-        .expect("Failed to execute cargo build command");
-    assert!(status.success(), "Cargo build failed");
-
     // Build the path to the built 'bodo' executable
-    let mut exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    exe_path.push("target");
-    exe_path.push("debug");
-    exe_path.push("bodo");
+    let current_exe = std::env::current_exe().expect("Failed to get current exe path");
+
+    // Assuming the path to the built 'bodo' binary is `current_exe/../../../debug/bodo`
+    let target_dir = current_exe
+        .parent() // deps/
+        .and_then(|p| p.parent()) // debug/
+        .and_then(|p| p.parent()) // target/
+        .expect("Failed to get target directory");
+
+    let exe_path = target_dir.join("debug").join("bodo");
     #[cfg(windows)]
     exe_path.set_extension("exe");
+
+    assert!(
+        exe_path.exists(),
+        "bodo executable not found at {:?}",
+        exe_path
+    );
 
     let mut child = Command::new(exe_path)
         .arg("--list")
