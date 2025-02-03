@@ -1,4 +1,5 @@
 use bodo::config::BodoConfig;
+use bodo::errors::BodoError;
 use bodo::graph::{Graph, NodeKind, TaskData};
 use bodo::script_loader::ScriptLoader;
 use std::fs;
@@ -107,6 +108,7 @@ fn test_cycle_detection() {
         working_dir: None,
         env: Default::default(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -119,6 +121,7 @@ fn test_cycle_detection() {
         working_dir: None,
         env: Default::default(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -141,6 +144,7 @@ fn test_format_cycle_error() {
         working_dir: None,
         env: Default::default(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -153,6 +157,7 @@ fn test_format_cycle_error() {
         working_dir: None,
         env: Default::default(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
