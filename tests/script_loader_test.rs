@@ -22,7 +22,12 @@ fn test_load_script() {
     config.scripts_dirs = Some(vec![temp_dir.path().to_string_lossy().to_string()]);
 
     let graph = loader.build_graph(config).unwrap();
-    assert!(graph.task_registry.contains_key("test_task"));
+
+    // Adjusted assertion with correct task name
+    let script_id = script_path.display().to_string();
+    let full_task_name = format!("{} {}", script_id, "test_task");
+
+    assert!(graph.task_registry.contains_key(&full_task_name));
 }
 
 #[test]
@@ -54,8 +59,21 @@ fn test_load_scripts_dir() {
     config.scripts_dirs = Some(vec![scripts_dir.to_string_lossy().to_string()]);
 
     let graph = loader.build_graph(config).unwrap();
-    assert!(graph.task_registry.contains_key("task1"));
-    assert!(graph.task_registry.contains_key("task2"));
+
+    // Adjusted assertions with correct task names
+    let script_id1 = script1_path.canonicalize().unwrap().display().to_string();
+    let full_task_name1 = format!("{} {}", script_id1, "task1");
+    let script_id2 = script2_path.canonicalize().unwrap().display().to_string();
+    let full_task_name2 = format!("{} {}", script_id2, "task2");
+
+    assert!(
+        graph.task_registry.contains_key(&full_task_name1),
+        "Task1 not found in task registry"
+    );
+    assert!(
+        graph.task_registry.contains_key(&full_task_name2),
+        "Task2 not found in task registry"
+    );
 }
 
 #[test]
@@ -80,12 +98,18 @@ fn test_task_dependencies() {
     config.scripts_dirs = Some(vec![temp_dir.path().to_string_lossy().to_string()]);
 
     let graph = loader.build_graph(config).unwrap();
-    assert!(graph.task_registry.contains_key("task1"));
-    assert!(graph.task_registry.contains_key("task2"));
+
+    let script_id = script_path.display().to_string();
+
+    let full_task1_name = format!("{} {}", script_id, "task1");
+    let full_task2_name = format!("{} {}", script_id, "task2");
+
+    assert!(graph.task_registry.contains_key(&full_task1_name));
+    assert!(graph.task_registry.contains_key(&full_task2_name));
 
     // Check that there's an edge from task2 to task1
-    let task1_id = graph.task_registry.get("task1").unwrap();
-    let task2_id = graph.task_registry.get("task2").unwrap();
+    let task1_id = graph.task_registry.get(&full_task1_name).unwrap();
+    let task2_id = graph.task_registry.get(&full_task2_name).unwrap();
 
     let mut found = false;
     for edge in &graph.edges {
