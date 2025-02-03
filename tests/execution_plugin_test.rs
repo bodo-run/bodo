@@ -204,7 +204,7 @@ fn test_run_concurrent_group() -> Result<()> {
         watch: None,
     }));
 
-    let fail_command = "nonexistentcommand"; // Command that fails
+    let fail_command = "exit 1"; // Command that fails
 
     let child_task2_id = graph.add_node(NodeKind::Task(TaskData {
         name: "child2".to_string(),
