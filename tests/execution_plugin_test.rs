@@ -207,8 +207,7 @@ fn test_run_concurrent_group() -> Result<()> {
         watch: None,
     }));
 
-    // Use a command that fails reliably across platforms
-    let fail_command = if cfg!(windows) { "exit /b 1" } else { "false" };
+    let fail_command = "thiscommanddoesnotexist";
 
     let child_task2_id = graph.add_node(NodeKind::Task(TaskData {
         name: "child2".to_string(),
