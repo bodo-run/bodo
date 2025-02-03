@@ -2,7 +2,6 @@ use bodo::config::BodoConfig;
 use bodo::errors::BodoError;
 use bodo::script_loader::ScriptLoader;
 use std::collections::HashMap;
-use std::fs;
 use std::path::PathBuf;
 
 #[test]
@@ -16,9 +15,9 @@ fn test_build_graph_empty_config() {
 #[test]
 fn test_load_nonexistent_script() {
     let mut loader = ScriptLoader::new();
-    let mut graph = bodo::graph::Graph::new();
+    let mut _graph = bodo::graph::Graph::new();
     let path = PathBuf::from("nonexistent_script.yaml");
-    let result = loader.load_script(&mut graph, &path, "", &HashMap::new(), &[]);
+    let result = loader.load_script(&mut _graph, &path, "", &HashMap::new(), &[]);
     assert!(result.is_err());
 }
 
@@ -56,12 +55,20 @@ fn test_register_duplicate_task() {
 #[test]
 fn test_resolve_dependency_not_found() {
     let mut loader = ScriptLoader::new();
-    let mut graph = bodo::graph::Graph::new();
-    let result = loader.resolve_dependency(
-        "nonexistent",
-        PathBuf::from("script.yaml").as_path(),
-        &mut graph,
-    );
+    let config = BodoConfig {
+        tasks: HashMap::from([(
+            "task1".to_string(),
+            TaskConfig {
+                pre_deps: vec![Dependency::Task {
+                    task: "nonexistent".to_string(),
+                }],
+                ..Default::default()
+            },
+        )]),
+        ..Default::default()
+    };
+
+    let result = loader.build_graph(config);
     assert!(result.is_err());
     if let Err(BodoError::PluginError(msg)) = result {
         assert!(msg.contains("Dependency not found"));
