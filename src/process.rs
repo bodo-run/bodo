@@ -64,12 +64,19 @@ impl ProcessManager {
             cmd, prefix_enabled, prefix_label, prefix_color
         );
 
-        let mut child = Command::new("sh")
-            .arg("-c")
-            .arg(cmd)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
+        let mut command = if cfg!(target_os = "windows") {
+            let mut cmd_command = Command::new("cmd");
+            cmd_command.arg("/C").arg(cmd);
+            cmd_command
+        } else {
+            let mut sh_command = Command::new("sh");
+            sh_command.arg("-c").arg(cmd);
+            sh_command
+        };
+
+        command.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+        let mut child = command.spawn()?;
 
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
