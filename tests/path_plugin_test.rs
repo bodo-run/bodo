@@ -46,6 +46,7 @@ fn test_path_plugin_on_graph_build() {
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
         watch: None,
+        arguments: vec![],
     }));
 
     let result = plugin.on_graph_build(&mut graph);
@@ -77,6 +78,7 @@ fn test_path_with_preserve() {
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
         watch: None,
+        arguments: vec![],
     }));
 
     let result = plugin.on_graph_build(&mut graph);
