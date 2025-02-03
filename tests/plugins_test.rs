@@ -242,7 +242,7 @@ fn test_watch_plugin() {
         }),
     };
 
-    let node_id = graph.add_node(NodeKind::Task(task_data));
+    let _node_id = graph.add_node(NodeKind::Task(task_data));
     plugin.on_graph_build(&mut graph).unwrap();
 
     // Test that the watch entries were set up correctly

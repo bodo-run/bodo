@@ -94,6 +94,22 @@ async function callAi(text: string) {
   return response.choices?.[0]?.message?.content ?? "";
 }
 
+async function reviewChanges() {
+  const { stdout: changes } = await runCommand("git", ["diff"]);
+  if (!changes) return "No changes";
+  console.log("Asking AI to review changes...");
+  const review = await callAi(
+    [
+      `Changes:`,
+      changes,
+      `Instructions: Review the changes made so far. In bullet points. Short and concise.`,
+      `If changes are removing implementations, or change source in a way to only pass the tests, reject them.`,
+      `Important: If the changes are good, return "${ALL_GOOD_TAG}".`,
+    ].join("\n")
+  );
+  return review.includes(ALL_GOOD_TAG);
+}
+
 async function getChangesSummary(repo: string) {
   const baseBranch = Deno.env.get("BASE_BRANCH") || "main";
   const { stdout: changes } = await runCommand("git", ["diff", baseBranch]);
@@ -189,6 +205,13 @@ async function main() {
   await runCommand("cargo", ["clippy", "--fix", "--allow-dirty"], {
     showOutput: true,
   });
+
+  // Review changes again
+  const allGood = await reviewChanges();
+  if (!allGood) {
+    await runCommand("git", ["add", "reset", "--hard"]);
+    console.log("Changes are good. Reverted to previous state.");
+  }
 }
 
 function parseUpdatedFiles(
