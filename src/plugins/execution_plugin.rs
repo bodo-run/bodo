@@ -1,3 +1,4 @@
+// src/plugins/execution_plugin.rs
 use colored::Colorize;
 use log::debug;
 use std::any::Any;
@@ -177,8 +178,15 @@ impl Plugin for ExecutionPlugin {
                         let final_cmd = expand_env_vars(cmd, &task_data.env);
                         self.print_command(&final_cmd);
                         let mut pm = ProcessManager::new(false);
-                        pm.spawn_command(&task_data.name, &final_cmd, true, None, None)
-                            .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
+                        pm.spawn_command(
+                            &task_data.name,
+                            &final_cmd,
+                            true,
+                            None,
+                            None,
+                            task_data.working_dir.as_deref(),
+                        )
+                        .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
                         pm.run_concurrently()
                             .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
                     }
@@ -189,8 +197,15 @@ impl Plugin for ExecutionPlugin {
                     self.print_command(&final_cmd);
                     let mut pm = ProcessManager::new(false);
                     let label = format!("cmd-{}", node_id);
-                    pm.spawn_command(&label, &final_cmd, true, None, None)
-                        .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
+                    pm.spawn_command(
+                        &label,
+                        &final_cmd,
+                        true,
+                        None,
+                        None,
+                        cmd_data.working_dir.as_deref(),
+                    )
+                    .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
                     pm.run_concurrently()
                         .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
                 }
@@ -237,6 +252,7 @@ fn run_concurrent_group(
                         prefix_enabled,
                         prefix_label.clone(),
                         prefix_color.clone(),
+                        t.working_dir.as_deref(),
                     )
                     .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
                     pending.push(t.name.clone());
@@ -251,6 +267,7 @@ fn run_concurrent_group(
                     prefix_enabled,
                     prefix_label.clone(),
                     prefix_color.clone(),
+                    cmd.working_dir.as_deref(),
                 )
                 .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
                 pending.push(label);

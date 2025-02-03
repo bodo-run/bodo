@@ -1,3 +1,4 @@
+// src/process.rs
 #[derive(Debug, Clone)]
 pub enum ColorSpec {
     Black,
@@ -58,10 +59,11 @@ impl ProcessManager {
         prefix_enabled: bool,
         prefix_label: Option<String>,
         prefix_color: Option<String>,
+        working_dir: Option<&str>,
     ) -> std::io::Result<()> {
         debug!(
-            "Spawning command '{}' (prefix={}, label={:?}, color={:?})",
-            cmd, prefix_enabled, prefix_label, prefix_color
+            "Spawning command '{}' (prefix={}, label={:?}, color={:?}, working_dir={:?})",
+            cmd, prefix_enabled, prefix_label, prefix_color, working_dir
         );
 
         let mut command = if cfg!(target_os = "windows") {
@@ -73,6 +75,10 @@ impl ProcessManager {
             sh_command.arg("-c").arg(cmd);
             sh_command
         };
+
+        if let Some(dir) = working_dir {
+            command.current_dir(dir);
+        }
 
         command.stdout(Stdio::piped()).stderr(Stdio::piped());
 
