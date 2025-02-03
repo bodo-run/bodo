@@ -1,8 +1,8 @@
 use bodo::config::{BodoConfig, Dependency, TaskConfig};
-use bodo::errors::BodoError;
+use bodo::errors::{BodoError, Result};
 use bodo::script_loader::ScriptLoader;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[test]
 fn test_build_graph_empty_config() {
@@ -35,7 +35,7 @@ fn test_merge_envs() {
 #[test]
 fn test_register_duplicate_task() {
     let mut loader = ScriptLoader::new();
-    let graph = bodo::graph::Graph::new();
+    let mut graph = bodo::graph::Graph::new();
     let config = BodoConfig {
         tasks: HashMap::from([
             ("task1".to_string(), Default::default()),
