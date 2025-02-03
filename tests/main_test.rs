@@ -7,6 +7,14 @@ use std::time::Duration;
 
 #[test]
 fn test_bodo_default() {
+    // First, ensure 'bodo' binary is built
+    let status = Command::new("cargo")
+        .args(["build", "--bin", "bodo"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .status()
+        .expect("Failed to execute cargo build command");
+    assert!(status.success(), "Cargo build failed");
+
     // Build the path to the built 'bodo' executable
     let mut exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     exe_path.push("target");
@@ -32,6 +40,7 @@ fn test_bodo_default() {
     while start.elapsed() < timeout {
         match child.try_wait() {
             Ok(Some(status)) => {
+                // Process has exited
                 let output = child.wait_with_output().expect("Failed to wait on child");
                 assert!(status.success());
                 let stdout = String::from_utf8_lossy(&output.stdout);
@@ -46,6 +55,7 @@ fn test_bodo_default() {
                 return;
             }
             Ok(None) => {
+                // Process still running
                 thread::sleep(Duration::from_millis(100));
                 continue;
             }
@@ -60,6 +70,14 @@ fn test_bodo_default() {
 
 #[test]
 fn test_bodo_list() {
+    // First, ensure 'bodo' binary is built
+    let status = Command::new("cargo")
+        .args(["build", "--bin", "bodo"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .status()
+        .expect("Failed to execute cargo build command");
+    assert!(status.success(), "Cargo build failed");
+
     // Build the path to the built 'bodo' executable
     let mut exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     exe_path.push("target");
@@ -85,6 +103,7 @@ fn test_bodo_list() {
     while start.elapsed() < timeout {
         match child.try_wait() {
             Ok(Some(status)) => {
+                // Process has exited
                 let output = child.wait_with_output().expect("Failed to wait on child");
                 assert!(status.success());
                 let stdout = String::from_utf8_lossy(&output.stdout);
@@ -100,6 +119,7 @@ fn test_bodo_list() {
                 return;
             }
             Ok(None) => {
+                // Process still running
                 thread::sleep(Duration::from_millis(100));
                 continue;
             }
