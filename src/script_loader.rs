@@ -315,8 +315,7 @@ impl ScriptLoader {
         let yaml_value: serde_yaml::Value = serde_yaml::from_str(&content)?;
 
         if let serde_yaml::Value::Mapping(mapping) = &yaml_value {
-            if let Some(tasks_value) = mapping.get(serde_yaml::Value::String("tasks".to_string()))
-            {
+            if let Some(tasks_value) = mapping.get(serde_yaml::Value::String("tasks".to_string())) {
                 if let serde_yaml::Value::Mapping(tasks_mapping) = tasks_value {
                     let mut task_names = HashSet::new();
                     for (key, _) in tasks_mapping {

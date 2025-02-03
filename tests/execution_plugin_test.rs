@@ -169,7 +169,7 @@ fn test_execution_plugin_command_failure() -> Result<()> {
     let node_id = graph.add_node(NodeKind::Task(TaskData {
         name: "test_task".to_string(),
         description: None,
-        command: Some("exit 1".to_string()), // Command that fails
+        command: Some("nonexistent_command_that_should_fail".to_string()), // Command that fails
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
@@ -205,7 +205,7 @@ fn test_run_concurrent_group() -> Result<()> {
         watch: None,
     }));
 
-    let fail_command = "false"; // Command that fails
+    let fail_command = "nonexistent_command_that_should_fail"; // Command that fails
 
     let child_task2_id = graph.add_node(NodeKind::Task(TaskData {
         name: "child2".to_string(),
