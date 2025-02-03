@@ -3,6 +3,7 @@
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
+use tempfile::tempdir;
 
 #[test]
 fn test_bodo_default() {
@@ -18,7 +19,7 @@ fn test_bodo_default() {
 
     let exe_path = target_dir.join("debug").join("bodo");
     #[cfg(windows)]
-    exe_path.set_extension("exe");
+    let exe_path = exe_path.with_extension("exe");
 
     assert!(
         exe_path.exists(),
@@ -26,11 +27,27 @@ fn test_bodo_default() {
         exe_path
     );
 
+    // Create a temp directory
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+
+    // Write the scripts/script.yaml file
+    let scripts_dir = temp_dir.path().join("scripts");
+    std::fs::create_dir_all(&scripts_dir).expect("Failed to create scripts directory");
+
+    let script_content = r#"
+default_task:
+  command: echo "Hello from Bodo root!"
+  description: "Default greeting when running `bodo` with no arguments."
+"#;
+
+    let script_path = scripts_dir.join("script.yaml");
+    std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
+
     let mut child = Command::new(exe_path)
         .arg("default")
         .env("RUST_LOG", "info")
         .env("BODO_NO_WATCH", "1")
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .current_dir(temp_dir.path())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -45,11 +62,11 @@ fn test_bodo_default() {
             Ok(Some(status)) => {
                 // Process has exited
                 let output = child.wait_with_output().expect("Failed to wait on child");
-                assert!(status.success());
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 println!("STDOUT:\n{}", stdout);
                 println!("STDERR:\n{}", stderr);
+                assert!(status.success(), "Process exited with status {}", status);
                 let output_combined = format!("{}{}", stdout, stderr);
                 assert!(
                     output_combined.contains("Hello from Bodo root!"),
@@ -85,7 +102,7 @@ fn test_bodo_list() {
 
     let exe_path = target_dir.join("debug").join("bodo");
     #[cfg(windows)]
-    exe_path.set_extension("exe");
+    let exe_path = exe_path.with_extension("exe");
 
     assert!(
         exe_path.exists(),
@@ -93,11 +110,35 @@ fn test_bodo_list() {
         exe_path
     );
 
+    // Create a temp directory
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+
+    // Write the scripts/script.yaml file
+    let scripts_dir = temp_dir.path().join("scripts");
+    std::fs::create_dir_all(&scripts_dir).expect("Failed to create scripts directory");
+
+    let script_content = r#"
+default_task:
+  command: echo "Hello from Bodo root!"
+  description: "Default greeting when running `bodo` with no arguments."
+
+tasks:
+  test:
+    command: echo "Running tests"
+    description: "Run all tests"
+  build:
+    command: echo "Building project"
+    description: "Build the project"
+"#;
+
+    let script_path = scripts_dir.join("script.yaml");
+    std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
+
     let mut child = Command::new(exe_path)
         .arg("--list")
         .env("RUST_LOG", "info")
         .env("BODO_NO_WATCH", "1")
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .current_dir(temp_dir.path())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -112,15 +153,23 @@ fn test_bodo_list() {
             Ok(Some(status)) => {
                 // Process has exited
                 let output = child.wait_with_output().expect("Failed to wait on child");
-                assert!(status.success());
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 println!("STDOUT:\n{}", stdout);
                 println!("STDERR:\n{}", stderr);
+                assert!(status.success(), "Process exited with status {}", status);
                 let output_combined = format!("{}{}", stdout, stderr);
                 assert!(
                     output_combined
                         .contains("Default greeting when running `bodo` with no arguments."),
+                    "Output does not contain expected task descriptions"
+                );
+                assert!(
+                    output_combined.contains("Run all tests"),
+                    "Output does not contain expected task descriptions"
+                );
+                assert!(
+                    output_combined.contains("Build the project"),
                     "Output does not contain expected task descriptions"
                 );
                 return;
