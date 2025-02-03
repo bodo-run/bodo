@@ -201,8 +201,6 @@ impl ScriptLoader {
         Ok(graph)
     }
 
-    // ... rest of the code ...
-
     fn validate_task_config(
         &self,
         task_config: &TaskConfig,

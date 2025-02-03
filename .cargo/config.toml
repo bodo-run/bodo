@@ -1,0 +1,4 @@
+[test]
+# Always run tests with --no-fail-fast
+harness = true
+options = { no-fail-fast = true } 

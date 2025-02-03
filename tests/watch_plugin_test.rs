@@ -46,7 +46,7 @@ fn test_watch_plugin_on_graph_build_with_tasks() {
         }),
     };
 
-    let node_id = graph.add_node(NodeKind::Task(task_data));
+    let _node_id = graph.add_node(NodeKind::Task(task_data));
     let result = plugin.on_graph_build(&mut graph);
     assert!(
         result.is_ok(),
