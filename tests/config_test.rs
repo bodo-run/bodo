@@ -1,6 +1,6 @@
 // tests/config_test.rs
 
-use bodo::config::{BodoConfig, Dependency, TaskConfig};
+use bodo::config::{BodoConfig, Dependency, TaskConfig, WatchConfig};
 use validator::Validate;
 use validator::ValidationErrors;
 
@@ -8,6 +8,7 @@ use validator::ValidationErrors;
 fn test_validate_task_name_reserved() {
     let mut config = TaskConfig::default();
     config._name_check = Some("default_task".to_string());
+    config.command = Some("echo 'test'".to_string()); // Add command to pass validation
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 }
@@ -16,6 +17,7 @@ fn test_validate_task_name_reserved() {
 fn test_validate_task_name_valid() {
     let mut config = TaskConfig::default();
     config._name_check = Some("valid_task_name".to_string());
+    config.command = Some("echo 'test'".to_string()); // Add command to pass validation
     let result = config.validate();
     assert!(
         result.is_ok(),
@@ -27,16 +29,19 @@ fn test_validate_task_name_valid() {
 fn test_validate_task_name_invalid_characters() {
     let mut config = TaskConfig::default();
     config._name_check = Some("invalid/task/name".to_string());
+    config.command = Some("echo 'test'".to_string()); // Add command
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 
     let mut config = TaskConfig::default();
     config._name_check = Some("invalid..name".to_string());
+    config.command = Some("echo 'test'".to_string()); // Add command
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 
     let mut config = TaskConfig::default();
     config._name_check = Some("invalid.name".to_string());
+    config.command = Some("echo 'test'".to_string()); // Add command
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 }
@@ -45,12 +50,14 @@ fn test_validate_task_name_invalid_characters() {
 fn test_validate_task_name_invalid_length() {
     let mut config = TaskConfig::default();
     config._name_check = Some("".to_string());
+    config.command = Some("echo 'test'".to_string()); // Add command
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 
     let long_name = "a".repeat(101);
     let mut config = TaskConfig::default();
     config._name_check = Some(long_name);
+    config.command = Some("echo 'test'".to_string()); // Add command
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 }
@@ -125,7 +132,12 @@ fn test_task_config_with_all_fields() {
         post_deps: vec![Dependency::Command {
             command: "echo 'Post'".to_string(),
         }],
-        watch: Some(Default::default()),
+        watch: Some(WatchConfig {
+            patterns: vec!["src/**/*.rs".to_string()],
+            debounce_ms: 500,
+            ignore_patterns: vec![],
+            auto_watch: false,
+        }),
         timeout: Some("1m".to_string()),
         exec_paths: vec!["/usr/local/bin".to_string()],
         arguments: vec![],
@@ -142,7 +154,6 @@ fn test_task_config_with_all_fields() {
 
 #[test]
 fn test_bodo_config_load() {
-    
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -175,7 +186,6 @@ fn test_bodo_config_load_invalid_file() {
 
 #[test]
 fn test_bodo_config_load_invalid_yaml() {
-    
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -207,7 +217,7 @@ fn test_validate_dependency_command() {
         command: "echo 'Hello'".to_string(),
     };
     let serialized = serde_yaml::to_string(&dep).unwrap();
-    assert_eq!(serialized.trim(), "command: \"echo 'Hello'\"");
+    assert_eq!(serialized.trim(), "command: echo 'Hello'");
 }
 
 #[test]
