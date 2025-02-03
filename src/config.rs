@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use validator::{Validate, ValidationError};
 
 /// Helper function to check for reserved task names and additional constraints
-fn validate_task_name(name: &str) -> std::result::Result<(), ValidationError> {
+pub fn validate_task_name(name: &str) -> std::result::Result<(), ValidationError> {
     let reserved = [
         "watch",
         "default_task",

@@ -9,7 +9,6 @@ use crate::{
     errors::{BodoError, Result},
     graph::{CommandData, Graph, NodeKind, TaskData},
 };
-use log::warn;
 
 pub struct ScriptLoader {
     pub name_to_id: HashMap<String, u64>,
@@ -365,5 +364,70 @@ impl ScriptLoader {
         Ok(())
     }
 
-    // Other methods remain the same
+    fn validate_task_config(
+        &self,
+        task_config: &TaskConfig,
+        task_name: &str,
+        _path: &Path,
+    ) -> Result<()> {
+        let mut task_config = task_config.clone();
+        task_config._name_check = Some(task_name.to_string());
+        task_config.validate().map_err(BodoError::from)
+    }
+
+    fn create_task_node(
+        &mut self,
+        graph: &mut Graph,
+        script_id: &str,
+        script_display_name: &str,
+        task_name: &str,
+        task_config: &TaskConfig,
+    ) -> u64 {
+        let task_data = TaskData {
+            name: task_name.to_string(),
+            description: task_config.description.clone(),
+            command: task_config.command.clone(),
+            working_dir: task_config.cwd.clone(),
+            env: task_config.env.clone(),
+            exec_paths: task_config.exec_paths.clone(),
+            is_default: false,
+            script_id: script_id.to_string(),
+            script_display_name: script_display_name.to_string(),
+            watch: task_config.watch.clone(),
+        };
+        graph.add_node(NodeKind::Task(task_data))
+    }
+
+    fn register_task(
+        &mut self,
+        script_id: &str,
+        task_name: &str,
+        node_id: u64,
+        graph: &mut Graph,
+    ) -> Result<()> {
+        let full_task_name = if script_id.is_empty() {
+            task_name.to_string()
+        } else {
+            format!("{} {}", script_id, task_name)
+        };
+        if graph.task_registry.contains_key(&full_task_name) {
+            return Err(BodoError::PluginError(format!(
+                "Duplicate task name '{}' found in '{}'",
+                full_task_name, script_id
+            )));
+        }
+        graph.task_registry.insert(full_task_name, node_id);
+        Ok(())
+    }
+
+    fn resolve_dependency(&self, task: &str, _path: &Path, graph: &mut Graph) -> Result<u64> {
+        if let Some(&node_id) = graph.task_registry.get(task) {
+            Ok(node_id)
+        } else {
+            Err(BodoError::PluginError(format!(
+                "Task '{}' not found when resolving dependency",
+                task
+            )))
+        }
+    }
 }
