@@ -52,6 +52,7 @@ fn run(args: Args) -> Result<(), BodoError> {
     let config = BodoConfig {
         root_script: Some("scripts/script.yaml".into()), // Updated to scripts/script.yaml
         scripts_dirs: Some(vec!["scripts/".into()]),
+        default_task: None, // Added missing default_task field
         tasks: HashMap::new(),
         env: HashMap::new(),
         exec_paths: vec![],
