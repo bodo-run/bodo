@@ -59,6 +59,7 @@ fn test_spawn_command_with_invalid_prefix_color() {
         true,
         Some("label".to_string()),
         Some("invalid_color".to_string()),
+        None,
     );
     assert!(result.is_ok());
     pm.run_concurrently().unwrap();
