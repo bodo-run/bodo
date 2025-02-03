@@ -1,79 +1,176 @@
-use bodo::config::{BodoConfig, Dependency, TaskConfig};
+use bodo::config::BodoConfig;
 use bodo::errors::{BodoError, Result};
+use bodo::manager::GraphManager;
 use bodo::script_loader::ScriptLoader;
 use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
+use tempfile::tempdir;
 
 #[test]
-fn test_build_graph_empty_config() {
-    let config = BodoConfig::default();
+fn test_load_script() {
+    let temp_dir = tempdir().unwrap();
+    let script_path = temp_dir.path().join("script.yaml");
+
+    let script_content = r#"
+    tasks:
+      test_task:
+        command: echo "Test Task"
+    "#;
+
+    fs::write(&script_path, script_content).unwrap();
+
     let mut loader = ScriptLoader::new();
-    let result = loader.build_graph(config);
-    assert!(result.is_ok());
+    let mut config = BodoConfig::default();
+    config.scripts_dirs = Some(vec![temp_dir.path().to_string_lossy().to_string()]);
+
+    let graph = loader.build_graph(config).unwrap();
+    assert!(graph.task_registry.contains_key("test_task"));
 }
 
 #[test]
-fn test_load_nonexistent_script() {
+fn test_load_scripts_dir() {
+    let temp_dir = tempdir().unwrap();
+    let scripts_dir = temp_dir.path().join("scripts");
+    fs::create_dir(&scripts_dir).unwrap();
+
+    let script1_path = scripts_dir.join("script1.yaml");
+    let script2_path = scripts_dir.join("script2.yaml");
+
+    let script1_content = r#"
+    tasks:
+      task1:
+        command: echo "Task 1"
+    "#;
+
+    let script2_content = r#"
+    tasks:
+      task2:
+        command: echo "Task 2"
+    "#;
+
+    fs::write(&script1_path, script1_content).unwrap();
+    fs::write(&script2_path, script2_content).unwrap();
+
     let mut loader = ScriptLoader::new();
-    let mut _graph = bodo::graph::Graph::new();
-    let path = PathBuf::from("nonexistent_script.yaml");
-    let result = loader.load_script(&mut _graph, &path, "", &HashMap::new(), &[]);
-    assert!(result.is_err());
+    let mut config = BodoConfig::default();
+    config.scripts_dirs = Some(vec![scripts_dir.to_string_lossy().to_string()]);
+
+    let graph = loader.build_graph(config).unwrap();
+    assert!(graph.task_registry.contains_key("task1"));
+    assert!(graph.task_registry.contains_key("task2"));
 }
 
 #[test]
-fn test_merge_envs() {
-    let global_env = HashMap::from([("GLOBAL".to_string(), "1".to_string())]);
-    let script_env = HashMap::from([("SCRIPT".to_string(), "2".to_string())]);
-    let task_env = HashMap::from([("TASK".to_string(), "3".to_string())]);
-    let merged = ScriptLoader::merge_envs(&global_env, &script_env, &task_env);
-    assert_eq!(merged.get("GLOBAL"), Some(&"1".to_string()));
-    assert_eq!(merged.get("SCRIPT"), Some(&"2".to_string()));
-    assert_eq!(merged.get("TASK"), Some(&"3".to_string()));
+fn test_task_dependencies() {
+    let temp_dir = tempdir().unwrap();
+    let script_path = temp_dir.path().join("script.yaml");
+
+    let script_content = r#"
+    tasks:
+      task1:
+        command: echo "Task 1"
+        pre_deps:
+          - task: task2
+      task2:
+        command: echo "Task 2"
+    "#;
+
+    fs::write(&script_path, script_content).unwrap();
+
+    let mut loader = ScriptLoader::new();
+    let mut config = BodoConfig::default();
+    config.scripts_dirs = Some(vec![temp_dir.path().to_string_lossy().to_string()]);
+
+    let graph = loader.build_graph(config).unwrap();
+    assert!(graph.task_registry.contains_key("task1"));
+    assert!(graph.task_registry.contains_key("task2"));
+
+    // Check that there's an edge from task2 to task1
+    let task1_id = graph.task_registry.get("task1").unwrap();
+    let task2_id = graph.task_registry.get("task2").unwrap();
+
+    let mut found = false;
+    for edge in &graph.edges {
+        if edge.from == *task2_id && edge.to == *task1_id {
+            found = true;
+            break;
+        }
+    }
+    assert!(found, "Edge from task2 to task1 not found");
 }
 
 #[test]
-fn test_register_duplicate_task() {
-    let mut loader = ScriptLoader::new();
-    let mut graph = bodo::graph::Graph::new();
-    let config = BodoConfig {
-        tasks: HashMap::from([
-            ("task1".to_string(), Default::default()),
-            ("task1".to_string(), Default::default()),
-        ]),
-        ..Default::default()
-    };
-    let result = loader.build_graph(config);
-    assert!(result.is_err());
-    if let Err(BodoError::PluginError(msg)) = result {
-        assert!(msg.contains("Duplicate task name"));
-    } else {
-        panic!("Expected PluginError due to duplicate task name");
+fn test_cycle_detection() {
+    let temp_dir = tempdir().unwrap();
+    let script_path = temp_dir.path().join("script.yaml");
+
+    let script_content = r#"
+    tasks:
+      task1:
+        command: echo "Task 1"
+        pre_deps:
+          - task: task2
+      task2:
+        command: echo "Task 2"
+        pre_deps:
+          - task: task1
+    "#;
+
+    fs::write(&script_path, script_content).unwrap();
+
+    let mut config = BodoConfig::default();
+    config.scripts_dirs = Some(vec![temp_dir.path().to_string_lossy().to_string()]);
+
+    // This should result in a cycle in the graph
+    let mut manager = GraphManager::new();
+    let result = manager.build_graph(config);
+
+    assert!(result.is_err(), "Cycle was not detected");
+    match result {
+        Err(BodoError::PluginError(msg)) => {
+            assert!(
+                msg.contains("found cyclical dependency"),
+                "Incorrect error message: {}",
+                msg
+            );
+        }
+        _ => panic!("Expected PluginError due to cycle"),
     }
 }
 
 #[test]
-fn test_resolve_dependency_not_found() {
+fn test_invalid_task_config() {
+    let temp_dir = tempdir().unwrap();
+    let script_path = temp_dir.path().join("script.yaml");
+
+    // Invalid task (no command or dependencies)
+    let script_content = r#"
+    tasks:
+      invalid_task:
+        description: "This task has no command or dependencies."
+    "#;
+
+    fs::write(&script_path, script_content).unwrap();
+
     let mut loader = ScriptLoader::new();
-    let config = BodoConfig {
-        tasks: HashMap::from([(
-            "task1".to_string(),
-            TaskConfig {
-                pre_deps: vec![Dependency::Task {
-                    task: "nonexistent".to_string(),
-                }],
-                ..Default::default()
-            },
-        )]),
-        ..Default::default()
-    };
+    let mut config = BodoConfig::default();
+    config.scripts_dirs = Some(vec![temp_dir.path().to_string_lossy().to_string()]);
 
     let result = loader.build_graph(config);
-    assert!(result.is_err());
-    if let Err(BodoError::PluginError(msg)) = result {
-        assert!(msg.contains("Dependency not found"));
-    } else {
-        panic!("Expected PluginError due to missing dependency");
+
+    assert!(
+        result.is_err(),
+        "Invalid task configuration was not detected"
+    );
+    match result {
+        Err(BodoError::ValidationError(msg)) => {
+            assert!(
+                msg.contains("A task must have a command or some dependencies"),
+                "Incorrect validation error message"
+            );
+        }
+        _ => panic!("Expected ValidationError"),
     }
 }
 

@@ -1,4 +1,7 @@
+// tests/graph_test.rs
+
 use bodo::graph::{Graph, NodeKind, TaskData};
+use std::collections::HashMap;
 
 #[test]
 fn test_add_node() {
@@ -20,34 +23,43 @@ fn test_add_node() {
 }
 
 #[test]
-fn test_add_edge() {
+fn test_graph_add_nodes_and_edges() {
     let mut graph = Graph::new();
-    let node_id1 = graph.add_node(NodeKind::Task(TaskData {
+
+    let task_data1 = TaskData {
         name: "task1".to_string(),
         description: None,
-        command: None,
+        command: Some("echo task1".to_string()),
         working_dir: None,
-        env: Default::default(),
+        env: HashMap::new(),
         exec_paths: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
         watch: None,
-    }));
-    let node_id2 = graph.add_node(NodeKind::Task(TaskData {
+    };
+    let node_id1 = graph.add_node(NodeKind::Task(task_data1));
+
+    let task_data2 = TaskData {
         name: "task2".to_string(),
         description: None,
-        command: None,
+        command: Some("echo task2".to_string()),
         working_dir: None,
-        env: Default::default(),
+        env: HashMap::new(),
         exec_paths: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
         watch: None,
-    }));
-    assert!(graph.add_edge(node_id1, node_id2).is_ok());
+    };
+    let node_id2 = graph.add_node(NodeKind::Task(task_data2));
+
+    graph.add_edge(node_id1, node_id2).unwrap();
+
+    assert_eq!(graph.nodes.len(), 2);
     assert_eq!(graph.edges.len(), 1);
+    assert_eq!(graph.edges[0].from, node_id1);
+    assert_eq!(graph.edges[0].to, node_id2);
 }
 
 #[test]
@@ -128,6 +140,7 @@ fn test_topological_sort() {
 
     let sorted = graph.topological_sort().unwrap();
     assert_eq!(sorted.len(), 3);
+    assert!(sorted[0] == node_a && sorted[1] == node_b && sorted[2] == node_c);
 }
 
 #[test]

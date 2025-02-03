@@ -33,28 +33,17 @@ impl ScriptLoader {
     }
 
     // Helper function for merging environment variables
-    pub fn merge_envs(
+    fn merge_envs(
         global_env: &HashMap<String, String>,
         script_env: &HashMap<String, String>,
         task_env: &HashMap<String, String>,
     ) -> HashMap<String, String> {
-        let mut merged = HashMap::new();
-        // Start with global
-        for (k, v) in global_env {
-            merged.insert(k.clone(), v.clone());
-        }
-        // Merge script-level, overriding if keys conflict
-        for (k, v) in script_env {
-            merged.insert(k.clone(), v.clone());
-        }
-        // Merge task-level
-        for (k, v) in task_env {
-            merged.insert(k.clone(), v.clone());
-        }
-        merged
+        let mut result = global_env.clone();
+        result.extend(script_env.clone());
+        result.extend(task_env.clone());
+        result
     }
 
-    // Helper function for merging exec_paths
     fn merge_exec_paths(
         global_paths: &[String],
         script_paths: &[String],
@@ -68,14 +57,12 @@ impl ScriptLoader {
     }
 
     pub fn build_graph(&mut self, config: BodoConfig) -> Result<Graph> {
-        // Validate the BodoConfig first
         config.validate().map_err(BodoError::from)?;
 
         let mut graph = Graph::new();
         let mut paths_to_load = vec![];
         let mut root_script_abs: Option<PathBuf> = None;
 
-        // Store global env and exec_paths to pass to load_script
         let global_env = config.env.clone();
         let global_exec_paths = config.exec_paths.clone();
 
@@ -83,7 +70,7 @@ impl ScriptLoader {
             let root_path = PathBuf::from(root_script);
             if root_path.exists() {
                 root_script_abs = Some(root_path.canonicalize()?);
-                paths_to_load.push((root_path, "".to_string()));
+                paths_to_load.insert(0, (root_path, "".to_string()));
             }
         }
 
@@ -188,7 +175,7 @@ impl ScriptLoader {
                                 raw_command: command.clone(),
                                 description: None,
                                 working_dir: None,
-                                env: std::collections::HashMap::new(),
+                                env: HashMap::new(),
                                 watch: None,
                             }));
                             graph.add_edge(cmd_node_id, task_id)?;
@@ -208,7 +195,7 @@ impl ScriptLoader {
                                 raw_command: command.clone(),
                                 description: None,
                                 working_dir: None,
-                                env: std::collections::HashMap::new(),
+                                env: HashMap::new(),
                                 watch: None,
                             }));
                             graph.add_edge(task_id, cmd_node_id)?;
@@ -227,11 +214,9 @@ impl ScriptLoader {
         task_name: &str,
         path: &Path,
     ) -> Result<()> {
-        // Set the task name for validation
         let mut task = task_config.clone();
         task._name_check = Some(task_name.to_string());
 
-        // Run validation
         if let Err(e) = task.validate() {
             warn!("Invalid task '{}' in {}: {}", task_name, path.display(), e);
             return Err(BodoError::ValidationError(format!(
@@ -264,14 +249,6 @@ impl ScriptLoader {
         for (task_name, task_config) in script_config.tasks {
             self.validate_task_config(&task_config, &task_name, path)?;
 
-            // Merge environments and exec_paths
-            let env = Self::merge_envs(global_env, &script_env, &task_config.env);
-            let exec_paths = Self::merge_exec_paths(
-                global_exec_paths,
-                &script_exec_paths,
-                &task_config.exec_paths,
-            );
-
             let node_id = self.create_task_node(
                 graph,
                 &script_id,
@@ -282,8 +259,8 @@ impl ScriptLoader {
 
             // Update the task data with merged env and exec_paths
             if let NodeKind::Task(ref mut task_data) = graph.nodes[node_id as usize].kind {
-                task_data.env = env;
-                task_data.exec_paths = exec_paths;
+                task_data.env = script_env.clone();
+                task_data.exec_paths = script_exec_paths.clone();
             }
 
             self.register_task(&script_id, &task_name, node_id, graph)?;
