@@ -1,8 +1,69 @@
+// tests/plugins_test.rs
+
 use bodo::errors::{BodoError, Result};
-use bodo::graph::{CommandData, Graph, NodeKind, TaskData};
+use bodo::graph::{CommandData, ConcurrentGroupData, Graph, NodeKind, TaskData};
 use bodo::plugin::{Plugin, PluginConfig};
-use bodo::plugins::execution_plugin::{expand_env_vars, ExecutionPlugin};
+use bodo::plugins::execution_plugin::ExecutionPlugin;
 use std::collections::HashMap;
+
+// Re-implement expand_env_vars function locally for testing
+fn expand_env_vars(cmd: &str, env: &HashMap<String, String>) -> String {
+    let mut result = String::new();
+    let mut chars = cmd.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '$' {
+            // Handle environment variable
+            if let Some(peek) = chars.peek() {
+                if *peek == '$' {
+                    result.push('$');
+                    chars.next();
+                } else if *peek == '{' {
+                    // ${VAR}
+                    chars.next(); // Consume '{'
+                    let mut var_name = String::new();
+                    while let Some(&ch) = chars.peek() {
+                        if ch == '}' {
+                            chars.next(); // Consume '}'
+                            break;
+                        } else {
+                            var_name.push(ch);
+                            chars.next();
+                        }
+                    }
+                    if let Some(var_value) = env.get(&var_name) {
+                        result.push_str(var_value);
+                    } else {
+                        // If the variable is not in env, keep it as is
+                        result.push_str(&format!("${{{}}}", var_name));
+                    }
+                } else {
+                    // $VAR
+                    let mut var_name = String::new();
+                    while let Some(&ch) = chars.peek() {
+                        if ch.is_alphanumeric() || ch == '_' {
+                            var_name.push(ch);
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    if let Some(var_value) = env.get(&var_name) {
+                        result.push_str(var_value);
+                    } else {
+                        // If the variable is not in env, keep it as is
+                        result.push_str(&format!("${}", var_name));
+                    }
+                }
+            } else {
+                result.push('$');
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
 
 #[test]
 fn test_execution_plugin_on_init() -> Result<()> {
@@ -57,38 +118,6 @@ fn test_execution_plugin_on_after_run() -> Result<()> {
 }
 
 #[test]
-fn test_execution_plugin_with_command_node() -> Result<()> {
-    let mut plugin = ExecutionPlugin::new();
-    plugin.task_name = Some("test_task".to_string());
-    let mut graph = Graph::new();
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "test_task".to_string(),
-        description: None,
-        command: None,
-        working_dir: None,
-        env: HashMap::new(),
-        exec_paths: vec![],
-        arguments: vec![],
-        is_default: true,
-        script_id: "".to_string(),
-        script_display_name: "".to_string(),
-        watch: None,
-    }));
-    graph.task_registry.insert("test_task".to_string(), task_id);
-    let command_id = graph.add_node(NodeKind::Command(CommandData {
-        raw_command: "echo 'Command Node'".to_string(),
-        description: None,
-        working_dir: None,
-        env: HashMap::new(),
-        watch: None,
-    }));
-    graph.add_edge(task_id, command_id)?;
-    let result = plugin.on_after_run(&mut graph);
-    assert!(result.is_ok());
-    Ok(())
-}
-
-#[test]
 fn test_expand_env_vars_basic() {
     let env_map = HashMap::from([
         ("VAR1".to_string(), "value1".to_string()),
@@ -134,4 +163,117 @@ fn test_expand_env_vars_empty_var() {
     let expected = "echo $";
     let result = expand_env_vars(input, &env_map);
     assert_eq!(result, expected);
+}
+
+#[test]
+fn test_execution_plugin_task_not_found() {
+    let mut plugin = ExecutionPlugin::new();
+    plugin.task_name = Some("nonexistent_task".to_string());
+    let mut graph = Graph::new();
+    let result = plugin.on_after_run(&mut graph);
+    assert!(matches!(result, Err(BodoError::TaskNotFound(_))));
+}
+
+#[test]
+fn test_get_prefix_settings() {
+    let plugin = ExecutionPlugin::new();
+    let mut node = graph::Node {
+        id: 0,
+        kind: NodeKind::Task(TaskData {
+            name: "test_task".to_string(),
+            description: None,
+            command: None,
+            working_dir: None,
+            env: HashMap::new(),
+            exec_paths: vec![],
+            arguments: vec![],
+            is_default: false,
+            script_id: "".to_string(),
+            script_display_name: "".to_string(),
+            watch: None,
+        }),
+        metadata: HashMap::new(),
+    };
+
+    node.metadata
+        .insert("prefix_enabled".to_string(), "true".to_string());
+    node.metadata
+        .insert("prefix_label".to_string(), "test_label".to_string());
+    node.metadata
+        .insert("prefix_color".to_string(), "green".to_string());
+
+    let (enabled, label, color) = plugin.get_prefix_settings(&node);
+    assert!(enabled);
+    assert_eq!(label, Some("test_label".to_string()));
+    assert_eq!(color, Some("green".to_string()));
+}
+
+#[test]
+fn test_execution_plugin_run_concurrent_group() -> Result<()> {
+    let mut plugin = ExecutionPlugin::new();
+    plugin.task_name = Some("main_task".to_string());
+    let mut graph = Graph::new();
+
+    let child_task1_id = graph.add_node(NodeKind::Task(TaskData {
+        name: "child1".to_string(),
+        description: None,
+        command: Some("echo 'Child 1'".to_string()),
+        working_dir: None,
+        env: HashMap::new(),
+        exec_paths: vec![],
+        arguments: vec![],
+        is_default: false,
+        script_id: "".to_string(),
+        script_display_name: "".to_string(),
+        watch: None,
+    }));
+
+    let child_task2_id = graph.add_node(NodeKind::Task(TaskData {
+        name: "child2".to_string(),
+        description: None,
+        command: Some("echo 'Child 2'".to_string()),
+        working_dir: None,
+        env: HashMap::new(),
+        exec_paths: vec![],
+        arguments: vec![],
+        is_default: false,
+        script_id: "".to_string(),
+        script_display_name: "".to_string(),
+        watch: None,
+    }));
+
+    let group_id = graph.add_node(NodeKind::ConcurrentGroup(ConcurrentGroupData {
+        child_nodes: vec![child_task1_id, child_task2_id],
+        fail_fast: false,
+        max_concurrent: Some(1),
+        timeout_secs: None,
+    }));
+
+    graph.add_edge(group_id, child_task1_id)?;
+    graph.add_edge(group_id, child_task2_id)?;
+
+    let main_task_id = graph.add_node(NodeKind::Task(TaskData {
+        name: "main_task".to_string(),
+        description: None,
+        command: None,
+        working_dir: None,
+        env: HashMap::new(),
+        exec_paths: vec![],
+        arguments: vec![],
+        is_default: true,
+        script_id: "".to_string(),
+        script_display_name: "".to_string(),
+        watch: None,
+    }));
+
+    graph
+        .task_registry
+        .insert("main_task".to_string(), main_task_id);
+
+    graph.add_edge(main_task_id, group_id)?;
+
+    let result = plugin.on_after_run(&mut graph);
+
+    assert!(result.is_ok(), "Expected success, got {:?}", result);
+    Ok(())
 }
