@@ -35,7 +35,7 @@ fn test_merge_envs() {
 #[test]
 fn test_register_duplicate_task() {
     let mut loader = ScriptLoader::new();
-    let mut graph = bodo::graph::Graph::new();
+    let graph = bodo::graph::Graph::new();
     let config = BodoConfig {
         tasks: HashMap::from([
             ("task1".to_string(), Default::default()),
