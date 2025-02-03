@@ -207,7 +207,8 @@ fn test_run_concurrent_group() -> Result<()> {
         watch: None,
     }));
 
-    let fail_command = "thiscommanddoesnotexist"; // Command that fails
+    // Use a command that fails reliably across platforms
+    let fail_command = if cfg!(windows) { "exit /b 1" } else { "exit 1" };
 
     let child_task2_id = graph.add_node(NodeKind::Task(TaskData {
         name: "child2".to_string(),
@@ -255,9 +256,6 @@ fn test_run_concurrent_group() -> Result<()> {
     graph.add_edge(main_task_id, group_id)?;
 
     let result = plugin.on_after_run(&mut graph);
-
-    // Uncomment the next line to see the actual error if needed
-    // println!("Result: {:?}", result);
 
     assert!(result.is_err(), "Expected error, got {:?}", result);
     Ok(())
