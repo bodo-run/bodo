@@ -10,10 +10,10 @@ fn test_load_script() {
     let script_path = temp_dir.path().join("script.yaml");
 
     let script_content = r#"
-    tasks:
-      test_task:
-        command: echo "Test Task"
-    "#;
+tasks:
+  test_task:
+    command: echo "Test Task"
+"#;
 
     fs::write(&script_path, script_content).unwrap();
 
@@ -25,6 +25,7 @@ fn test_load_script() {
 
     // Adjusted assertion with correct task name
     let script_id = script_path.display().to_string();
+
     let full_task_name = format!("{} {}", script_id, "test_task");
 
     assert!(graph.task_registry.contains_key(&full_task_name));
@@ -40,16 +41,16 @@ fn test_load_scripts_dir() {
     let script2_path = scripts_dir.join("script2.yaml");
 
     let script1_content = r#"
-    tasks:
-      task1:
-        command: echo "Task 1"
-    "#;
+tasks:
+  task1:
+    command: echo "Task 1"
+"#;
 
     let script2_content = r#"
-    tasks:
-      task2:
-        command: echo "Task 2"
-    "#;
+tasks:
+  task2:
+    command: echo "Task 2"
+"#;
 
     fs::write(&script1_path, script1_content).unwrap();
     fs::write(&script2_path, script2_content).unwrap();
@@ -82,14 +83,14 @@ fn test_task_dependencies() {
     let script_path = temp_dir.path().join("script.yaml");
 
     let script_content = r#"
-    tasks:
-      task1:
-        command: echo "Task 1"
-        pre_deps:
-          - task: task2
-      task2:
-        command: echo "Task 2"
-    "#;
+tasks:
+  task1:
+    command: echo "Task 1"
+    pre_deps:
+      - task: task2
+  task2:
+    command: echo "Task 2"
+"#;
 
     fs::write(&script_path, script_content).unwrap();
 
