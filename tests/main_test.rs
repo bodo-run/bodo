@@ -9,7 +9,7 @@ use std::time::Duration;
 fn test_bodo_default() {
     // First, ensure 'bodo' binary is built
     let status = Command::new("cargo")
-        .args(["build", "--bin", "bodo"])
+        .args(["build", "--bin", "bodo", "--all-features"])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .status()
         .expect("Failed to execute cargo build command");
@@ -72,7 +72,7 @@ fn test_bodo_default() {
 fn test_bodo_list() {
     // First, ensure 'bodo' binary is built
     let status = Command::new("cargo")
-        .args(["build", "--bin", "bodo"])
+        .args(["build", "--bin", "bodo", "--all-features"])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .status()
         .expect("Failed to execute cargo build command");
