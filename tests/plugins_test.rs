@@ -1,7 +1,7 @@
 // tests/plugins_test.rs
 
 use bodo::errors::{BodoError, Result};
-use bodo::graph::{CommandData, ConcurrentGroupData, Graph, Node, NodeKind, TaskData};
+use bodo::graph::{Graph, Node, NodeKind, TaskData};
 use bodo::plugin::{Plugin, PluginConfig};
 use bodo::plugins::execution_plugin::ExecutionPlugin;
 use std::collections::HashMap;
