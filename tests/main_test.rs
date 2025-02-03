@@ -13,62 +13,9 @@ use bodo::{
 };
 use clap::Parser;
 use log::{error, LevelFilter};
-use std::io::Read;
-use std::process::Command;
-use std::process::Stdio;
-use std::{collections::HashMap, path::PathBuf, process::exit};
+use std::fs;
+use std::{collections::HashMap, process::exit};
 use tempfile::tempdir;
-
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-pub struct Args {
-    /// List all available tasks
-    #[arg(short, long)]
-    pub list: bool,
-
-    /// Watch mode - rerun task on file changes
-    #[arg(short, long)]
-    pub watch: bool,
-
-    /// Auto watch mode - automatically enable watch if specified
-    #[arg(long)]
-    pub auto_watch: bool,
-
-    /// Enable debug logs
-    #[arg(long)]
-    pub debug: bool,
-
-    /// Task to run (defaults to default_task)
-    pub task: Option<String>,
-
-    /// Subtask to run
-    pub subtask: Option<String>,
-
-    /// Additional arguments passed to the task
-    #[arg(last = true)]
-    pub args: Vec<String>,
-}
-
-pub fn get_task_name(args: &Args, graph_manager: &GraphManager) -> Result<String, BodoError> {
-    let task_name = if let Some(task) = args.task.clone() {
-        if let Some(subtask) = args.subtask.clone() {
-            format!("{} {}", task, subtask)
-        } else {
-            task
-        }
-    } else {
-        if !graph_manager.task_exists("default") {
-            return Err(BodoError::NoTaskSpecified);
-        }
-        "default".to_string()
-    };
-
-    if !graph_manager.task_exists(&task_name) {
-        return Err(BodoError::TaskNotFound(task_name));
-    }
-
-    Ok(task_name)
-}
 
 #[test]
 fn test_bodo_default() {
@@ -93,11 +40,11 @@ tasks:
 
     // Run 'bodo' with 'default' argument in temp_dir
     let bodo_executable = env!("CARGO_BIN_EXE_bodo");
-    let mut child = Command::new(bodo_executable)
+    let mut child = std::process::Command::new(bodo_executable)
         .arg("default")
         .current_dir(temp_dir.path())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("Failed to spawn 'bodo' process");
 
