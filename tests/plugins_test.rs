@@ -106,6 +106,24 @@ fn test_execution_plugin() {
 fn test_execution_plugin_with_concurrent_group() {
     use bodo::plugin::PluginConfig;
     use bodo::plugins::execution_plugin::ExecutionPlugin;
+    use tempfile::TempDir;
+
+    // Create a temporary directory
+    let temp_dir = TempDir::new().unwrap();
+    let temp_dir_path = temp_dir.path();
+
+    let output_file1 = temp_dir_path.join("bodo_test_output_child1");
+    let output_file2 = temp_dir_path.join("bodo_test_output_child2");
+
+    let command1 = format!(
+        "echo 'Hello from child 1' > {}",
+        output_file1.to_str().unwrap()
+    );
+
+    let command2 = format!(
+        "echo 'Hello from child 2' > {}",
+        output_file2.to_str().unwrap()
+    );
 
     // Build a graph with a concurrent group
     let mut graph = Graph::new();
@@ -132,7 +150,7 @@ fn test_execution_plugin_with_concurrent_group() {
     let task_data_child1 = TaskData {
         name: "child_task1".to_string(),
         description: None,
-        command: Some("touch /tmp/bodo_test_output_child1 && echo 'Hello from child 1' > /tmp/bodo_test_output_child1".to_string()),
+        command: Some(command1.clone()),
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
@@ -150,7 +168,7 @@ fn test_execution_plugin_with_concurrent_group() {
     let task_data_child2 = TaskData {
         name: "child_task2".to_string(),
         description: None,
-        command: Some("touch /tmp/bodo_test_output_child2 && echo 'Hello from child 2' > /tmp/bodo_test_output_child2".to_string()),
+        command: Some(command2.clone()),
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
@@ -205,25 +223,15 @@ fn test_execution_plugin_with_concurrent_group() {
 
     // Print debug information
     println!("Checking if output files exist:");
-    println!(
-        "File 1: {}",
-        std::path::Path::new("/tmp/bodo_test_output_child1").exists()
-    );
-    println!(
-        "File 2: {}",
-        std::path::Path::new("/tmp/bodo_test_output_child2").exists()
-    );
+    println!("File 1: {}", output_file1.exists());
+    println!("File 2: {}", output_file2.exists());
 
     // Verify that the commands executed by checking the output files
-    let output1 = std::fs::read_to_string("/tmp/bodo_test_output_child1")
-        .expect("Failed to read output file 1");
+    let output1 = std::fs::read_to_string(&output_file1).expect("Failed to read output file 1");
     assert_eq!(output1.trim(), "Hello from child 1");
-    let output2 = std::fs::read_to_string("/tmp/bodo_test_output_child2")
-        .expect("Failed to read output file 2");
+    let output2 = std::fs::read_to_string(&output_file2).expect("Failed to read output file 2");
     assert_eq!(output2.trim(), "Hello from child 2");
-    // Clean up
-    let _ = std::fs::remove_file("/tmp/bodo_test_output_child1");
-    let _ = std::fs::remove_file("/tmp/bodo_test_output_child2");
+    // Clean up automatically when temp_dir goes out of scope
 }
 
 #[test]
