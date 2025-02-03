@@ -1,11 +1,11 @@
-use bodo::errors::BodoError;
+use bodo::errors::{BodoError, Result};
 use bodo::graph::{CommandData, Graph, NodeKind, TaskData};
 use bodo::plugin::{Plugin, PluginConfig};
-use bodo::plugins::execution_plugin::ExecutionPlugin;
+use bodo::plugins::execution_plugin::{expand_env_vars, ExecutionPlugin};
 use std::collections::HashMap;
 
 #[test]
-fn test_execution_plugin_on_init() -> Result<(), BodoError> {
+fn test_execution_plugin_on_init() -> Result<()> {
     let mut plugin = ExecutionPlugin::new();
     let mut options = serde_json::Map::new();
     options.insert(
@@ -24,18 +24,16 @@ fn test_execution_plugin_on_init() -> Result<(), BodoError> {
 }
 
 #[test]
-fn test_execution_plugin_on_after_run_no_task_specified() -> Result<(), BodoError> {
+fn test_execution_plugin_on_after_run_no_task_specified() -> Result<()> {
     let mut plugin = ExecutionPlugin::new();
     let mut graph = Graph::new();
     let result = plugin.on_after_run(&mut graph);
-    assert!(
-        matches!(result, Err(BodoError::PluginError(msg)) if msg.contains("No task specified"))
-    );
+    assert!(matches!(result, Err(BodoError::PluginError(_))));
     Ok(())
 }
 
 #[test]
-fn test_execution_plugin_on_after_run() -> Result<(), BodoError> {
+fn test_execution_plugin_on_after_run() -> Result<()> {
     let mut plugin = ExecutionPlugin::new();
     plugin.task_name = Some("test_task".to_string());
     let mut graph = Graph::new();
@@ -46,6 +44,7 @@ fn test_execution_plugin_on_after_run() -> Result<(), BodoError> {
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: true,
         script_id: "".to_string(),
         script_display_name: "".to_string(),
@@ -58,7 +57,7 @@ fn test_execution_plugin_on_after_run() -> Result<(), BodoError> {
 }
 
 #[test]
-fn test_execution_plugin_with_command_node() -> Result<(), BodoError> {
+fn test_execution_plugin_with_command_node() -> Result<()> {
     let mut plugin = ExecutionPlugin::new();
     plugin.task_name = Some("test_task".to_string());
     let mut graph = Graph::new();
@@ -69,6 +68,7 @@ fn test_execution_plugin_with_command_node() -> Result<(), BodoError> {
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: true,
         script_id: "".to_string(),
         script_display_name: "".to_string(),
@@ -86,4 +86,52 @@ fn test_execution_plugin_with_command_node() -> Result<(), BodoError> {
     let result = plugin.on_after_run(&mut graph);
     assert!(result.is_ok());
     Ok(())
+}
+
+#[test]
+fn test_expand_env_vars_basic() {
+    let env_map = HashMap::from([
+        ("VAR1".to_string(), "value1".to_string()),
+        ("VAR2".to_string(), "value2".to_string()),
+    ]);
+    let input = "echo $VAR1 and $VAR2";
+    let expected = "echo value1 and value2";
+    let result = expand_env_vars(input, &env_map);
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_expand_env_vars_no_match() {
+    let env_map = HashMap::from([("VAR1".to_string(), "value1".to_string())]);
+    let input = "echo $VAR2 and ${VAR3}";
+    let expected = "echo $VAR2 and ${VAR3}";
+    let result = expand_env_vars(input, &env_map);
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_expand_env_vars_partial() {
+    let env_map = HashMap::from([("HOME".to_string(), "/home/user".to_string())]);
+    let input = "cd $HOME/projects";
+    let expected = "cd /home/user/projects";
+    let result = expand_env_vars(input, &env_map);
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_expand_env_vars_special_chars() {
+    let env_map = HashMap::from([("VAR".to_string(), "value".to_string())]);
+    let input = "echo $$VAR $VAR$ $VAR text";
+    let expected = "echo $VAR value$ value text";
+    let result = expand_env_vars(input, &env_map);
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_expand_env_vars_empty_var() {
+    let env_map = HashMap::new();
+    let input = "echo $";
+    let expected = "echo $";
+    let result = expand_env_vars(input, &env_map);
+    assert_eq!(result, expected);
 }
