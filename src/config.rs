@@ -143,8 +143,7 @@ pub struct ConcurrentlyOptions {
 }
 
 /// Represents a CLI argument that can be passed to a task
-#[derive(Debug, Clone, Serialize, Deserialize, Validate, JsonSchema, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, JsonSchema, PartialEq, Default)]
 pub struct TaskArgument {
     /// Name of the argument (used as environment variable)
     #[validate(length(min = 1, max = 64))]
@@ -161,7 +160,6 @@ pub struct TaskArgument {
     /// Default value if not provided
     pub default: Option<String>,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Validate, JsonSchema)]
 #[validate(schema(function = "validate_task_config"))]

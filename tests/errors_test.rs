@@ -1,4 +1,4 @@
-use bodo::errors::{BodoError, Result};
+use bodo::errors::BodoError;
 use std::io;
 
 #[test]

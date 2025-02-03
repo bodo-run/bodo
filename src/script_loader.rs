@@ -33,7 +33,7 @@ impl ScriptLoader {
     }
 
     // [CASCADING CHANGE] Helper function for merging environment variables
-    fn merge_envs(
+    pub fn merge_envs(
         global_env: &HashMap<String, String>,
         script_env: &HashMap<String, String>,
         task_env: &HashMap<String, String>,
@@ -165,7 +165,7 @@ impl ScriptLoader {
         Ok(())
     }
 
-    fn load_script(
+    pub fn load_script(
         &mut self,
         graph: &mut Graph,
         path: &Path,
