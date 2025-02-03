@@ -164,17 +164,18 @@ impl WatchPlugin {
         }
     }
 
-    // A small helper that just returns some BodoConfig with "scripts/" as script dirs
-    fn graph_manager_config_snapshot() -> Result<crate::config::BodoConfig> {
-        Ok(crate::config::BodoConfig {
-            scripts_dirs: Some(vec!["scripts/".into()]),
-            ..Default::default()
-        })
-    }
-
     // Rest of the implementation...
 
     // ... (Rest of the methods remain unchanged)
+}
+
+// Function moved outside of impl block
+// A small helper that just returns some BodoConfig with "scripts/" as script dirs
+fn graph_manager_config_snapshot() -> Result<crate::config::BodoConfig> {
+    Ok(crate::config::BodoConfig {
+        scripts_dirs: Some(vec!["scripts/".into()]),
+        ..Default::default()
+    })
 }
 
 impl Default for WatchPlugin {
@@ -407,4 +408,17 @@ impl Plugin for WatchPlugin {
         }
         Ok(())
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+// Function moved outside of impl block
+// A small helper that just returns some BodoConfig with "scripts/" as script dirs
+fn graph_manager_config_snapshot() -> Result<crate::config::BodoConfig> {
+    Ok(crate::config::BodoConfig {
+        scripts_dirs: Some(vec!["scripts/".into()]),
+        ..Default::default()
+    })
 }
