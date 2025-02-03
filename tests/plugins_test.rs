@@ -41,8 +41,11 @@ fn test_execution_plugin_with_concurrent_group() {
     let task_data_child1 = TaskData {
         name: "child_task1".to_string(),
         description: None,
-        command: Some(format!("touch {}", output_file1.to_str().unwrap())),
-        working_dir: None,
+        command: Some(format!(
+            "touch {}",
+            output_file1.file_name().unwrap().to_str().unwrap()
+        )),
+        working_dir: Some(temp_dir_path.to_string_lossy().to_string()),
         env: HashMap::new(),
         exec_paths: vec![],
         is_default: false,
@@ -59,8 +62,11 @@ fn test_execution_plugin_with_concurrent_group() {
     let task_data_child2 = TaskData {
         name: "child_task2".to_string(),
         description: None,
-        command: Some(format!("touch {}", output_file2.to_str().unwrap())),
-        working_dir: None,
+        command: Some(format!(
+            "touch {}",
+            output_file2.file_name().unwrap().to_str().unwrap()
+        )),
+        working_dir: Some(temp_dir_path.to_string_lossy().to_string()),
         env: HashMap::new(),
         exec_paths: vec![],
         is_default: false,
