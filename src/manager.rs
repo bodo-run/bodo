@@ -6,6 +6,7 @@ use crate::{
     script_loader::ScriptLoader,
     Result,
 };
+use std::collections::HashMap;
 
 pub struct GraphManager {
     pub config: BodoConfig,
@@ -102,6 +103,47 @@ impl GraphManager {
 
     pub fn task_exists(&self, task_name: &str) -> bool {
         self.graph.task_registry.contains_key(task_name)
+    }
+
+    pub fn apply_task_arguments(&mut self, task_name: &str, args: &[String]) -> Result<()> {
+        let task_config = self.get_task_config(task_name)?;
+
+        // Take the arguments from the task_config.arguments
+        let arg_defs = task_config.arguments;
+
+        // Map arguments to env variables
+        let mut env_vars = HashMap::new();
+
+        for (i, arg_def) in arg_defs.iter().enumerate() {
+            if i < args.len() {
+                env_vars.insert(arg_def.name.clone(), args[i].clone());
+            } else if let Some(default) = &arg_def.default {
+                env_vars.insert(arg_def.name.clone(), default.clone());
+            } else if arg_def.required {
+                return Err(BodoError::PluginError(format!(
+                    "Missing required argument: {}",
+                    arg_def.name
+                )));
+            }
+        }
+
+        // Update the task's env in the graph
+        let node_id = self
+            .graph
+            .task_registry
+            .get(task_name)
+            .ok_or_else(|| BodoError::TaskNotFound(task_name.to_string()))?;
+
+        if let NodeKind::Task(task_data) = &mut self.graph.nodes[*node_id as usize].kind {
+            task_data.env.extend(env_vars);
+        } else {
+            return Err(BodoError::PluginError(format!(
+                "Node '{}' is not a Task node",
+                task_name
+            )));
+        }
+
+        Ok(())
     }
 
     // Rest of the code remains unchanged.
