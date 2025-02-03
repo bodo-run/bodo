@@ -111,7 +111,6 @@ jobs:
       - name: Run AI Loop
         id: ai_loop
         timeout-minutes: 360
-        continue-on-error: true
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -125,15 +124,17 @@ jobs:
           for i in $(seq 1 $MAX_ATTEMPTS); do
             echo "===== Attempt $i ====="
             deno run --allow-all scripts/ai/main.ts || echo "Failed to run AI Loop at attempt $i"
-            git add -A
-            git commit -m "AI Loop attempt $i"
-            git push -u origin $NEW_BRANCH
+            if [ -n "$(git status --porcelain)" ]; then
+              git add -A
+              git commit -m "AI Loop attempt $i"
+              git push -u origin $NEW_BRANCH
+            fi
             echo "last_attempt=${i}" >> "$GITHUB_OUTPUT"
           done
           echo "success=${SUCCESS}" >> "$GITHUB_OUTPUT"
 
       - name: Create PR
-        if: always() && ${{ github.event.inputs.pr-on-fail }}
+        if: ${{ github.event.inputs.pr-on-fail }}
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           MAX_ATTEMPTS: ${{ env.MAX_ATTEMPTS }}
