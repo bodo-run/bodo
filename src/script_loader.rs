@@ -405,6 +405,107 @@ impl ScriptLoader {
             self.register_task(script_id, &task_name, node_id, graph)?;
         }
 
+        // Now, process dependencies for the default_task
+        if let Some(ref default_task_config) = script_config.default_task {
+            let default_task_name = "default";
+            let full_task_name = if script_id.is_empty() {
+                default_task_name.to_string()
+            } else {
+                format!("{} {}", script_id, default_task_name)
+            };
+
+            let node_id = *graph.task_registry.get(&full_task_name).unwrap();
+
+            // Handle dependencies
+            for dep in &default_task_config.pre_deps {
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(task, script_id, graph)?;
+                        graph.add_edge(dep_id, node_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command.clone(),
+                            description: None,
+                            working_dir: None,
+                            env: HashMap::new(),
+                            watch: None,
+                        }));
+                        graph.add_edge(cmd_node_id, node_id)?;
+                    }
+                }
+            }
+
+            for dep in &default_task_config.post_deps {
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(task, script_id, graph)?;
+                        graph.add_edge(node_id, dep_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command.clone(),
+                            description: None,
+                            working_dir: None,
+                            env: HashMap::new(),
+                            watch: None,
+                        }));
+                        graph.add_edge(node_id, cmd_node_id)?;
+                    }
+                }
+            }
+        }
+
+        // Now, process dependencies for the tasks
+        for (task_name, task_config) in &script_config.tasks {
+            let full_task_name = if script_id.is_empty() {
+                task_name.clone()
+            } else {
+                format!("{} {}", script_id, task_name)
+            };
+
+            let node_id = *graph.task_registry.get(&full_task_name).unwrap();
+
+            // Handle dependencies
+            for dep in &task_config.pre_deps {
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(task, script_id, graph)?;
+                        graph.add_edge(dep_id, node_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command.clone(),
+                            description: None,
+                            working_dir: None,
+                            env: HashMap::new(),
+                            watch: None,
+                        }));
+                        graph.add_edge(cmd_node_id, node_id)?;
+                    }
+                }
+            }
+
+            for dep in &task_config.post_deps {
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(task, script_id, graph)?;
+                        graph.add_edge(node_id, dep_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command.clone(),
+                            description: None,
+                            working_dir: None,
+                            env: HashMap::new(),
+                            watch: None,
+                        }));
+                        graph.add_edge(node_id, cmd_node_id)?;
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
