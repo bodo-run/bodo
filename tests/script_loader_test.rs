@@ -2,6 +2,7 @@
 
 use bodo::config::{BodoConfig, TaskConfig};
 use bodo::graph::{Graph, NodeKind, TaskData};
+use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
 use bodo::script_loader::ScriptLoader;
 use std::fs;
 use tempfile::tempdir;
@@ -289,7 +290,11 @@ fn test_load_script_with_arguments_and_concurrently() {
     let mut config = BodoConfig::default();
     config.scripts_dirs = Some(vec![temp_dir.path().to_string_lossy().to_string()]);
 
-    let graph = loader.build_graph(config).unwrap();
+    let mut graph = loader.build_graph(config).unwrap();
+
+    // Apply the ConcurrentPlugin to the graph
+    let mut plugin = ConcurrentPlugin::new();
+    plugin.on_graph_build(&mut graph).unwrap();
 
     let script_id = script_path.display().to_string();
 
@@ -356,7 +361,7 @@ fn test_load_script_with_arguments_and_concurrently() {
                 assert_eq!(task_data.name, "task_with_args");
             }
             NodeKind::Command(cmd_data) => {
-                assert_eq!(cmd_data.raw_command, "echo \"Running concurrent command\"");
+                assert_eq!(cmd_data.raw_command, r#"echo "Running concurrent command""#);
             }
             _ => panic!("Unexpected node type in concurrent group"),
         }
