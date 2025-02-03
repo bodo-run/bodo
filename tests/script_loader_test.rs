@@ -1,4 +1,4 @@
-use bodo::config::BodoConfig;
+use bodo::config::{BodoConfig, Dependency, TaskConfig};
 use bodo::errors::BodoError;
 use bodo::script_loader::ScriptLoader;
 use std::collections::HashMap;
