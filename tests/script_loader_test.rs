@@ -217,10 +217,10 @@ fn test_build_graph_with_root_script_and_config_tasks() {
     fs::create_dir_all(&scripts_dir).unwrap();
 
     let root_script_content = r#"
-tasks:
-  root_task:
-    command: echo "Root task"
-"#;
+    tasks:
+      root_task:
+        command: echo "Root task"
+    "#;
 
     fs::write(&root_script_path, root_script_content).unwrap();
 
@@ -259,6 +259,108 @@ tasks:
         !graph.task_registry.contains_key("config_task"),
         "Did not expect 'config_task' from config to be loaded when root_script is specified"
     );
+}
+
+#[test]
+fn test_load_script_with_arguments_and_concurrently() {
+    let temp_dir = tempdir().unwrap();
+    let script_path = temp_dir.path().join("script.yaml");
+
+    let script_content = r#"
+    tasks:
+      task_with_args:
+        command: echo "Hello $name"
+        args:
+          - name: name
+            required: true
+        env:
+          GREETING: "Hello"
+      concurrent_task:
+        concurrently_options:
+          fail_fast: true
+        concurrently:
+          - task: task_with_args
+          - command: echo "Running concurrent command"
+    "#;
+
+    fs::write(&script_path, script_content).unwrap();
+
+    let mut loader = ScriptLoader::new();
+    let mut config = BodoConfig::default();
+    config.scripts_dirs = Some(vec![temp_dir.path().to_string_lossy().to_string()]);
+
+    let graph = loader.build_graph(config).unwrap();
+
+    let script_id = script_path.display().to_string();
+
+    // Check if 'task_with_args' is loaded correctly with arguments
+    let full_task_name = format!("{} {}", script_id, "task_with_args");
+    assert!(
+        graph.task_registry.contains_key(&full_task_name),
+        "Task 'task_with_args' not found in task registry"
+    );
+
+    let task_id = graph.task_registry.get(&full_task_name).unwrap();
+    let task_node = &graph.nodes[*task_id as usize];
+
+    if let NodeKind::Task(task_data) = &task_node.kind {
+        assert_eq!(task_data.name, "task_with_args");
+        assert_eq!(task_data.arguments.len(), 1);
+        let arg = &task_data.arguments[0];
+        assert_eq!(arg.name, "name");
+        assert!(arg.required);
+        assert!(arg.default.is_none());
+        assert_eq!(task_data.env.get("GREETING"), Some(&"Hello".to_string()));
+    } else {
+        panic!("Expected Task node");
+    }
+
+    // Check if 'concurrent_task' is loaded correctly with concurrently options
+    let full_concurrent_task_name = format!("{} {}", script_id, "concurrent_task");
+    assert!(
+        graph.task_registry.contains_key(&full_concurrent_task_name),
+        "Task 'concurrent_task' not found in task registry"
+    );
+
+    let concurrent_task_id = graph.task_registry.get(&full_concurrent_task_name).unwrap();
+    let concurrent_task_node = &graph.nodes[*concurrent_task_id as usize];
+
+    // Verify that the concurrent group node is correctly added
+    let concurrent_group_nodes: Vec<_> = graph
+        .nodes
+        .iter()
+        .filter_map(|node| {
+            if let NodeKind::ConcurrentGroup(group_data) = &node.kind {
+                Some((node.id, group_data))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    assert_eq!(
+        concurrent_group_nodes.len(),
+        1,
+        "Expected one concurrent group node"
+    );
+
+    let (_group_id, group_data) = &concurrent_group_nodes[0];
+    assert_eq!(group_data.child_nodes.len(), 2);
+
+    // Ensure that the child nodes are correct
+    let child_task_ids = &group_data.child_nodes;
+    for &child_id in child_task_ids {
+        let child_node = &graph.nodes[child_id as usize];
+        match &child_node.kind {
+            NodeKind::Task(task_data) => {
+                assert_eq!(task_data.name, "task_with_args");
+            }
+            NodeKind::Command(cmd_data) => {
+                assert_eq!(cmd_data.raw_command, "echo \"Running concurrent command\"");
+            }
+            _ => panic!("Unexpected node type in concurrent group"),
+        }
+    }
 }
 
 #[test]
