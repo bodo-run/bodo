@@ -26,13 +26,11 @@ Important: Add test files to the tests/ directory. Do not add tests in src/ file
 Deno.mkdirSync("coverage", { recursive: true });
 
 // Run cargo-llvm-cov in one shot
-const { code, stdout, stderr } = await runCommand("cargo", [
-  "llvm-cov",
-  "test",
-  "--ignore-run-fail",
-]);
+const { code, stdout, stderr } = await runCommand(
+  "cargo llvm-cov test --ignore-run-fail"
+);
 // Serialize repo
-const { stdout: repo } = await runCommand("yek", ["--tokens", "120k"]);
+const { stdout: repo } = await runCommand("yek --tokens 120k");
 
 // Get a summary of changes made so far
 const summary = await getChangesSummary(repo);
@@ -81,15 +79,13 @@ for (const f of updatedFiles) {
 }
 
 // Format & fix code
-await runCommand("cargo", ["fmt"], { showOutput: true });
-await runCommand("cargo", ["clippy", "--fix", "--allow-dirty"], {
-  showOutput: true,
-});
+await runCommand("cargo fmt");
+await runCommand("cargo clippy --fix --allow-dirty");
 
 // Review changes again
 const allGood = await reviewChanges();
 if (!allGood) {
-  await runCommand("git", ["add", "reset", "--hard"]);
+  await runCommand("git add reset --hard");
   console.log("Changes are not good. Reverted to previous state.");
 }
 
@@ -97,6 +93,8 @@ if (!allGood) {
 
 function getOpenAiClient() {
   const provider = Deno.env.get("AI_PROVIDER") || "ollama";
+
+  console.log("Using AI provider:", provider);
 
   switch (provider) {
     case "ollama": {
@@ -150,15 +148,14 @@ async function writeFileContent(filePath: string, content: string) {
 }
 
 async function runCommand(
-  cmd: string,
-  args: string[] = [],
-  options: { showOutput?: boolean } = {}
+  command: string
 ): Promise<{ code: number; stdout: string; stderr: string }> {
-  console.log("$", [cmd, ...args].join(" "));
+  const [cmd, ...args] = command.split(/\s+/);
+  console.log(`$ ${command}`);
   const proc = new Deno.Command(cmd, {
     args,
-    stdout: options.showOutput ? "inherit" : "piped",
-    stderr: options.showOutput ? "inherit" : "piped",
+    stdout: "piped",
+    stderr: "piped",
     stdin: "inherit",
     env: {
       ...Deno.env.toObject(),
@@ -172,8 +169,8 @@ async function runCommand(
   const output = await proc.output();
   return {
     code: output.code,
-    stdout: options.showOutput ? "" : new TextDecoder().decode(output.stdout),
-    stderr: options.showOutput ? "" : new TextDecoder().decode(output.stderr),
+    stdout: new TextDecoder().decode(output.stdout),
+    stderr: new TextDecoder().decode(output.stderr),
   };
 }
 
@@ -203,7 +200,7 @@ async function callAi(
 }
 
 async function reviewChanges() {
-  const { stdout: changes } = await runCommand("git", ["diff"]);
+  const { stdout: changes } = await runCommand("git diff");
   if (!changes) return "No changes";
   console.log("Asking AI to review changes...");
   const review = await callAi(
@@ -220,7 +217,7 @@ async function reviewChanges() {
 
 async function getChangesSummary(repo: string) {
   const baseBranch = Deno.env.get("BASE_BRANCH") || "main";
-  const { stdout: changes } = await runCommand("git", ["diff", baseBranch]);
+  const { stdout: changes } = await runCommand(`git diff ${baseBranch}`);
   if (!changes) return "No changes";
   console.log("Asking AI to summarize changes...");
   const summaryAndThinking = await callAi(
