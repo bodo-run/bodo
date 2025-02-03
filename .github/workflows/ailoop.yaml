@@ -86,12 +86,15 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
       - name: Install Yek
         run: |
           curl -fsSL https://bodo.run/yek.sh | bash
-
-      - name: Install llvm-cov
-        run: cargo +stable install cargo-llvm-cov --locked
 
       - name: Configure git with Github Bot
         run: |
