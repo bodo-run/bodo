@@ -123,6 +123,11 @@ function getOpenAiClient() {
       if (!apiKey) throw new Error("Missing DEEPSEEK_API_KEY env var.");
       return new OpenAI({ apiKey, baseURL: "https://api.deepseek.com/v1" });
     }
+    case "azure": {
+      const apiKey = Deno.env.get("AZURE_API_KEY");
+      if (!apiKey) throw new Error("Missing AZURE_API_KEY env var.");
+      return new OpenAI({ apiKey, baseURL: "https://api.azure.com/v1" });
+    }
     default: {
       throw new Error(`Unknown AI provider: ${provider}`);
     }
