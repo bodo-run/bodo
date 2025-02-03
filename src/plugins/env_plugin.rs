@@ -7,7 +7,7 @@ use crate::{
 };
 
 pub struct EnvPlugin {
-    global_env: Option<HashMap<String, String>>,
+    pub global_env: Option<HashMap<String, String>>,
 }
 
 impl EnvPlugin {
