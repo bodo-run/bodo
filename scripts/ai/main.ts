@@ -15,37 +15,137 @@ Your task is first to fix the tests that are failing. DO NOT remove any existing
 If all tests are passing, pay attention to the coverage report and add new tests to add more 
 coverage as needed. Code coverage should be executed 100%;
 Provide only and only code updates. Do not provide any other text. You response can be multiple files.
-DO NOT DELETE EXISTING IMPLEMENTATIONS. ONLY ADD TESTS.
+DO NOT DELETE EXISTING IMPLEMENTATIONS. DO NOT DELETE EXISTING TEST. ONLY ADD TESTS.
 
 Important: Add test files to the tests/ directory. Do not add tests in src/ files
 `.trim();
 
-function getOpenAiClient() {
-  const provider = Deno.env.get("AI_PROVIDER");
-  if (provider === "fireworks") {
-    const apiKey = Deno.env.get("FIREWORKS_AI_API_KEY");
-    if (!apiKey) throw new Error("Missing FIREWORKS_AI_API_KEY env var.");
+// make sure coverage dir exists
+Deno.mkdirSync("coverage", { recursive: true });
 
-    const openai = new OpenAI({
-      apiKey,
-      baseURL: "https://api.fireworks.ai/inference/v1/",
-    });
-    const modelName = "accounts/fireworks/models/deepseek-r1";
-    return { openai, modelName };
-  } else if (provider === "openai") {
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) throw new Error("Missing OPENAI_API_KEY env var.");
-    const openai = new OpenAI({ apiKey });
-    const modelName = "o1-preview";
-    return { openai, modelName };
-  } else if (provider === "deepseek") {
-    const apiKey = Deno.env.get("DEEPSEEK_API_KEY");
-    if (!apiKey) throw new Error("Missing DEEPSEEK_API_KEY env var.");
-    const openai = new OpenAI({ apiKey });
-    const modelName = "deepseek-reasoner";
-    return { openai, modelName, baseURL: "https://api.deepseek.com/v1" };
+// Run cargo-llvm-cov in one shot
+const { code, stdout, stderr } = await runCommand("cargo", [
+  "llvm-cov",
+  "test",
+  "--no-fail-fast",
+]);
+// Serialize repo
+const { stdout: repo } = await runCommand("yek", [
+  "--tokens",
+  "120k",
+  "--ignore-patterns",
+  "scripts/ai/*",
+  "--ignore-patterns",
+  ".github/**/*",
+  "--ignore-patterns",
+  "docs/**/*",
+]);
+
+// Get a summary of changes made so far
+const summary = await getChangesSummary(repo);
+
+const aiPrompt = Deno.env.get("AI_PROMPT") || DEFAULT_PROMPT;
+
+// Ask AI to write code
+const textToAi = [
+  `Repository:`,
+  repo,
+  `Summary of changes we made so far:`,
+  summary,
+  `cargo llvm-cov exit code: ${code}`,
+  `STDOUT:`,
+  stdout,
+  `STDERR:`,
+  stderr,
+  `Instructions:`,
+  aiPrompt,
+  `If all tests pass, and coverage is at 100%, return "${ALL_GOOD_TAG}".`,
+  `When you return updated code, format your response as follows:`,
+  FILE_TAG,
+  `<relative/path/to/file>`,
+  START_TAG,
+  `<complete updated file content>`,
+  END_TAG,
+]
+  .map((line) => stripAnsi(line))
+  .join("\n")
+  .trim();
+
+console.log("AI prompt:", textToAi);
+
+const aiContent = await callAi(textToAi);
+
+// Otherwise, parse out any updated code
+const updatedFiles = parseUpdatedFiles(aiContent);
+if (!updatedFiles.length) {
+  console.log("No updated files from AI");
+  Deno.exit(1);
+}
+
+// Write new content
+for (const f of updatedFiles) {
+  await writeFileContent(f.filename, f.content);
+}
+
+// Format & fix code
+await runCommand("cargo", ["fmt"], { showOutput: true });
+await runCommand("cargo", ["clippy", "--fix", "--allow-dirty"], {
+  showOutput: true,
+});
+
+// Review changes again
+const allGood = await reviewChanges();
+if (!allGood) {
+  await runCommand("git", ["add", "reset", "--hard"]);
+  console.log("Changes are not good. Reverted to previous state.");
+}
+
+// ------------------ Utils -------------------
+
+function getOpenAiClient() {
+  const provider = Deno.env.get("AI_PROVIDER") || "ollama";
+
+  switch (provider) {
+    case "ollama": {
+      const apiKey = "";
+      const openai = new OpenAI({
+        apiKey,
+        baseURL: "http://127.0.0.1:11434/v1",
+      });
+      return {
+        openai,
+        modelName: "mistral-small",
+      };
+    }
+    case "fireworks": {
+      const apiKey = Deno.env.get("FIREWORKS_AI_API_KEY");
+      if (!apiKey) throw new Error("Missing FIREWORKS_AI_API_KEY env var.");
+
+      const openai = new OpenAI({
+        apiKey,
+        baseURL: "https://api.fireworks.ai/inference/v1/",
+      });
+      const modelName = "accounts/fireworks/models/deepseek-r1";
+      return { openai, modelName };
+    }
+    case "openai": {
+      const apiKey = Deno.env.get("OPENAI_API_KEY");
+      if (!apiKey) throw new Error("Missing OPENAI_API_KEY env var.");
+      const openai = new OpenAI({ apiKey });
+      const modelName = "o1-preview";
+      return { openai, modelName };
+    }
+    case "deepseek": {
+      const apiKey = Deno.env.get("DEEPSEEK_API_KEY");
+      if (!apiKey) throw new Error("Missing DEEPSEEK_API_KEY env var.");
+      const openai = new OpenAI({ apiKey });
+      const modelName = "deepseek-reasoner";
+      return { openai, modelName, baseURL: "https://api.deepseek.com/v1" };
+    }
+    default: {
+      throw new Error(`Unknown AI provider: ${provider}`);
+    }
   }
-  throw new Error(`Unknown AI provider: ${provider}`);
 }
 
 async function writeFileContent(filePath: string, content: string) {
@@ -84,14 +184,29 @@ async function runCommand(
   };
 }
 
-async function callAi(text: string) {
+async function callAi(
+  text: string,
+  { printOutput = true }: { printOutput?: boolean } = {}
+) {
   const { openai, modelName } = getOpenAiClient();
+  const encoder = new TextEncoder();
   const chatParams: ChatCompletionCreateParams = {
     model: modelName,
+    stream: true,
     messages: [{ role: "user", content: text }],
   };
-  const response = await openai.chat.completions.create(chatParams);
-  return response.choices?.[0]?.message?.content ?? "";
+
+  const res = await openai.chat.completions.create(chatParams);
+  const contents = [];
+  for await (const chunk of res) {
+    const content = chunk.choices[0].delta.content ?? "";
+    contents.push(content);
+    if (printOutput) {
+      Deno.stdout.writeSync(encoder.encode(content));
+    }
+  }
+
+  return contents.join("");
 }
 
 async function reviewChanges() {
@@ -128,90 +243,6 @@ async function getChangesSummary(repo: string) {
   // remove the thinking part
   const summary = summaryAndThinking.replace(/<think>\n.*?\n<\/think>/s, "");
   return summary;
-}
-
-async function main() {
-  // make sure coverage dir exists
-  Deno.mkdirSync("coverage", { recursive: true });
-
-  // Run cargo-llvm-cov in one shot
-  const { code, stdout, stderr } = await runCommand("cargo", [
-    "llvm-cov",
-    "test",
-    "--no-fail-fast",
-  ]);
-  // Serialize repo
-  const { stdout: repo } = await runCommand("yek", [
-    "--tokens",
-    "120k",
-    "--ignore-patterns",
-    "scripts/ai/*",
-    "--ignore-patterns",
-    ".github/**/*",
-    "--ignore-patterns",
-    "docs/**/*",
-  ]);
-  // Get a summary of changes made so far
-  const summary = await getChangesSummary(repo);
-  console.log("Changes summary:", summary);
-
-  const aiPrompt = Deno.env.get("AI_PROMPT") || DEFAULT_PROMPT;
-
-  // Ask AI to write code
-  const textToAi = [
-    `Repository:`,
-    repo,
-    `Summary of changes we made so far:`,
-    summary,
-    `cargo llvm-cov exit code: ${code}`,
-    `STDOUT:`,
-    stdout,
-    `STDERR:`,
-    stderr,
-    `Instructions:`,
-    aiPrompt,
-    `If all tests pass, and coverage is at 100%, return "${ALL_GOOD_TAG}".`,
-    `When you return updated code, format your response as follows:`,
-    FILE_TAG,
-    `<relative/path/to/file>`,
-    START_TAG,
-    `<complete updated file content>`,
-    END_TAG,
-  ]
-    .map((line) => stripAnsi(line))
-    .join("\n")
-    .trim();
-
-  console.log("AI prompt:", textToAi);
-
-  const aiContent = await callAi(textToAi);
-
-  console.log("AI response:", aiContent);
-
-  // Otherwise, parse out any updated code
-  const updatedFiles = parseUpdatedFiles(aiContent);
-  if (!updatedFiles.length) {
-    console.log("No updated files from AI");
-    return;
-  }
-
-  // Write new content
-  for (const f of updatedFiles) {
-    await writeFileContent(f.filename, f.content);
-  }
-
-  // Format & fix code
-  await runCommand("cargo", ["fmt"], { showOutput: true });
-  await runCommand("cargo", ["clippy", "--fix", "--allow-dirty"], {
-    showOutput: true,
-  });
-
-  // Review changes again
-  const allGood = await reviewChanges();
-  if (!allGood) {
-    await runCommand("git", ["add", "reset", "--hard"]);
-    console.log("Changes are good. Reverted to previous state.");
-  }
 }
 
 function parseUpdatedFiles(
@@ -255,5 +286,3 @@ function parseUpdatedFiles(
   }
   return results;
 }
-
-await main();
