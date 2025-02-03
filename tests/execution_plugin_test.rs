@@ -1,3 +1,4 @@
+// tests/execution_plugin_test.rs
 use bodo::errors::{BodoError, Result};
 use bodo::graph::{CommandData, ConcurrentGroupData, Graph, NodeKind, TaskData};
 use bodo::plugin::{Plugin, PluginConfig};
@@ -204,7 +205,7 @@ fn test_run_concurrent_group() -> Result<()> {
         watch: None,
     }));
 
-    let fail_command = "exit 1"; // Command that fails
+    let fail_command = "false"; // Command that fails
 
     let child_task2_id = graph.add_node(NodeKind::Task(TaskData {
         name: "child2".to_string(),

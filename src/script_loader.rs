@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use validator::Validate;
@@ -311,6 +311,29 @@ impl ScriptLoader {
     ) -> Result<()> {
         // Read and parse the script file
         let content = fs::read_to_string(path)?;
+        // First, parse into serde_yaml::Value to check for duplicate tasks
+        let yaml_value: serde_yaml::Value = serde_yaml::from_str(&content)?;
+
+        if let serde_yaml::Value::Mapping(mapping) = &yaml_value {
+            if let Some(tasks_value) = mapping.get(serde_yaml::Value::String("tasks".to_string()))
+            {
+                if let serde_yaml::Value::Mapping(tasks_mapping) = tasks_value {
+                    let mut task_names = HashSet::new();
+                    for (key, _) in tasks_mapping {
+                        if let serde_yaml::Value::String(task_name) = key {
+                            if !task_names.insert(task_name.clone()) {
+                                return Err(BodoError::PluginError(format!(
+                                    "Duplicate task name '{}' found in '{}'",
+                                    task_name,
+                                    path.display()
+                                )));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Then, proceed to parse the content into BodoConfig as before:
         let script_config: BodoConfig = serde_yaml::from_str(&content)?;
 
         let script_env = script_config.env.clone();
