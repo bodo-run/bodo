@@ -230,9 +230,9 @@ fn test_run_concurrent_group() -> Result<()> {
         timeout_secs: None,
     }));
 
-    // Add edges from group to child tasks
-    graph.add_edge(group_id, child_task1_id)?;
-    graph.add_edge(group_id, child_task2_id)?;
+    // Add edges from child tasks to group (reversed from before)
+    graph.add_edge(child_task1_id, group_id)?;
+    graph.add_edge(child_task2_id, group_id)?;
 
     let main_task_id = graph.add_node(NodeKind::Task(TaskData {
         name: "main_task".to_string(),
@@ -252,7 +252,8 @@ fn test_run_concurrent_group() -> Result<()> {
         .task_registry
         .insert("main_task".to_string(), main_task_id);
 
-    graph.add_edge(main_task_id, group_id)?;
+    // Add edge from group to main task (reversed from before)
+    graph.add_edge(group_id, main_task_id)?;
 
     let result = plugin.on_after_run(&mut graph);
 

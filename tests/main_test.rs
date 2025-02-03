@@ -79,22 +79,23 @@ default_task:
                 let output_combined = format!("{}{}", stdout, stderr);
                 assert!(
                     output_combined.contains("Hello from Bodo root!"),
-                    "Output does not contain expected message 'Hello from Bodo root!'"
+                    "Expected output not found"
                 );
                 return;
             }
             Ok(None) => {
                 // Process still running
                 thread::sleep(Duration::from_millis(100));
-                continue;
             }
-            Err(e) => panic!("Error attempting to wait: {}", e),
+            Err(e) => {
+                panic!("Error waiting for process: {}", e);
+            }
         }
     }
 
-    // If we get here, the process timed out
+    // If we get here, the process didn't finish in time
     child.kill().expect("Failed to kill process");
-    panic!("Process timed out after {} seconds", timeout.as_secs());
+    panic!("Process did not finish within timeout");
 }
 
 #[test]

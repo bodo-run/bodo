@@ -235,8 +235,13 @@ fn run_concurrent_group(
 
     for &child_id in &group_data.child_nodes {
         if pending.len() >= max_concurrent {
-            pm.run_concurrently()
-                .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
+            // Run the current batch and handle any errors
+            if let Err(e) = pm.run_concurrently() {
+                return Err(BodoError::PluginError(format!(
+                    "Concurrent execution failed: {}",
+                    e
+                )));
+            }
             pm = ProcessManager::new(group_data.fail_fast);
             pending.clear();
         }
@@ -279,8 +284,13 @@ fn run_concurrent_group(
     }
 
     if !pending.is_empty() {
-        pm.run_concurrently()
-            .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
+        // Run the remaining commands and handle any errors
+        if let Err(e) = pm.run_concurrently() {
+            return Err(BodoError::PluginError(format!(
+                "Concurrent execution failed: {}",
+                e
+            )));
+        }
     }
     Ok(())
 }
