@@ -119,7 +119,11 @@ async function main() {
   Deno.mkdirSync("coverage", { recursive: true });
 
   // Run cargo-llvm-cov in one shot
-  const { code, stdout, stderr } = await runCommand("cargo", ["llvm-cov"]);
+  const { code, stdout, stderr } = await runCommand("cargo", [
+    "llvm-cov",
+    "test",
+    "--no-fail-fast",
+  ]);
   // Serialize repo
   const { stdout: repo } = await runCommand("yek", [
     "--tokens",

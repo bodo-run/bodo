@@ -72,31 +72,45 @@ impl Default for ExecutionPlugin {
 }
 
 /// Simple expansion of `$KEY` with the environment map's values. Not robust for all shells.
-fn expand_env_vars(original: &str, env_map: &std::collections::HashMap<String, String>) -> String {
+pub fn expand_env_vars(
+    original: &str,
+    env_map: &std::collections::HashMap<String, String>,
+) -> String {
     let mut result = String::new();
     let mut chars = original.chars().peekable();
     while let Some(ch) = chars.next() {
         if ch == '$' {
-            // attempt to read a variable name
-            let mut var_name = String::new();
-            while let Some(peek_ch) = chars.peek() {
-                if peek_ch.is_alphanumeric() || *peek_ch == '_' {
-                    var_name.push(*peek_ch);
-                    chars.next();
-                } else {
-                    break;
-                }
-            }
-            if !var_name.is_empty() {
-                if let Some(val) = env_map.get(&var_name) {
-                    result.push_str(val);
-                } else {
-                    // no match in env, leave as is
+            if let Some(&next_ch) = chars.peek() {
+                if next_ch == '$' {
+                    // handle $$ as a literal $
                     result.push('$');
-                    result.push_str(&var_name);
+                    chars.next(); // consume the second '$'
+                } else {
+                    // attempt to read a variable name
+                    let mut var_name = String::new();
+                    while let Some(peek_ch) = chars.peek() {
+                        if peek_ch.is_alphanumeric() || *peek_ch == '_' {
+                            var_name.push(*peek_ch);
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    if !var_name.is_empty() {
+                        if let Some(val) = env_map.get(&var_name) {
+                            result.push_str(val);
+                        } else {
+                            // no match in env, leave as is
+                            result.push('$');
+                            result.push_str(&var_name);
+                        }
+                    } else {
+                        // '$' followed by non-alphanumeric, just output '$'
+                        result.push('$');
+                    }
                 }
             } else {
-                // just a lone '$'
+                // '$' at end of string
                 result.push('$');
             }
         } else {
@@ -229,7 +243,7 @@ fn run_concurrent_group(
                 }
             }
             NodeKind::Command(cmd) => {
-                let label = format!("cmd-{}", child_node.id);
+                let label = format!("cmd-{}", child_id);
                 let final_cmd = expand_env_vars(&cmd.raw_command, &cmd.env);
                 pm.spawn_command(
                     &label,

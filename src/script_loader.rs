@@ -32,29 +32,24 @@ impl ScriptLoader {
         }
     }
 
-    // [CASCADING CHANGE] Helper function for merging environment variables
     fn merge_envs(
         global_env: &HashMap<String, String>,
         script_env: &HashMap<String, String>,
         task_env: &HashMap<String, String>,
     ) -> HashMap<String, String> {
         let mut merged = HashMap::new();
-        // Start with global
         for (k, v) in global_env {
             merged.insert(k.clone(), v.clone());
         }
-        // Merge script-level, overriding if keys conflict
         for (k, v) in script_env {
             merged.insert(k.clone(), v.clone());
         }
-        // Merge task-level
         for (k, v) in task_env {
             merged.insert(k.clone(), v.clone());
         }
         merged
     }
 
-    // Helper function for merging exec_paths
     fn merge_exec_paths(
         global_paths: &[String],
         script_paths: &[String],
@@ -68,14 +63,12 @@ impl ScriptLoader {
     }
 
     pub fn build_graph(&mut self, config: BodoConfig) -> Result<Graph> {
-        // Validate the BodoConfig first
         config.validate().map_err(BodoError::from)?;
 
         let mut graph = Graph::new();
         let mut paths_to_load = vec![];
         let mut root_script_abs: Option<PathBuf> = None;
 
-        // Store global env and exec_paths to pass to load_script
         let global_env = config.env.clone();
         let global_exec_paths = config.exec_paths.clone();
 
@@ -83,7 +76,7 @@ impl ScriptLoader {
             let root_path = PathBuf::from(root_script);
             if root_path.exists() {
                 root_script_abs = Some(root_path.canonicalize()?);
-                paths_to_load.push((root_path, "".to_string()));
+                paths_to_load.insert(0, (root_path, "".to_string()));
             }
         }
 
@@ -139,8 +132,76 @@ impl ScriptLoader {
             )?;
         }
 
+        // Load tasks from BodoConfig.tasks
+        if !config.tasks.is_empty() {
+            let script_display_name = "".to_string();
+            let script_id = "config".to_string();
+
+            for (task_name, task_config) in &config.tasks {
+                self.validate_task_config(task_config, task_name, Path::new("config"))?;
+
+                let task_config = {
+                    let mut tc = task_config.clone();
+                    tc.env = Self::merge_envs(&global_env, &HashMap::new(), &tc.env);
+                    tc.exec_paths =
+                        Self::merge_exec_paths(&global_exec_paths, &Vec::new(), &tc.exec_paths);
+                    tc
+                };
+
+                let task_id = self.create_task_node(
+                    &mut graph,
+                    &script_id,
+                    &script_display_name,
+                    task_name,
+                    &task_config,
+                );
+                self.register_task(&script_id, task_name, task_id, &mut graph)?;
+
+                for dep in &task_config.pre_deps {
+                    match dep {
+                        Dependency::Task { task } => {
+                            let dep_id =
+                                self.resolve_dependency(task, Path::new("config"), &mut graph)?;
+                            graph.add_edge(dep_id, task_id)?;
+                        }
+                        Dependency::Command { command } => {
+                            let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                                raw_command: command.clone(),
+                                description: None,
+                                working_dir: None,
+                                env: HashMap::new(),
+                                watch: None,
+                            }));
+                            graph.add_edge(cmd_node_id, task_id)?;
+                        }
+                    }
+                }
+                for dep in &task_config.post_deps {
+                    match dep {
+                        Dependency::Task { task } => {
+                            let dep_id =
+                                self.resolve_dependency(task, Path::new("config"), &mut graph)?;
+                            graph.add_edge(task_id, dep_id)?;
+                        }
+                        Dependency::Command { command } => {
+                            let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                                raw_command: command.clone(),
+                                description: None,
+                                working_dir: None,
+                                env: HashMap::new(),
+                                watch: None,
+                            }));
+                            graph.add_edge(task_id, cmd_node_id)?;
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(graph)
     }
+
+    // ... rest of the code ...
 
     fn validate_task_config(
         &self,
@@ -148,11 +209,9 @@ impl ScriptLoader {
         task_name: &str,
         path: &Path,
     ) -> Result<()> {
-        // Set the task name for validation
         let mut task = task_config.clone();
         task._name_check = Some(task_name.to_string());
 
-        // Run validation
         if let Err(e) = task.validate() {
             warn!("Invalid task '{}' in {}: {}", task_name, path.display(), e);
             return Err(BodoError::ValidationError(format!(
@@ -184,7 +243,6 @@ impl ScriptLoader {
         let contents = fs::read_to_string(path)?;
         let yaml: serde_yaml::Value = serde_yaml::from_str(&contents)?;
 
-        // [CASCADING CHANGE] Parse script-level env if present
         let script_env = if let Some(env_val) = yaml.get("env") {
             if let Some(map) = env_val.as_mapping() {
                 let mut senv = HashMap::new();
@@ -201,7 +259,6 @@ impl ScriptLoader {
             HashMap::new()
         };
 
-        // Parse script-level exec_paths if present
         let script_exec_paths = if let Some(paths_val) = yaml.get("exec_paths") {
             if let Some(arr) = paths_val.as_sequence() {
                 arr.iter()
@@ -228,7 +285,6 @@ impl ScriptLoader {
             let mut task_config: TaskConfig =
                 serde_yaml::from_value::<TaskConfig>(default_task.clone())?;
 
-            // Merge environments and exec_paths for default task
             task_config.env = Self::merge_envs(global_env, &script_env, &task_config.env);
             task_config.exec_paths = Self::merge_exec_paths(
                 global_exec_paths,
@@ -236,7 +292,6 @@ impl ScriptLoader {
                 &task_config.exec_paths,
             );
 
-            // Validate default task
             self.validate_task_config(&task_config, "default", path)?;
 
             let default_id = self.create_task_node(
@@ -255,7 +310,6 @@ impl ScriptLoader {
                 let name = k.as_str().unwrap_or_default().to_string();
                 let mut task_config: TaskConfig = serde_yaml::from_value::<TaskConfig>(v.clone())?;
 
-                // Merge environments and exec_paths for each task
                 task_config.env = Self::merge_envs(global_env, &script_env, &task_config.env);
                 task_config.exec_paths = Self::merge_exec_paths(
                     global_exec_paths,
@@ -263,7 +317,6 @@ impl ScriptLoader {
                     &task_config.exec_paths,
                 );
 
-                // Validate task config
                 self.validate_task_config(&task_config, &name, path)?;
 
                 let task_id = self.create_task_node(
@@ -278,7 +331,6 @@ impl ScriptLoader {
             }
         }
 
-        // Handle dependencies after all tasks are created
         for (task_id, task_config) in task_ids {
             for dep in task_config.pre_deps {
                 match dep {
@@ -291,8 +343,8 @@ impl ScriptLoader {
                             raw_command: command,
                             description: None,
                             working_dir: None,
+                            env: std::collections::HashMap::new(),
                             watch: None,
-                            env: HashMap::new(),
                         }));
                         graph.add_edge(cmd_node_id, task_id)?;
                     }
@@ -309,8 +361,8 @@ impl ScriptLoader {
                             raw_command: command,
                             description: None,
                             working_dir: None,
+                            env: std::collections::HashMap::new(),
                             watch: None,
-                            env: HashMap::new(),
                         }));
                         graph.add_edge(task_id, cmd_node_id)?;
                     }
@@ -455,7 +507,6 @@ impl ScriptLoader {
     ) -> Result<u64> {
         if let Some((script_path, fallback_name)) = self.parse_cross_file_ref(dep, referencing_file)
         {
-            // [CASCADING CHANGE] Create empty global env for cross-file references
             let empty_global_env = HashMap::new();
             self.load_script(graph, &script_path, &fallback_name, &empty_global_env, &[])?;
         }
