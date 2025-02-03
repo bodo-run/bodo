@@ -1,4 +1,5 @@
 // tests/execution_plugin_test.rs
+
 use std::collections::HashMap;
 
 use bodo::errors::{BodoError, Result};
@@ -170,7 +171,7 @@ fn test_execution_plugin_command_failure() -> Result<()> {
     let node_id = graph.add_node(NodeKind::Task(TaskData {
         name: "test_task".to_string(),
         description: None,
-        command: Some("invalid_command".to_string()), // Command that fails
+        command: Some("exit 1".to_string()), // Command that fails
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
@@ -206,7 +207,7 @@ fn test_run_concurrent_group() -> Result<()> {
         watch: None,
     }));
 
-    let fail_command = "invalid_command"; // Command that fails
+    let fail_command = "exit 1"; // Command that fails
 
     let child_task2_id = graph.add_node(NodeKind::Task(TaskData {
         name: "child2".to_string(),
