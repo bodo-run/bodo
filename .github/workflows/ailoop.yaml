@@ -115,19 +115,16 @@ jobs:
           done
           echo "success=${SUCCESS}" >> "$GITHUB_OUTPUT"
 
-      - name: Create PR or Issue
+      - name: Create PR
         if: always() && ${{ github.event.inputs.pr-on-fail }}
-        uses: peter-evans/create-pull-request@v5
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           MAX_ATTEMPTS: ${{ env.MAX_ATTEMPTS }}
-        with:
-          token: ${{ env.GH_TOKEN }}
-          commit-message: "AI Loop"
-          title: "AI tests for \\`${{ env.BASE_BRANCH }}\\` branch"
-          body: |
-            - Successful: ${{ steps.ai_loop.outputs.success != 0 }}
-            - Attempts: `${{ steps.ai_loop.outputs.last_attempt }} / ${{ env.MAX_ATTEMPTS }}`
-            - [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          branch: ${{ env.NEW_BRANCH }}
-          base: ${{ env.BASE_BRANCH }}
+        run: |
+          gh pr create \
+            --title "AI tests for \`${{ env.BASE_BRANCH }}\` branch" \
+            --body "- Successful: ${{ steps.ai_loop.outputs.success != 0 }}
+            - Attempts: \`${{ steps.ai_loop.outputs.last_attempt }} / ${{ env.MAX_ATTEMPTS }}\`
+            - [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" \
+            --base "${{ env.BASE_BRANCH }}" \
+            --head "${{ env.NEW_BRANCH }}"
