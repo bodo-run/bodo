@@ -467,6 +467,7 @@ impl ScriptLoader {
             script_id: script_id.to_string(),
             script_display_name: script_display_name.to_string(),
             watch: task_config.watch.clone(),
+            arguments: task_config.arguments.clone(),
         };
         graph.add_node(NodeKind::Task(task_data))
     }

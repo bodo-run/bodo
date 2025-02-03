@@ -207,6 +207,7 @@ pub struct BodoConfig {
     #[validate]
     pub default_task: Option<TaskConfig>,
 
+    #[serde(default)]
     #[validate]
     pub tasks: HashMap<String, TaskConfig>,
 

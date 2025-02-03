@@ -77,7 +77,7 @@ impl GraphManager {
             concurrently_options: Default::default(),
             concurrently: vec![],
             exec_paths: task_data.exec_paths.clone(),
-            arguments: Vec::new(),
+            arguments: task_data.arguments.clone(),
             _name_check: None,
         })
     }
