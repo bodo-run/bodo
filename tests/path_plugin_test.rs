@@ -21,15 +21,18 @@ fn test_path_plugin_on_init() {
     };
     let result = plugin.on_init(&config);
     assert!(result.is_ok());
-    assert_eq!(plugin.default_paths, vec!["/usr/local/bin".to_string()]);
-    assert_eq!(plugin.preserve_path, false);
+    assert_eq!(
+        plugin.get_default_paths(),
+        &vec!["/usr/local/bin".to_string()]
+    );
+    assert!(!plugin.get_preserve_path());
 }
 
 #[test]
 fn test_path_plugin_on_graph_build() {
     let mut plugin = PathPlugin::new();
-    plugin.default_paths = vec!["/usr/bin".to_string()];
-    plugin.preserve_path = false;
+    plugin.set_default_paths(vec!["/usr/bin".to_string()]);
+    plugin.set_preserve_path(false);
     let mut graph = Graph::new();
     let task_id = graph.add_node(NodeKind::Task(TaskData {
         name: "test_task".to_string(),
