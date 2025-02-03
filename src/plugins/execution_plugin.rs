@@ -11,7 +11,7 @@ use crate::{
 };
 
 pub struct ExecutionPlugin {
-    task_name: Option<String>,
+    pub task_name: Option<String>,
 }
 
 impl ExecutionPlugin {
@@ -229,7 +229,7 @@ fn run_concurrent_group(
                 }
             }
             NodeKind::Command(cmd) => {
-                let label = format!("cmd-{}", child_node.id);
+                let label = format!("cmd-{}", child_id);
                 let final_cmd = expand_env_vars(&cmd.raw_command, &cmd.env);
                 pm.spawn_command(
                     &label,

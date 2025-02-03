@@ -43,6 +43,22 @@ impl PathPlugin {
 
         paths.join(":")
     }
+
+    pub fn get_default_paths(&self) -> &Vec<String> {
+        &self.default_paths
+    }
+
+    pub fn get_preserve_path(&self) -> bool {
+        self.preserve_path
+    }
+
+    pub fn set_default_paths(&mut self, paths: Vec<String>) {
+        self.default_paths = paths;
+    }
+
+    pub fn set_preserve_path(&mut self, preserve: bool) {
+        self.preserve_path = preserve;
+    }
 }
 
 impl Default for PathPlugin {
