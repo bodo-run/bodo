@@ -30,11 +30,12 @@ on:
         required: true
         type: choice
         options:
-          - mistral-small
-          - o1-mini
-          - o1-preview
-          - accounts/fireworks/models/deepseek-r1
-          - accounts/fireworks/models/deepseek-coder
+          - o1-mini # OpenAI
+          - o1-preview # OpenAI
+          - accounts/fireworks/models/deepseek-r1 # Fireworks AI
+          - accounts/fireworks/models/deepseek-coder # Fireworks AI
+          - deepseek-reasoner # DeepSeek AI
+          - deepseek-coder # DeepSeek AI
 
 permissions:
   contents: write
