@@ -407,7 +407,7 @@ impl ScriptLoader {
         Ok(())
     }
 
-    fn resolve_dependency(
+    pub fn resolve_dependency(
         &mut self,
         dep: &str,
         referencing_file: &Path,
@@ -450,7 +450,7 @@ impl ScriptLoader {
         )))
     }
 
-    fn parse_cross_file_ref(
+    pub fn parse_cross_file_ref(
         &self,
         dep: &str,
         referencing_file: &Path,
