@@ -57,8 +57,8 @@ fn test_bodo_error_display_for_serialization_errors() {
         "YAML error message should not be empty"
     );
     assert!(
-        format!("{}", bodo_err).contains("did not find expected"),
-        "YAML error message should mention expected token"
+        format!("{}", bodo_err).contains("mapping values are not allowed"),
+        "YAML error message should mention mapping values error"
     );
 }
 
