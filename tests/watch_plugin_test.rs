@@ -1,5 +1,6 @@
 use bodo::config::WatchConfig;
 use bodo::graph::{NodeKind, TaskData};
+use bodo::plugin::Plugin;
 use bodo::plugins::watch_plugin::WatchPlugin;
 use bodo::Graph;
 use std::collections::HashMap;
