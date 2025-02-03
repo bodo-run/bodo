@@ -46,10 +46,9 @@ default_task:
     // Set environment variables to point to our temp scripts directory
     let root_script_env = scripts_dir
         .join("script.yaml")
-        .to_str()
-        .unwrap()
-        .to_string();
-    let scripts_dirs_env = scripts_dir.to_str().unwrap().to_string();
+        .to_string_lossy()
+        .into_owned();
+    let scripts_dirs_env = scripts_dir.to_string_lossy().into_owned();
 
     let mut child = Command::new(exe_path)
         // .arg("default") // No need to specify 'default' since we're testing the default task
