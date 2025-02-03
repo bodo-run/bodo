@@ -1,4 +1,6 @@
-use bodo::config::BodoConfig;
+// tests/script_loader_test.rs
+
+use bodo::config::{BodoConfig, TaskConfig};
 use bodo::graph::{Graph, NodeKind, TaskData};
 use bodo::script_loader::ScriptLoader;
 use std::fs;
@@ -23,7 +25,6 @@ tasks:
 
     let graph = loader.build_graph(config).unwrap();
 
-    // Adjusted assertion with correct task name
     let script_id = script_path.display().to_string();
 
     let full_task_name = format!("{} {}", script_id, "test_task");
@@ -61,7 +62,6 @@ tasks:
 
     let graph = loader.build_graph(config).unwrap();
 
-    // Adjusted assertions with correct task names
     let script_id1 = script1_path.canonicalize().unwrap().display().to_string();
     let full_task_name1 = format!("{} {}", script_id1, "task1");
     let script_id2 = script2_path.canonicalize().unwrap().display().to_string();
@@ -108,7 +108,6 @@ tasks:
     assert!(graph.task_registry.contains_key(&full_task1_name));
     assert!(graph.task_registry.contains_key(&full_task2_name));
 
-    // Check that there's an edge from task2 to task1
     let task1_id = graph.task_registry.get(&full_task1_name).unwrap();
     let task2_id = graph.task_registry.get(&full_task2_name).unwrap();
 
@@ -204,9 +203,64 @@ fn test_format_cycle_error() {
 fn test_generate_schema() {
     let schema = BodoConfig::generate_schema();
     assert!(!schema.is_empty(), "Schema should not be empty");
-    // Optionally, verify that the schema contains certain expected strings
     assert!(
         schema.contains("\"title\": \"BodoConfig\""),
         "Schema should contain BodoConfig title"
+    );
+}
+
+#[test]
+fn test_build_graph_with_root_script_and_config_tasks() {
+    let temp_dir = tempdir().unwrap();
+    let root_script_path = temp_dir.path().join("root_script.yaml");
+    let scripts_dir = temp_dir.path().join("scripts");
+    fs::create_dir_all(&scripts_dir).unwrap();
+
+    let root_script_content = r#"
+tasks:
+  root_task:
+    command: echo "Root task"
+"#;
+
+    fs::write(&root_script_path, root_script_content).unwrap();
+
+    // Config with root_script and tasks
+    let mut config = BodoConfig::default();
+    config.root_script = Some(root_script_path.to_string_lossy().to_string());
+    config.default_task = Some(TaskConfig {
+        command: Some("echo 'Default Task in Config'".to_string()),
+        ..Default::default()
+    });
+    config.tasks.insert(
+        "config_task".to_string(),
+        TaskConfig {
+            command: Some("echo 'Config Task'".to_string()),
+            ..Default::default()
+        },
+    );
+
+    config.scripts_dirs = Some(vec![scripts_dir.to_string_lossy().to_string()]);
+
+    let mut loader = ScriptLoader::new();
+    let graph = loader.build_graph(config).unwrap();
+
+    // Expect that only tasks from root_script are loaded
+    let root_script_id = root_script_path
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
+    let full_root_task_name = format!("{} {}", root_script_id, "root_task");
+    assert!(
+        graph.task_registry.contains_key(&full_root_task_name),
+        "Expected 'root_task' from root_script to be loaded"
+    );
+    assert!(
+        !graph.task_registry.contains_key("default"),
+        "Did not expect 'default' task from config to be loaded when root_script is specified"
+    );
+    assert!(
+        !graph.task_registry.contains_key("config_task"),
+        "Did not expect 'config_task' from config to be loaded when root_script is specified"
     );
 }

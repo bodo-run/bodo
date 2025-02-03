@@ -2,7 +2,6 @@
 
 use bodo::config::BodoConfig;
 use bodo::errors::BodoError;
-use bodo::graph::NodeKind;
 use bodo::script_loader::ScriptLoader;
 use std::fs;
 use tempfile::tempdir;
@@ -11,10 +10,6 @@ use tempfile::tempdir;
 fn test_load_script_with_duplicate_tasks() {
     let temp_dir = tempdir().unwrap();
     let script_path = temp_dir.path().join("script.yaml");
-
-    // Due to serde_yaml limitations, duplicate keys are not treated as an error, and the last occurrence overwrites the previous one
-    // So we cannot expect an error in this case
-    // Instead, we can check that the task named 'duplicate_task' has the command from the second definition
 
     let script_content = r#"
 tasks:
@@ -32,44 +27,23 @@ tasks:
 
     let result = loader.build_graph(config);
     assert!(
-        result.is_ok(),
-        "Expected build_graph to succeed, but it failed: {:?}",
+        result.is_err(),
+        "Expected build_graph to fail due to duplicate task names, but it succeeded: {:?}",
         result
     );
 
-    let graph = result.unwrap();
-
-    // Now, we can check that the task 'duplicate_task' exists in the graph, and its command is 'echo "Second definition"'
-
-    let task_node_id = graph.task_registry.iter().find_map(|(k, v)| {
-        if k.contains("duplicate_task") {
-            Some(v)
-        } else {
-            None
-        }
-    });
-    assert!(
-        task_node_id.is_some(),
-        "Expected to find 'duplicate_task' in task_registry"
-    );
-
-    let node_id = *task_node_id.unwrap();
-    let node = &graph.nodes[node_id as usize];
-
-    if let NodeKind::Task(task_data) = &node.kind {
-        assert_eq!(
-            task_data.name, "duplicate_task",
-            "Expected task name to be 'duplicate_task', found '{}'",
-            task_data.name
-        );
-        assert_eq!(
-            task_data.command.as_deref(),
-            Some("echo \"Second definition\""),
-            "Expected command to be 'echo \"Second definition\"', found '{:?}'",
-            task_data.command
+    if let Err(BodoError::YamlError(e)) = result {
+        let error_message = e.to_string();
+        assert!(
+            error_message.contains("duplicate entry with key \"duplicate_task\""),
+            "Expected error message to mention duplicate key, but got: {}",
+            error_message
         );
     } else {
-        panic!("Expected node of kind Task");
+        panic!(
+            "Expected YamlError due to duplicate keys, but got a different error: {:?}",
+            result
+        );
     }
 }
 
