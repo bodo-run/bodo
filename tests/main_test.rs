@@ -16,10 +16,10 @@ fn test_bodo_default() {
     assert!(status.success(), "Cargo build failed");
 
     // Build the path to the built 'bodo' executable
-    let mut exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    exe_path.push("target");
-    exe_path.push("debug");
-    exe_path.push("bodo");
+    let mut exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("debug")
+        .join("bodo");
     #[cfg(windows)]
     exe_path.set_extension("exe");
 
