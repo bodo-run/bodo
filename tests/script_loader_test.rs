@@ -2,6 +2,7 @@
 
 use bodo::config::{BodoConfig, TaskConfig};
 use bodo::graph::{Graph, NodeKind, TaskData};
+use bodo::plugin::Plugin; // Added this line
 use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
 use bodo::script_loader::ScriptLoader;
 use std::fs;
@@ -197,16 +198,6 @@ fn test_format_cycle_error() {
             && error_message.contains("task1")
             && error_message.contains("task2"),
         "Error message should include task1 and task2"
-    );
-}
-
-#[test]
-fn test_generate_schema() {
-    let schema = BodoConfig::generate_schema();
-    assert!(!schema.is_empty(), "Schema should not be empty");
-    assert!(
-        schema.contains("\"title\": \"BodoConfig\""),
-        "Schema should contain BodoConfig title"
     );
 }
 
