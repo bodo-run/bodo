@@ -11,7 +11,9 @@ const END_TAG = "__FILE_CONTENT_END__";
 const ALL_GOOD_TAG = "DONE_ALL_TESTS_PASS_AND_COVERAGE_IS_GOOD";
 const DEFAULT_PROMPT = `
 You are given the full respository, results of the test run, and the coverage report.
-Your task is first to fix the tests that are failing. DO NOT remove any existing implementations to make the tests pass.
+Your task is first to fix the tests that are failing. 
+Pick one test and try to fix that one failing test if multiple tests are failing.
+DO NOT remove any existing implementations to make the tests pass.
 If all tests are passing, pay attention to the coverage report and add new tests to add more 
 coverage as needed. Code coverage should be executed 100%;
 Provide only and only code updates. Do not provide any other text. You response can be multiple files.
@@ -27,19 +29,10 @@ Deno.mkdirSync("coverage", { recursive: true });
 const { code, stdout, stderr } = await runCommand("cargo", [
   "llvm-cov",
   "test",
-  "--no-fail-fast",
+  "--ignore-run-fail",
 ]);
 // Serialize repo
-const { stdout: repo } = await runCommand("yek", [
-  "--tokens",
-  "120k",
-  "--ignore-patterns",
-  "scripts/ai/*",
-  "--ignore-patterns",
-  ".github/**/*",
-  "--ignore-patterns",
-  "docs/**/*",
-]);
+const { stdout: repo } = await runCommand("yek", ["--tokens", "120k"]);
 
 // Get a summary of changes made so far
 const summary = await getChangesSummary(repo);

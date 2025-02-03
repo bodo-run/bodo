@@ -1,9 +1,13 @@
 output_dir: "./repo-serialized"
 
 ignore_patterns:
-  - "docs/"
-  - "target/"
-  - "DESIGN.md"
+  - "docs/**/*"
+  - "target/**/*"
+  - "scripts/ai/**/*"
+  - ".github/**/*"
+  - "coverage/**/*"
+  - "coverage-report/**/*"
+  - "repo-serialized/**/*"
 
 priority_rules:
   - score: 100
