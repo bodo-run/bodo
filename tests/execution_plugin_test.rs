@@ -228,6 +228,10 @@ fn test_run_concurrent_group() -> Result<()> {
         timeout_secs: None,
     }));
 
+    // Add edges from group to child tasks
+    graph.add_edge(group_id, child_task1_id)?;
+    graph.add_edge(group_id, child_task2_id)?;
+
     let main_task_id = graph.add_node(NodeKind::Task(TaskData {
         name: "main_task".to_string(),
         description: None,
