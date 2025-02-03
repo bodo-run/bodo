@@ -24,6 +24,17 @@ on:
           - openai
           - fireworks
           - deepseek
+      model:
+        description: "AI model"
+        default: "accounts/fireworks/models/deepseek-r1"
+        required: true
+        type: choice
+        options:
+          - mistral-small
+          - o1-mini
+          - o1-preview
+          - accounts/fireworks/models/deepseek-r1
+          - accounts/fireworks/models/deepseek-coder
 
 permissions:
   contents: write
