@@ -13,7 +13,7 @@ fn test_watch_plugin_on_init_no_watch() {
         ..Default::default()
     };
     plugin.on_init(&config).unwrap();
-    assert!(!plugin.watch_mode);
+    assert!(!plugin.is_watch_mode());
 }
 
 #[test]
@@ -24,7 +24,7 @@ fn test_watch_plugin_on_init_with_watch() {
         ..Default::default()
     };
     plugin.on_init(&config).unwrap();
-    assert!(plugin.watch_mode);
+    assert!(plugin.is_watch_mode());
 }
 
 #[test]
@@ -60,7 +60,7 @@ fn test_watch_plugin_on_graph_build_with_auto_watch_and_env_var_set() {
     plugin.on_graph_build(&mut graph).unwrap();
 
     // Ensure that watch_mode remains false due to BODO_NO_WATCH
-    assert!(!plugin.watch_mode);
+    assert!(!plugin.is_watch_mode());
 
     // Unset the environment variable for other tests
     std::env::remove_var("BODO_NO_WATCH");
@@ -99,7 +99,7 @@ fn test_watch_plugin_on_graph_build_with_auto_watch() {
     plugin.on_graph_build(&mut graph).unwrap();
 
     // Ensure that watch_mode is now true due to auto_watch
-    assert!(plugin.watch_mode);
+    assert!(plugin.is_watch_mode());
 }
 
 #[test]

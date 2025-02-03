@@ -47,6 +47,14 @@ impl WatchPlugin {
         self.watch_entries.len()
     }
 
+    pub fn is_watch_mode(&self) -> bool {
+        self.watch_mode
+    }
+
+    // We'll store a pointer to whether we need to re-run the entire pipeline. In a real setup
+    // you might want a reference to the GraphManager or some approach to re-run tasks.
+    // Here we'll keep it simpler and just store a flag we can read in on_after_run.
+
     fn create_watcher() -> Result<(RecommendedWatcher, Receiver<notify::Result<Event>>)> {
         debug!("Creating file watcher with 1s poll interval");
         let (tx, rx) = mpsc::channel();
