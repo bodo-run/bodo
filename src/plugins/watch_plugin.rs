@@ -413,12 +413,3 @@ impl Plugin for WatchPlugin {
         self
     }
 }
-
-// Function moved outside of impl block
-// A small helper that just returns some BodoConfig with "scripts/" as script dirs
-fn graph_manager_config_snapshot() -> Result<crate::config::BodoConfig> {
-    Ok(crate::config::BodoConfig {
-        scripts_dirs: Some(vec!["scripts/".into()]),
-        ..Default::default()
-    })
-}
