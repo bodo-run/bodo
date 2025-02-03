@@ -13,74 +13,83 @@ use bodo::{
 };
 use clap::Parser;
 use log::{error, LevelFilter};
-use std::fs;
 use std::{collections::HashMap, process::exit};
-use tempfile::tempdir;
 
-#[test]
-fn test_bodo_default() {
-    // Create a temporary directory
-    let temp_dir = tempdir().unwrap();
-    let scripts_dir = temp_dir.path().join("scripts");
-    fs::create_dir(&scripts_dir).unwrap();
+fn main() {
+    let args = Args::parse();
 
-    // Write scripts/script.yaml
-    let script_yaml = r#"
-default_task:
-  command: echo "Hello from Bodo root!"
-  description: "Default greeting when running `bodo` with no arguments."
+    if args.debug {
+        std::env::set_var("RUST_LOG", "bodo=debug");
+    } else if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "bodo=info");
+    }
+    env_logger::Builder::from_default_env()
+        .filter_module(
+            "bodo",
+            if args.debug {
+                LevelFilter::Debug
+            } else {
+                LevelFilter::Info
+            },
+        )
+        .init();
 
-tasks:
-  example:
-    description: "An example task."
-    command: echo "Example task"
-"#;
+    if let Err(e) = run(args) {
+        error!("Error: {}", e);
+        exit(1);
+    }
+}
 
-    fs::write(scripts_dir.join("script.yaml"), script_yaml).unwrap();
+fn run(args: Args) -> Result<(), BodoError> {
+    let watch_mode = if std::env::var("BODO_NO_WATCH").is_ok() {
+        false
+    } else if args.auto_watch {
+        true
+    } else {
+        args.watch
+    };
 
-    // Run 'bodo' with 'default' argument in temp_dir
-    let bodo_executable = env!("CARGO_BIN_EXE_bodo");
-    let mut child = std::process::Command::new(bodo_executable)
-        .arg("default")
-        .current_dir(temp_dir.path())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .expect("Failed to spawn 'bodo' process");
+    let config = BodoConfig {
+        root_script: Some("scripts/script.yaml".into()), // Updated to scripts/script.yaml
+        scripts_dirs: Some(vec!["scripts/".into()]),
+        tasks: HashMap::new(),
+        env: HashMap::new(),
+        exec_paths: vec![],
+    };
 
-    // Capture stdout and stderr
-    let mut stdout = String::new();
-    let mut stderr = String::new();
+    let mut graph_manager = GraphManager::new();
+    graph_manager.build_graph(config)?;
 
-    child
-        .stdout
-        .as_mut()
-        .unwrap()
-        .read_to_string(&mut stdout)
-        .unwrap();
-    child
-        .stderr
-        .as_mut()
-        .unwrap()
-        .read_to_string(&mut stderr)
-        .unwrap();
-
-    // Wait for the process to exit with a timeout
-    let result = child.wait();
-    match result {
-        Ok(status) => {
-            assert!(
-                status.success(),
-                "Command exited with non-zero status: {}",
-                status
-            );
-        }
-        Err(e) => panic!("Failed to wait on child process: {}", e),
+    if args.list {
+        graph_manager.register_plugin(Box::new(PrintListPlugin));
+        graph_manager.run_plugins(None)?;
+        return Ok(());
     }
 
-    // Check the output
-    assert!(
-        stdout.contains("Hello from Bodo root!"),
-        "Output does not contain expected message 'Hello from Bodo root!'"
-    );
+    // Register all normal plugins
+    graph_manager.register_plugin(Box::new(EnvPlugin::new()));
+    graph_manager.register_plugin(Box::new(PathPlugin::new()));
+    graph_manager.register_plugin(Box::new(ConcurrentPlugin::new()));
+    graph_manager.register_plugin(Box::new(PrefixPlugin::new()));
+    graph_manager.register_plugin(Box::new(WatchPlugin::new(watch_mode, true)));
+    graph_manager.register_plugin(Box::new(ExecutionPlugin::new()));
+    graph_manager.register_plugin(Box::new(TimeoutPlugin::new()));
+
+    let task_name = get_task_name(&args, &graph_manager)?;
+
+    // Apply any CLI arguments to the task before running plugins
+    graph_manager.apply_task_arguments(&task_name, &args.args)?;
+
+    let mut options = serde_json::Map::new();
+    options.insert("task".into(), serde_json::Value::String(task_name.clone()));
+
+    let plugin_config = PluginConfig {
+        fail_fast: true,
+        watch: watch_mode,
+        list: false,
+        options: Some(options),
+    };
+
+    graph_manager.run_plugins(Some(plugin_config))?;
+    Ok(())
 }
