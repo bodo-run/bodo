@@ -115,9 +115,15 @@ impl ScriptLoader {
         }
 
         for (path, script_name) in paths_to_load {
+            let script_id = if Some(&path) == root_script_abs.as_ref() {
+                "".to_string() // For root script, script_id is empty string
+            } else {
+                path.display().to_string()
+            };
             self.load_script(
                 &mut graph,
                 &path,
+                &script_id,
                 &script_name,
                 &global_env,
                 &global_exec_paths,
@@ -169,7 +175,7 @@ impl ScriptLoader {
             for dep in &task_config.pre_deps {
                 match dep {
                     Dependency::Task { task } => {
-                        let dep_id = self.resolve_dependency(task, Path::new("config"), &graph)?;
+                        let dep_id = self.resolve_dependency(task, &script_id, &graph)?;
                         graph.add_edge(dep_id, node_id)?;
                     }
                     Dependency::Command { command } => {
@@ -188,7 +194,7 @@ impl ScriptLoader {
             for dep in &task_config.post_deps {
                 match dep {
                     Dependency::Task { task } => {
-                        let dep_id = self.resolve_dependency(task, Path::new("config"), &graph)?;
+                        let dep_id = self.resolve_dependency(task, &script_id, &graph)?;
                         graph.add_edge(node_id, dep_id)?;
                     }
                     Dependency::Command { command } => {
@@ -254,8 +260,7 @@ impl ScriptLoader {
                 for dep in &task_config.pre_deps {
                     match dep {
                         Dependency::Task { task } => {
-                            let dep_id =
-                                self.resolve_dependency(task, Path::new("config"), &graph)?;
+                            let dep_id = self.resolve_dependency(task, &script_id, &graph)?;
                             graph.add_edge(dep_id, node_id)?;
                         }
                         Dependency::Command { command } => {
@@ -274,8 +279,7 @@ impl ScriptLoader {
                 for dep in &task_config.post_deps {
                     match dep {
                         Dependency::Task { task } => {
-                            let dep_id =
-                                self.resolve_dependency(task, Path::new("config"), &graph)?;
+                            let dep_id = self.resolve_dependency(task, &script_id, &graph)?;
                             graph.add_edge(node_id, dep_id)?;
                         }
                         Dependency::Command { command } => {
@@ -300,6 +304,7 @@ impl ScriptLoader {
         &mut self,
         graph: &mut Graph,
         path: &Path,
+        script_id: &str,
         script_display_name: &str,
         global_env: &HashMap<String, String>,
         global_exec_paths: &[String],
@@ -312,7 +317,6 @@ impl ScriptLoader {
         let script_exec_paths = script_config.exec_paths.clone();
 
         // Process default_task if present
-        let script_id = path.display().to_string();
 
         if let Some(default_task_config) = script_config.default_task {
             let default_task_name = "default";
@@ -328,7 +332,7 @@ impl ScriptLoader {
 
             let node_id = self.create_task_node(
                 graph,
-                &script_id,
+                script_id,
                 script_display_name,
                 default_task_name, // Using "default" as the task name
                 &default_task_config,
@@ -340,7 +344,7 @@ impl ScriptLoader {
                 task_data.exec_paths = exec_paths;
             }
 
-            self.register_task(&script_id, default_task_name, node_id, graph)?;
+            self.register_task(script_id, default_task_name, node_id, graph)?;
 
             let mut task_node_ids = HashMap::new();
             task_node_ids.insert(default_task_name.to_string(), node_id);
@@ -352,7 +356,7 @@ impl ScriptLoader {
             for dep in &task_config.pre_deps {
                 match dep {
                     Dependency::Task { task } => {
-                        let dep_id = self.resolve_dependency(task, path, graph)?;
+                        let dep_id = self.resolve_dependency(task, script_id, graph)?;
                         graph.add_edge(dep_id, node_id)?;
                     }
                     Dependency::Command { command } => {
@@ -371,7 +375,7 @@ impl ScriptLoader {
             for dep in &task_config.post_deps {
                 match dep {
                     Dependency::Task { task } => {
-                        let dep_id = self.resolve_dependency(task, path, graph)?;
+                        let dep_id = self.resolve_dependency(task, script_id, graph)?;
                         graph.add_edge(node_id, dep_id)?;
                     }
                     Dependency::Command { command } => {
@@ -404,7 +408,7 @@ impl ScriptLoader {
 
             let node_id = self.create_task_node(
                 graph,
-                &script_id,
+                script_id,
                 script_display_name,
                 task_name,
                 task_config,
@@ -416,7 +420,7 @@ impl ScriptLoader {
                 task_data.exec_paths = exec_paths;
             }
 
-            self.register_task(&script_id, task_name, node_id, graph)?;
+            self.register_task(script_id, task_name, node_id, graph)?;
             task_node_ids.insert(task_name.clone(), node_id);
         }
 
@@ -428,7 +432,7 @@ impl ScriptLoader {
             for dep in &task_config.pre_deps {
                 match dep {
                     Dependency::Task { task } => {
-                        let dep_id = self.resolve_dependency(task, path, graph)?;
+                        let dep_id = self.resolve_dependency(task, script_id, graph)?;
                         graph.add_edge(dep_id, node_id)?;
                     }
                     Dependency::Command { command } => {
@@ -447,7 +451,7 @@ impl ScriptLoader {
             for dep in &task_config.post_deps {
                 match dep {
                     Dependency::Task { task } => {
-                        let dep_id = self.resolve_dependency(task, path, graph)?;
+                        let dep_id = self.resolve_dependency(task, script_id, graph)?;
                         graph.add_edge(node_id, dep_id)?;
                     }
                     Dependency::Command { command } => {
@@ -524,8 +528,14 @@ impl ScriptLoader {
         Ok(())
     }
 
-    fn resolve_dependency(&self, task: &str, _path: &Path, graph: &Graph) -> Result<u64> {
-        if let Some(&node_id) = graph.task_registry.get(task) {
+    fn resolve_dependency(&self, task: &str, script_id: &str, graph: &Graph) -> Result<u64> {
+        let full_task_name = if task.contains(' ') || script_id.is_empty() {
+            task.to_string()
+        } else {
+            format!("{} {}", script_id, task)
+        };
+
+        if let Some(&node_id) = graph.task_registry.get(&full_task_name) {
             Ok(node_id)
         } else {
             Err(BodoError::PluginError(format!(
