@@ -34,6 +34,7 @@ fn test_watch_plugin_on_graph_build_with_tasks() {
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
