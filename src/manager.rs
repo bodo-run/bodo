@@ -1,7 +1,7 @@
 use crate::{
     config::{BodoConfig, TaskConfig},
     errors::BodoError,
-    graph::{Graph, NodeKind, TaskData},
+    graph::{Graph, NodeKind},
     plugin::{PluginConfig, PluginManager},
     script_loader::ScriptLoader,
     Result,
@@ -100,7 +100,9 @@ impl GraphManager {
         Ok(())
     }
 
-    // Rest of the code remains unchanged.
+    pub fn task_exists(&self, task_name: &str) -> bool {
+        self.graph.task_registry.contains_key(task_name)
+    }
 
-    // ... (other methods)
+    // Rest of the code remains unchanged.
 }
