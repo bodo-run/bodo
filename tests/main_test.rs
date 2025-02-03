@@ -43,10 +43,20 @@ default_task:
     let script_path = scripts_dir.join("script.yaml");
     std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
 
+    // Set environment variables to point to our temp scripts directory
+    let root_script_env = scripts_dir
+        .join("script.yaml")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let scripts_dirs_env = scripts_dir.to_str().unwrap().to_string();
+
     let mut child = Command::new(exe_path)
-        .arg("default")
+        // .arg("default") // No need to specify 'default' since we're testing the default task
         .env("RUST_LOG", "info")
         .env("BODO_NO_WATCH", "1")
+        .env("BODO_ROOT_SCRIPT", &root_script_env)
+        .env("BODO_SCRIPTS_DIRS", &scripts_dirs_env)
         .current_dir(temp_dir.path())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -134,10 +144,20 @@ tasks:
     let script_path = scripts_dir.join("script.yaml");
     std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
 
+    // Set environment variables to point to our temp scripts directory
+    let root_script_env = scripts_dir
+        .join("script.yaml")
+        .to_str()
+        .unwrap()
+        .to_string();
+    let scripts_dirs_env = scripts_dir.to_str().unwrap().to_string();
+
     let mut child = Command::new(exe_path)
         .arg("--list")
         .env("RUST_LOG", "info")
         .env("BODO_NO_WATCH", "1")
+        .env("BODO_ROOT_SCRIPT", &root_script_env)
+        .env("BODO_SCRIPTS_DIRS", &scripts_dirs_env)
         .current_dir(temp_dir.path())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
