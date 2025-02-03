@@ -133,7 +133,7 @@ impl ScriptLoader {
         // Process default_task and tasks from config only if root_script is not provided
         if config.root_script.is_none() {
             // Process default_task if present
-            if let Some(default_task_config) = config.default_task {
+            if let Some(ref default_task_config) = config.default_task {
                 let script_id = "".to_string();
                 let script_display_name = "".to_string();
                 let script_env = HashMap::new();
@@ -148,14 +148,14 @@ impl ScriptLoader {
                 );
 
                 // Validate task config
-                self.validate_task_config(&default_task_config, "default", Path::new("config"))?;
+                self.validate_task_config(default_task_config, "default", Path::new("config"))?;
 
                 let node_id = self.create_task_node(
                     &mut graph,
                     &script_id,
                     &script_display_name,
                     "default", // Using "default" as the task name
-                    &default_task_config,
+                    default_task_config,
                 );
 
                 // Update the task data with merged env and exec_paths
@@ -171,10 +171,9 @@ impl ScriptLoader {
                 task_node_ids.insert("default".to_string(), node_id);
 
                 // Handle dependencies after all tasks are registered
-                let task_config = &default_task_config;
                 let node_id = *task_node_ids.get("default").unwrap();
 
-                for dep in &task_config.pre_deps {
+                for dep in &default_task_config.pre_deps {
                     match dep {
                         Dependency::Task { task } => {
                             let dep_id = self.resolve_dependency(task, &script_id, &graph)?;
@@ -193,7 +192,7 @@ impl ScriptLoader {
                     }
                 }
 
-                for dep in &task_config.post_deps {
+                for dep in &default_task_config.post_deps {
                     match dep {
                         Dependency::Task { task } => {
                             let dep_id = self.resolve_dependency(task, &script_id, &graph)?;
@@ -223,7 +222,7 @@ impl ScriptLoader {
                 let mut task_node_ids = HashMap::new();
 
                 // First, create and register all tasks
-                for (name, task_config) in config.tasks.iter() {
+                for (name, task_config) in &config.tasks {
                     // Merge environments and exec_paths for each task
                     let env = Self::merge_envs(&global_env, &script_env, &task_config.env);
                     let exec_paths = Self::merge_exec_paths(
@@ -255,7 +254,7 @@ impl ScriptLoader {
                 }
 
                 // Now, process dependencies
-                for (name, task_config) in config.tasks.iter() {
+                for (name, task_config) in &config.tasks {
                     let node_id = *task_node_ids.get(name).unwrap();
 
                     // Handle dependencies
@@ -344,9 +343,9 @@ impl ScriptLoader {
         let script_exec_paths = script_config.exec_paths.clone();
 
         // Process default_task if present
-        if let Some(default_task_config) = script_config.default_task {
+        if let Some(ref default_task_config) = script_config.default_task {
             let default_task_name = "default";
-            self.validate_task_config(&default_task_config, default_task_name, path)?;
+            self.validate_task_config(default_task_config, default_task_name, path)?;
 
             // Merge environments and exec_paths for default_task
             let env = Self::merge_envs(global_env, &script_env, &default_task_config.env);
@@ -362,7 +361,7 @@ impl ScriptLoader {
                 script_id,
                 script_display_name,
                 default_task_name,
-                &default_task_config,
+                default_task_config,
             );
 
             // Update the task data with merged env and exec_paths
@@ -376,8 +375,8 @@ impl ScriptLoader {
         }
 
         // Process tasks
-        for (task_name, task_config) in script_config.tasks {
-            self.validate_task_config(&task_config, &task_name, path)?;
+        for (task_name, task_config) in &script_config.tasks {
+            self.validate_task_config(task_config, task_name, path)?;
 
             // Merge environments and exec_paths for this task
             let env = Self::merge_envs(global_env, &script_env, &task_config.env);
@@ -392,8 +391,8 @@ impl ScriptLoader {
                 graph,
                 script_id,
                 script_display_name,
-                &task_name,
-                &task_config,
+                task_name,
+                task_config,
             );
 
             // Update the task data with merged env and exec_paths
@@ -402,7 +401,7 @@ impl ScriptLoader {
                 task_data.exec_paths = exec_paths;
             }
 
-            self.register_task(script_id, &task_name, node_id, graph)?;
+            self.register_task(script_id, task_name, node_id, graph)?;
         }
 
         // Now, process dependencies for the default_task
