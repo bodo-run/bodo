@@ -38,7 +38,7 @@ impl ExecutionPlugin {
         (prefix_enabled, prefix_label, prefix_color)
     }
 
-    fn expand_env_vars(&self, cmd: &str, env: &HashMap<String, String>) -> String {
+    pub fn expand_env_vars(&self, cmd: &str, env: &HashMap<String, String>) -> String {
         let mut result = String::new();
         let mut chars = cmd.chars().peekable();
 
@@ -131,7 +131,6 @@ impl Plugin for ExecutionPlugin {
             .get(&task_name)
             .ok_or_else(|| BodoError::TaskNotFound(task_name.clone()))?;
 
-        let sorted_node_ids = graph.topological_sort()?;
         let mut visited = std::collections::HashSet::new();
 
         let mut pm = ProcessManager::new(true);
