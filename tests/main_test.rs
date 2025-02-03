@@ -1,95 +1,133 @@
-use bodo::{
-    cli::{get_task_name, Args},
-    config::BodoConfig,
-    manager::GraphManager,
-    plugin::PluginConfig,
-    plugins::{
-        concurrent_plugin::ConcurrentPlugin, env_plugin::EnvPlugin,
-        execution_plugin::ExecutionPlugin, path_plugin::PathPlugin, prefix_plugin::PrefixPlugin,
-        print_list_plugin::PrintListPlugin, timeout_plugin::TimeoutPlugin,
-        watch_plugin::WatchPlugin,
-    },
-    BodoError,
-};
-use clap::Parser;
-use log::{error, LevelFilter};
-use std::{collections::HashMap, process::exit};
+// tests/main_test.rs
 
-fn main() {
-    let args = Args::parse();
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::Duration;
 
-    if args.debug {
-        std::env::set_var("RUST_LOG", "bodo=debug");
-    } else if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "bodo=info");
+#[test]
+fn test_bodo_default() {
+    // First, ensure 'bodo' binary is built
+    let status = Command::new("cargo")
+        .args(["build", "--bin", "bodo"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .status()
+        .expect("Failed to execute cargo build command");
+    assert!(status.success(), "Cargo build failed");
+
+    // Build the path to the built 'bodo' executable
+    let exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("debug")
+        .join("bodo");
+    #[cfg(windows)]
+    exe_path.set_extension("exe");
+
+    let mut child = Command::new(exe_path)
+        .arg("default")
+        .env("RUST_LOG", "info")
+        .env("BODO_NO_WATCH", "1")
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to execute command");
+
+    // Wait for at most 10 seconds
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+
+    while start.elapsed() < timeout {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                // Process has exited
+                let output = child.wait_with_output().expect("Failed to wait on child");
+                assert!(status.success());
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                println!("STDOUT:\n{}", stdout);
+                println!("STDERR:\n{}", stderr);
+                let output_combined = format!("{}{}", stdout, stderr);
+                assert!(
+                    output_combined.contains("Hello from Bodo root!"),
+                    "Output does not contain expected message 'Hello from Bodo root!'"
+                );
+                return;
+            }
+            Ok(None) => {
+                // Process still running
+                thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+            Err(e) => panic!("Error attempting to wait: {}", e),
+        }
     }
-    env_logger::Builder::from_default_env()
-        .filter_module(
-            "bodo",
-            if args.debug {
-                LevelFilter::Debug
-            } else {
-                LevelFilter::Info
-            },
-        )
-        .init();
 
-    if let Err(e) = run(args) {
-        error!("Error: {}", e);
-        exit(1);
-    }
+    // If we get here, the process timed out
+    child.kill().expect("Failed to kill process");
+    panic!("Process timed out after {} seconds", timeout.as_secs());
 }
 
-fn run(args: Args) -> Result<(), BodoError> {
-    let watch_mode = if std::env::var("BODO_NO_WATCH").is_ok() {
-        false
-    } else if args.auto_watch {
-        true
-    } else {
-        args.watch
-    };
+#[test]
+fn test_bodo_list() {
+    // First, ensure 'bodo' binary is built
+    let status = Command::new("cargo")
+        .args(["build", "--bin", "bodo"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .status()
+        .expect("Failed to execute cargo build command");
+    assert!(status.success(), "Cargo build failed");
 
-    let config = BodoConfig {
-        root_script: Some("scripts/script.yaml".into()), // Updated to scripts/script.yaml
-        scripts_dirs: Some(vec!["scripts/".into()]),
-        tasks: HashMap::new(),
-        env: HashMap::new(),
-        exec_paths: vec![],
-    };
+    // Build the path to the built 'bodo' executable
+    let mut exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    exe_path.push("target");
+    exe_path.push("debug");
+    exe_path.push("bodo");
+    #[cfg(windows)]
+    exe_path.set_extension("exe");
 
-    let mut graph_manager = GraphManager::new();
-    graph_manager.build_graph(config)?;
+    let mut child = Command::new(exe_path)
+        .arg("--list")
+        .env("RUST_LOG", "info")
+        .env("BODO_NO_WATCH", "1")
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to execute command");
 
-    if args.list {
-        graph_manager.register_plugin(Box::new(PrintListPlugin));
-        graph_manager.run_plugins(None)?;
-        return Ok(());
+    // Wait for at most 10 seconds
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+
+    while start.elapsed() < timeout {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                // Process has exited
+                let output = child.wait_with_output().expect("Failed to wait on child");
+                assert!(status.success());
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                println!("STDOUT:\n{}", stdout);
+                println!("STDERR:\n{}", stderr);
+                let output_combined = format!("{}{}", stdout, stderr);
+                assert!(
+                    output_combined
+                        .contains("Default greeting when running `bodo` with no arguments."),
+                    "Output does not contain expected task descriptions"
+                );
+                return;
+            }
+            Ok(None) => {
+                // Process still running
+                thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+            Err(e) => panic!("Error attempting to wait: {}", e),
+        }
     }
 
-    // Register all normal plugins
-    graph_manager.register_plugin(Box::new(EnvPlugin::new()));
-    graph_manager.register_plugin(Box::new(PathPlugin::new()));
-    graph_manager.register_plugin(Box::new(ConcurrentPlugin::new()));
-    graph_manager.register_plugin(Box::new(PrefixPlugin::new()));
-    graph_manager.register_plugin(Box::new(WatchPlugin::new(watch_mode, true)));
-    graph_manager.register_plugin(Box::new(ExecutionPlugin::new()));
-    graph_manager.register_plugin(Box::new(TimeoutPlugin::new()));
-
-    let task_name = get_task_name(&args, &graph_manager)?;
-
-    // Apply any CLI arguments to the task before running plugins
-    graph_manager.apply_task_arguments(&task_name, &args.args)?;
-
-    let mut options = serde_json::Map::new();
-    options.insert("task".into(), serde_json::Value::String(task_name.clone()));
-
-    let plugin_config = PluginConfig {
-        fail_fast: true,
-        watch: watch_mode,
-        list: false,
-        options: Some(options),
-    };
-
-    graph_manager.run_plugins(Some(plugin_config))?;
-    Ok(())
+    // If we get here, the process timed out
+    child.kill().expect("Failed to kill process");
+    panic!("Process timed out after {} seconds", timeout.as_secs());
 }
