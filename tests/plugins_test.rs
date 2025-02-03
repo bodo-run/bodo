@@ -116,11 +116,9 @@ fn test_execution_plugin_with_concurrent_group() {
     let output_file1 = temp_dir_path.join("bodo_test_output_child1");
     let output_file2 = temp_dir_path.join("bodo_test_output_child2");
 
-    let temp_dir_str = temp_dir_path.to_str().unwrap().to_string();
-
-    // Adjust commands to write files in the working directory
-    let command1 = "echo Hello from child 1 > bodo_test_output_child1".to_string();
-    let command2 = "echo Hello from child 2 > bodo_test_output_child2".to_string();
+    // Adjust commands to write files using absolute paths
+    let command1 = format!("echo Hello from child 1 > {}", output_file1.display());
+    let command2 = format!("echo Hello from child 2 > {}", output_file2.display());
 
     // Build a graph with a concurrent group
     let mut graph = Graph::new();
@@ -148,7 +146,7 @@ fn test_execution_plugin_with_concurrent_group() {
         name: "child_task1".to_string(),
         description: None,
         command: Some(command1.clone()),
-        working_dir: Some(temp_dir_str.clone()),
+        working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
         is_default: false,
@@ -166,7 +164,7 @@ fn test_execution_plugin_with_concurrent_group() {
         name: "child_task2".to_string(),
         description: None,
         command: Some(command2.clone()),
-        working_dir: Some(temp_dir_str.clone()),
+        working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
         is_default: false,
@@ -222,6 +220,90 @@ fn test_execution_plugin_with_concurrent_group() {
     let output2 = std::fs::read_to_string(output_file2).expect("Failed to read output file 2");
     assert_eq!(output2.trim(), "Hello from child 2");
     // Clean up automatically when temp_dir goes out of scope
+}
+
+#[test]
+fn test_execution_plugin_task_not_found() {
+    use bodo::plugin::PluginConfig;
+    use bodo::plugins::execution_plugin::ExecutionPlugin;
+
+    let mut graph = Graph::new();
+
+    let mut plugin = ExecutionPlugin::new();
+
+    let mut options = serde_json::Map::new();
+    options.insert(
+        "task".into(),
+        serde_json::Value::String("nonexistent_task".to_string()),
+    );
+    let config = PluginConfig {
+        options: Some(options),
+        ..Default::default()
+    };
+
+    let result = plugin.on_init(&config);
+    assert!(result.is_ok());
+
+    // Run on_after_run to execute the task, which should fail
+    let result = plugin.on_after_run(&mut graph);
+    assert!(result.is_err());
+    if let Err(bodo::BodoError::TaskNotFound(task_name)) = result {
+        assert_eq!(task_name, "nonexistent_task".to_string());
+    } else {
+        panic!("Expected TaskNotFound error");
+    }
+}
+
+#[test]
+fn test_execution_plugin_command_failure() {
+    use bodo::plugin::PluginConfig;
+    use bodo::plugins::execution_plugin::ExecutionPlugin;
+
+    // Build a graph with one task that fails
+    let mut graph = Graph::new();
+
+    let task_data = TaskData {
+        name: "failing_task".to_string(),
+        description: None,
+        command: Some("exit 1".to_string()),
+        working_dir: None,
+        env: HashMap::new(),
+        exec_paths: vec![],
+        is_default: false,
+        script_id: "script".to_string(),
+        script_display_name: "".to_string(),
+        watch: None,
+    };
+
+    let node_id = graph.add_node(NodeKind::Task(task_data));
+
+    // Register task in task_registry
+    graph
+        .task_registry
+        .insert("failing_task".to_string(), node_id);
+
+    let mut plugin = ExecutionPlugin::new();
+
+    let mut options = serde_json::Map::new();
+    options.insert(
+        "task".into(),
+        serde_json::Value::String("failing_task".to_string()),
+    );
+    let config = PluginConfig {
+        options: Some(options),
+        ..Default::default()
+    };
+
+    plugin.on_init(&config).unwrap();
+
+    // Run on_after_run to execute the task
+    let result = plugin.on_after_run(&mut graph);
+    assert!(result.is_err());
+    if let Err(bodo::BodoError::PluginError(err_msg)) = result {
+        assert!(err_msg.contains("One or more processes failed"));
+    } else {
+        panic!("Expected PluginError due to task failure");
+    }
 }
 
 #[test]
