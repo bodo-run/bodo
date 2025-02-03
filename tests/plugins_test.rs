@@ -28,7 +28,7 @@ fn test_execution_plugin_on_after_run_no_task_specified() -> Result<(), BodoErro
     let mut plugin = ExecutionPlugin::new();
     let mut graph = Graph::new();
     let result = plugin.on_after_run(&mut graph);
-    assert!(matches!(result, Err(BodoError::PluginError(_))));
+    assert!(matches!(result, Err(BodoError::PluginError(msg)) if msg.contains("No task specified")));
     Ok(())
 }
 
