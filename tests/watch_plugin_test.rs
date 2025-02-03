@@ -165,3 +165,26 @@ fn test_watch_plugin_on_graph_build_with_tasks() {
     // Ensure that the watch_entries were populated
     assert_eq!(plugin.get_watch_entry_count(), 1);
 }
+
+#[test]
+fn test_find_base_directory() {
+    use bodo::plugins::watch_plugin::find_base_directory;
+    use std::path::PathBuf;
+
+    let test_cases = vec![
+        ("**/*.rs", PathBuf::from(".")),
+        ("src/**/*.rs", PathBuf::from("src")),
+        ("src/lib.rs", PathBuf::from("src")),
+        ("src/*.rs", PathBuf::from("src")),
+        ("*.rs", PathBuf::from(".")),
+        ("src/*/mod.rs", PathBuf::from("src")),
+        ("src", PathBuf::from("src")),
+        ("src/", PathBuf::from("src")),
+        ("", PathBuf::from(".")),
+    ];
+
+    for (input, expected) in test_cases {
+        let result = find_base_directory(input).unwrap();
+        assert_eq!(result, expected, "Failed for input '{}'", input);
+    }
+}
