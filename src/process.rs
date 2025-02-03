@@ -135,7 +135,6 @@ impl ProcessManager {
 
     pub fn run_concurrently(&mut self) -> std::io::Result<()> {
         debug!("Running {} processes concurrently", self.children.len());
-        let mut any_failed = false;
 
         let children = std::mem::take(&mut self.children);
         let len = children.len();
@@ -179,55 +178,41 @@ impl ProcessManager {
                     }
                 }
             });
+
             wait_handles.push(handle);
 
-            if stdout_handle.is_some() || stderr_handle.is_some() {
-                io_handles.push((stdout_handle, stderr_handle));
+            // Store IO handles if they exist
+            if let Some(h) = stdout_handle {
+                io_handles.push(h);
+            }
+            if let Some(h) = stderr_handle {
+                io_handles.push(h);
             }
         }
 
         // Wait for all processes to complete
         for handle in wait_handles {
-            match handle.join() {
-                Ok(result) => match result {
-                    Ok((name, code, _)) => {
-                        if code != 0 {
-                            warn!("Process '{}' failed with exit code {}", name, code);
-                            any_failed = true;
-                        } else {
-                            debug!("Process '{}' completed successfully", name);
-                        }
+            match handle.join().unwrap() {
+                Ok((name, code, _)) => {
+                    if code != 0 {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!("Process '{}' failed with exit code {}", name, code),
+                        ));
                     }
-                    Err(e) => {
-                        warn!("Process failed with error: {}", e);
-                        any_failed = true;
-                    }
-                },
+                }
                 Err(e) => {
-                    warn!("Thread panicked: {:?}", e);
-                    any_failed = true;
+                    return Err(e);
                 }
             }
         }
 
-        // Join stdout/stderr handles
-        for (stdout_handle, stderr_handle) in io_handles {
-            if let Some(handle) = stdout_handle {
-                let _ = handle.join();
-            }
-            if let Some(handle) = stderr_handle {
-                let _ = handle.join();
-            }
+        // Wait for all IO threads to complete
+        for handle in io_handles {
+            let _ = handle.join();
         }
 
-        if any_failed {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "One or more processes failed",
-            ))
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
 
     pub fn kill_all(&mut self) -> Result<(), BodoError> {
