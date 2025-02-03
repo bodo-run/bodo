@@ -22,6 +22,8 @@ use log::{debug, error, info, warn};
 use std::{
     io::{BufRead, BufReader},
     process::{Child, Command, Stdio},
+    sync::atomic::{AtomicBool, Ordering},
+    sync::Arc,
     thread::{self, JoinHandle},
 };
 
@@ -122,48 +124,97 @@ impl ProcessManager {
         debug!("Running {} processes concurrently", self.children.len());
         let mut any_failed = false;
 
-        let mut children = std::mem::take(&mut self.children);
+        let children = std::mem::take(&mut self.children);
         let len = children.len();
 
-        for i in 0..len {
-            let status = children[i].child.wait()?;
-            if !status.success() {
-                let code = status.code().unwrap_or(-1);
-                warn!(
-                    "Process '{}' failed with exit code {}",
-                    children[i].name, code
-                );
-                any_failed = true;
-                if self.fail_fast {
-                    debug!("Fail-fast enabled, killing remaining processes");
-                    for child in children.iter_mut().skip(i + 1) {
-                        let _ = child.child.kill();
+        // Create a shared flag for fail-fast coordination
+        let should_terminate = Arc::new(AtomicBool::new(false));
+
+        // Create a vector to store the wait futures
+        let mut wait_handles = Vec::with_capacity(len);
+        let mut io_handles = Vec::with_capacity(len);
+
+        // Move each child into its own thread
+        for mut child_info in children {
+            let name = child_info.name.clone();
+            let stdout_handle = child_info.stdout_handle.take();
+            let stderr_handle = child_info.stderr_handle.take();
+            let fail_fast = self.fail_fast;
+            let should_terminate = should_terminate.clone();
+
+            let handle = thread::spawn(move || {
+                // Try to wait with a timeout to allow checking the termination flag
+                loop {
+                    if should_terminate.load(Ordering::SeqCst) {
+                        debug!("Process '{}' received termination signal", name);
+                        let _ = child_info.child.kill();
+                        break Ok::<(String, i32, bool), std::io::Error>((name, -1, fail_fast));
                     }
-                    break;
+
+                    match child_info.child.try_wait()? {
+                        Some(status) => {
+                            let code = status.code().unwrap_or(-1);
+                            if code != 0 && fail_fast {
+                                should_terminate.store(true, Ordering::SeqCst);
+                            }
+                            break Ok((name, code, fail_fast));
+                        }
+                        None => {
+                            // Process still running, sleep briefly then check again
+                            thread::sleep(std::time::Duration::from_millis(10));
+                        }
+                    }
                 }
-            } else {
-                debug!("Process '{}' completed successfully", children[i].name);
+            });
+            wait_handles.push(handle);
+
+            if stdout_handle.is_some() || stderr_handle.is_some() {
+                io_handles.push((stdout_handle, stderr_handle));
             }
         }
 
-        for mut child_info in children {
-            if let Some(handle) = child_info.stdout_handle.take() {
+        // Wait for all processes to complete
+        for handle in wait_handles {
+            match handle.join() {
+                Ok(result) => match result {
+                    Ok((name, code, _)) => {
+                        if code != 0 {
+                            warn!("Process '{}' failed with exit code {}", name, code);
+                            any_failed = true;
+                        } else {
+                            debug!("Process '{}' completed successfully", name);
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Process failed with error: {}", e);
+                        any_failed = true;
+                    }
+                },
+                Err(e) => {
+                    warn!("Thread panicked: {:?}", e);
+                    any_failed = true;
+                }
+            }
+        }
+
+        // Join stdout/stderr handles
+        for (stdout_handle, stderr_handle) in io_handles {
+            if let Some(handle) = stdout_handle {
                 let _ = handle.join();
             }
-            if let Some(handle) = child_info.stderr_handle.take() {
+            if let Some(handle) = stderr_handle {
                 let _ = handle.join();
             }
         }
 
         if any_failed {
-            debug!("One or more processes failed");
-            return Err(std::io::Error::new(
+            Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "One or more processes failed",
-            ));
+            ))
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 
     pub fn kill_all(&mut self) -> Result<(), BodoError> {

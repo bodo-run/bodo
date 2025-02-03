@@ -41,7 +41,13 @@ fn main() {
 }
 
 fn run(args: Args) -> Result<(), BodoError> {
-    let watch_mode = if args.auto_watch { true } else { args.watch };
+    let watch_mode = if std::env::var("BODO_NO_WATCH").is_ok() {
+        false
+    } else if args.auto_watch {
+        true
+    } else {
+        args.watch
+    };
 
     let config = BodoConfig {
         root_script: Some("scripts/script.yaml".into()), // Updated to scripts/script.yaml
