@@ -24,6 +24,7 @@ on:
           - openai
           - fireworks
           - deepseek
+          - azure
       model:
         description: "AI model"
         default: "accounts/fireworks/models/deepseek-r1"
@@ -36,6 +37,8 @@ on:
           - accounts/fireworks/models/deepseek-coder # Fireworks AI
           - deepseek-reasoner # DeepSeek AI
           - deepseek-coder # DeepSeek AI
+          - DeepSeek-R1 # Azure AI
+          - DeepSeek-Coder # Azure AI
 
 permissions:
   contents: write
