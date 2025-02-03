@@ -1,5 +1,3 @@
-// tests/concurrent_plugin_test.rs
-
 use bodo::graph::{Graph, NodeKind, TaskData};
 use bodo::plugin::Plugin;
 use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
@@ -19,6 +17,7 @@ fn test_concurrent_plugin() {
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -34,6 +33,7 @@ fn test_concurrent_plugin() {
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -49,6 +49,7 @@ fn test_concurrent_plugin() {
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),

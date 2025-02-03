@@ -49,9 +49,16 @@ fn run(args: Args) -> Result<(), BodoError> {
         args.watch
     };
 
+    let root_script =
+        std::env::var("BODO_ROOT_SCRIPT").unwrap_or_else(|_| "scripts/script.yaml".into());
+    let scripts_dirs = std::env::var("BODO_SCRIPTS_DIRS")
+        .map(|s| s.split(',').map(|s| s.into()).collect())
+        .unwrap_or_else(|_| vec!["scripts/".into()]);
+
     let config = BodoConfig {
-        root_script: Some("scripts/script.yaml".into()), // Updated to scripts/script.yaml
-        scripts_dirs: Some(vec!["scripts/".into()]),
+        root_script: Some(root_script),
+        scripts_dirs: Some(scripts_dirs),
+        default_task: None, // Added missing default_task field
         tasks: HashMap::new(),
         env: HashMap::new(),
         exec_paths: vec![],

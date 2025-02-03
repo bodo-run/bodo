@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use validator::{Validate, ValidationError};
 
 /// Helper function to check for reserved task names and additional constraints
-fn validate_task_name(name: &str) -> std::result::Result<(), ValidationError> {
+pub fn validate_task_name(name: &str) -> std::result::Result<(), ValidationError> {
     let reserved = [
         "watch",
         "default_task",
@@ -69,26 +69,6 @@ fn validate_task_config(task: &TaskConfig) -> std::result::Result<(), Validation
 pub enum Dependency {
     Task { task: String },
     Command { command: String },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default, Validate, JsonSchema)]
-pub struct BodoConfig {
-    /// Path to the root script (relative to the root of the project)
-    pub root_script: Option<String>,
-
-    /// Path to the scripts directory (relative to the root of the project)
-    #[validate(length(min = 1))]
-    pub scripts_dirs: Option<Vec<String>>,
-    #[validate]
-    pub tasks: HashMap<String, TaskConfig>,
-
-    /// Environment variables to set for all tasks
-    #[serde(default)]
-    pub env: HashMap<String, String>,
-
-    /// Paths to add to the PATH environment variable for all tasks
-    #[serde(default)]
-    pub exec_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate, JsonSchema, PartialEq)]
@@ -213,6 +193,31 @@ pub struct TaskConfig {
     #[serde(skip)]
     #[validate(custom = "validate_task_name")]
     pub _name_check: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Validate, JsonSchema)]
+pub struct BodoConfig {
+    /// Path to the root script (relative to the root of the project)
+    pub root_script: Option<String>,
+
+    /// Path to the scripts directory (relative to the root of the project)
+    #[validate(length(min = 1))]
+    pub scripts_dirs: Option<Vec<String>>,
+
+    #[validate]
+    pub default_task: Option<TaskConfig>,
+
+    #[serde(default)]
+    #[validate]
+    pub tasks: HashMap<String, TaskConfig>,
+
+    /// Environment variables to set for all tasks
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+
+    /// Paths to add to the PATH environment variable for all tasks
+    #[serde(default)]
+    pub exec_paths: Vec<String>,
 }
 
 impl BodoConfig {

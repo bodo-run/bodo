@@ -10,10 +10,10 @@ fn test_load_script() {
     let script_path = temp_dir.path().join("script.yaml");
 
     let script_content = r#"
-    tasks:
-      test_task:
-        command: echo "Test Task"
-    "#;
+tasks:
+  test_task:
+    command: echo "Test Task"
+"#;
 
     fs::write(&script_path, script_content).unwrap();
 
@@ -22,7 +22,13 @@ fn test_load_script() {
     config.scripts_dirs = Some(vec![temp_dir.path().to_string_lossy().to_string()]);
 
     let graph = loader.build_graph(config).unwrap();
-    assert!(graph.task_registry.contains_key("test_task"));
+
+    // Adjusted assertion with correct task name
+    let script_id = script_path.display().to_string();
+
+    let full_task_name = format!("{} {}", script_id, "test_task");
+
+    assert!(graph.task_registry.contains_key(&full_task_name));
 }
 
 #[test]
@@ -35,16 +41,16 @@ fn test_load_scripts_dir() {
     let script2_path = scripts_dir.join("script2.yaml");
 
     let script1_content = r#"
-    tasks:
-      task1:
-        command: echo "Task 1"
-    "#;
+tasks:
+  task1:
+    command: echo "Task 1"
+"#;
 
     let script2_content = r#"
-    tasks:
-      task2:
-        command: echo "Task 2"
-    "#;
+tasks:
+  task2:
+    command: echo "Task 2"
+"#;
 
     fs::write(&script1_path, script1_content).unwrap();
     fs::write(&script2_path, script2_content).unwrap();
@@ -54,8 +60,21 @@ fn test_load_scripts_dir() {
     config.scripts_dirs = Some(vec![scripts_dir.to_string_lossy().to_string()]);
 
     let graph = loader.build_graph(config).unwrap();
-    assert!(graph.task_registry.contains_key("task1"));
-    assert!(graph.task_registry.contains_key("task2"));
+
+    // Adjusted assertions with correct task names
+    let script_id1 = script1_path.canonicalize().unwrap().display().to_string();
+    let full_task_name1 = format!("{} {}", script_id1, "task1");
+    let script_id2 = script2_path.canonicalize().unwrap().display().to_string();
+    let full_task_name2 = format!("{} {}", script_id2, "task2");
+
+    assert!(
+        graph.task_registry.contains_key(&full_task_name1),
+        "Task1 not found in task registry"
+    );
+    assert!(
+        graph.task_registry.contains_key(&full_task_name2),
+        "Task2 not found in task registry"
+    );
 }
 
 #[test]
@@ -64,14 +83,14 @@ fn test_task_dependencies() {
     let script_path = temp_dir.path().join("script.yaml");
 
     let script_content = r#"
-    tasks:
-      task1:
-        command: echo "Task 1"
-        pre_deps:
-          - task: task2
-      task2:
-        command: echo "Task 2"
-    "#;
+tasks:
+  task1:
+    command: echo "Task 1"
+    pre_deps:
+      - task: task2
+  task2:
+    command: echo "Task 2"
+"#;
 
     fs::write(&script_path, script_content).unwrap();
 
@@ -80,12 +99,18 @@ fn test_task_dependencies() {
     config.scripts_dirs = Some(vec![temp_dir.path().to_string_lossy().to_string()]);
 
     let graph = loader.build_graph(config).unwrap();
-    assert!(graph.task_registry.contains_key("task1"));
-    assert!(graph.task_registry.contains_key("task2"));
+
+    let script_id = script_path.display().to_string();
+
+    let full_task1_name = format!("{} {}", script_id, "task1");
+    let full_task2_name = format!("{} {}", script_id, "task2");
+
+    assert!(graph.task_registry.contains_key(&full_task1_name));
+    assert!(graph.task_registry.contains_key(&full_task2_name));
 
     // Check that there's an edge from task2 to task1
-    let task1_id = graph.task_registry.get("task1").unwrap();
-    let task2_id = graph.task_registry.get("task2").unwrap();
+    let task1_id = graph.task_registry.get(&full_task1_name).unwrap();
+    let task2_id = graph.task_registry.get(&full_task2_name).unwrap();
 
     let mut found = false;
     for edge in &graph.edges {
@@ -107,6 +132,7 @@ fn test_cycle_detection() {
         working_dir: None,
         env: Default::default(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -119,6 +145,7 @@ fn test_cycle_detection() {
         working_dir: None,
         env: Default::default(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -141,6 +168,7 @@ fn test_format_cycle_error() {
         working_dir: None,
         env: Default::default(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -153,6 +181,7 @@ fn test_format_cycle_error() {
         working_dir: None,
         env: Default::default(),
         exec_paths: vec![],
+        arguments: vec![],
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
