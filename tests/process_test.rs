@@ -1,5 +1,4 @@
 use bodo::process::ProcessManager;
-use std::io::ErrorKind;
 
 #[test]
 fn test_spawn_command_success() {
