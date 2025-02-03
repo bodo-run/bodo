@@ -25,6 +25,7 @@ pub struct TaskData {
     pub script_id: String,
     pub script_display_name: String,
     pub watch: Option<WatchConfig>,
+    pub arguments: Vec<crate::config::TaskArgument>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
