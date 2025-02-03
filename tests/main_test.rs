@@ -30,25 +30,25 @@ fn test_bodo_default() {
     // Create a temp directory
     let temp_dir = tempdir().expect("Failed to create temp dir");
 
-    // Write the scripts/script.yaml file
-    let scripts_dir = temp_dir.path().join("scripts");
-    std::fs::create_dir_all(&scripts_dir).expect("Failed to create scripts directory");
-
+    // Write the script.yaml file directly under temp_dir
     let script_content = r#"
 default_task:
   command: echo "Hello from Bodo root!"
   description: "Default greeting when running `bodo` with no arguments."
 "#;
 
-    let script_path = scripts_dir.join("script.yaml");
+    let script_path = temp_dir.path().join("script.yaml");
     std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
 
     // Set environment variables to point to our temp scripts directory
-    let root_script_env = scripts_dir
-        .join("script.yaml")
+    let root_script_env = script_path.to_string_lossy().into_owned();
+    // Do not set BODO_SCRIPTS_DIRS to avoid loading scripts from scripts/
+    // Alternatively, set it to an empty directory
+    let scripts_dirs_env = temp_dir
+        .path()
+        .join("scripts_empty")
         .to_string_lossy()
         .into_owned();
-    let scripts_dirs_env = scripts_dir.to_string_lossy().into_owned();
 
     let mut child = Command::new(exe_path)
         // .arg("default") // No need to specify 'default' since we're testing the default task
@@ -123,10 +123,7 @@ fn test_bodo_list() {
     // Create a temp directory
     let temp_dir = tempdir().expect("Failed to create temp dir");
 
-    // Write the scripts/script.yaml file
-    let scripts_dir = temp_dir.path().join("scripts");
-    std::fs::create_dir_all(&scripts_dir).expect("Failed to create scripts directory");
-
+    // Write the script.yaml file directly under temp_dir
     let script_content = r#"
 default_task:
   command: echo "Hello from Bodo root!"
@@ -141,16 +138,18 @@ tasks:
     description: "Build the project"
 "#;
 
-    let script_path = scripts_dir.join("script.yaml");
+    let script_path = temp_dir.path().join("script.yaml");
     std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
 
     // Set environment variables to point to our temp scripts directory
-    let root_script_env = scripts_dir
-        .join("script.yaml")
+    let root_script_env = script_path.to_str().unwrap().to_string();
+    // Set BODO_SCRIPTS_DIRS to a non-existent directory to prevent loading additional scripts
+    let scripts_dirs_env = temp_dir
+        .path()
+        .join("scripts_empty")
         .to_str()
         .unwrap()
         .to_string();
-    let scripts_dirs_env = scripts_dir.to_str().unwrap().to_string();
 
     let mut child = Command::new(exe_path)
         .arg("--list")
