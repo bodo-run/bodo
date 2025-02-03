@@ -7,6 +7,8 @@ use bodo::graph::{CommandData, ConcurrentGroupData, Graph, NodeKind, TaskData};
 use bodo::plugin::{Plugin, PluginConfig};
 use bodo::plugins::execution_plugin::{expand_env_vars, ExecutionPlugin};
 
+use bodo::graph; // Added this line to import the `graph` module
+
 #[test]
 fn test_execution_plugin_on_init() -> Result<()> {
     let mut plugin = ExecutionPlugin::new();
