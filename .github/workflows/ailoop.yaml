@@ -85,9 +85,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Create new branch
+      - name: Create and setup new branch
         run: |
-          git checkout -b ${{ env.NEW_BRANCH }}
+          # Create new branch from base branch
+          git checkout -b ${{ env.NEW_BRANCH }} ${{ env.BASE_BRANCH }}
+          # Push the new branch to establish tracking
+          git push -u origin ${{ env.NEW_BRANCH }}
 
       - name: Run AI Loop
         id: ai_loop
