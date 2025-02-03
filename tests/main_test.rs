@@ -16,7 +16,7 @@ fn test_bodo_default() {
     assert!(status.success(), "Cargo build failed");
 
     // Build the path to the built 'bodo' executable
-    let mut exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("debug")
         .join("bodo");

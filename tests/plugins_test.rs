@@ -116,12 +116,11 @@ fn test_execution_plugin_with_concurrent_group() {
     let output_file1 = temp_dir_path.join("bodo_test_output_child1");
     let output_file2 = temp_dir_path.join("bodo_test_output_child2");
 
-    // Adjust path strings to use in commands
-    let output_file1_str = output_file1.to_str().unwrap();
-    let output_file2_str = output_file2.to_str().unwrap();
+    let temp_dir_str = temp_dir_path.to_str().unwrap().to_string();
 
-    let command1 = format!("echo Hello from child 1 > \"{}\"", output_file1_str);
-    let command2 = format!("echo Hello from child 2 > \"{}\"", output_file2_str);
+    // Adjust commands to write files in the working directory
+    let command1 = "echo Hello from child 1 > bodo_test_output_child1".to_string();
+    let command2 = "echo Hello from child 2 > bodo_test_output_child2".to_string();
 
     // Build a graph with a concurrent group
     let mut graph = Graph::new();
@@ -149,7 +148,7 @@ fn test_execution_plugin_with_concurrent_group() {
         name: "child_task1".to_string(),
         description: None,
         command: Some(command1.clone()),
-        working_dir: None,
+        working_dir: Some(temp_dir_str.clone()),
         env: HashMap::new(),
         exec_paths: vec![],
         is_default: false,
@@ -167,7 +166,7 @@ fn test_execution_plugin_with_concurrent_group() {
         name: "child_task2".to_string(),
         description: None,
         command: Some(command2.clone()),
-        working_dir: None,
+        working_dir: Some(temp_dir_str.clone()),
         env: HashMap::new(),
         exec_paths: vec![],
         is_default: false,
@@ -216,18 +215,11 @@ fn test_execution_plugin_with_concurrent_group() {
     // Run on_after_run to execute the task
     plugin.on_after_run(&mut graph).unwrap();
 
-    // Give the commands some time to complete
-    std::thread::sleep(std::time::Duration::from_secs(1));
-
-    // Print debug information
-    println!("Checking if output files exist:");
-    println!("File 1: {}", output_file1.exists());
-    println!("File 2: {}", output_file2.exists());
-
     // Verify that the commands executed by checking the output files
-    let output1 = std::fs::read_to_string(&output_file1).expect("Failed to read output file 1");
+    let output1 = std::fs::read_to_string(output_file1).expect("Failed to read output file 1");
     assert_eq!(output1.trim(), "Hello from child 1");
-    let output2 = std::fs::read_to_string(&output_file2).expect("Failed to read output file 2");
+
+    let output2 = std::fs::read_to_string(output_file2).expect("Failed to read output file 2");
     assert_eq!(output2.trim(), "Hello from child 2");
     // Clean up automatically when temp_dir goes out of scope
 }
