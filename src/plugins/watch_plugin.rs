@@ -28,11 +28,11 @@ pub struct WatchPlugin {
 #[derive(Debug)]
 pub struct WatchEntry {
     #[allow(dead_code)]
-    task_name: String,
-    glob_set: GlobSet,
-    ignore_set: Option<GlobSet>,
-    directories_to_watch: HashSet<PathBuf>,
-    debounce_ms: u64,
+    pub task_name: String,
+    pub glob_set: GlobSet,
+    pub ignore_set: Option<GlobSet>,
+    pub directories_to_watch: HashSet<PathBuf>,
+    pub debounce_ms: u64,
 }
 
 impl WatchPlugin {
