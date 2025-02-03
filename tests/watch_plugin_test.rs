@@ -1,9 +1,10 @@
 use bodo::config::WatchConfig;
 use bodo::graph::{NodeKind, TaskData};
 use bodo::plugin::Plugin;
-use bodo::plugins::watch_plugin::WatchPlugin;
+use bodo::plugins::watch_plugin::{WatchEntry, WatchPlugin};
 use bodo::Graph;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[test]
 fn test_watch_plugin_on_init_no_watch() {
@@ -98,8 +99,9 @@ fn test_watch_plugin_on_graph_build_with_auto_watch() {
 
     plugin.on_graph_build(&mut graph).unwrap();
 
-    // Ensure that watch_mode is now true due to auto_watch
+    // Ensure that watch_entries were populated
     assert!(plugin.is_watch_mode());
+    assert_eq!(plugin.get_watch_entry_count(), 1);
 }
 
 #[test]
@@ -168,7 +170,6 @@ fn test_watch_plugin_on_graph_build_with_tasks() {
 
 #[test]
 fn test_find_base_directory() {
-    use bodo::plugins::watch_plugin::find_base_directory;
     use std::path::PathBuf;
 
     let test_cases = vec![
@@ -184,16 +185,14 @@ fn test_find_base_directory() {
     ];
 
     for (input, expected) in test_cases {
-        let result = find_base_directory(input).unwrap();
+        let result = WatchPlugin::find_base_directory(input).unwrap();
         assert_eq!(result, expected, "Failed for input '{}'", input);
     }
 }
 
 #[test]
 fn test_filter_changed_paths() {
-    use bodo::plugins::watch_plugin::WatchEntry;
-    use globset::{Glob, GlobSet, GlobSetBuilder};
-    use std::path::PathBuf;
+    use globset::{Glob, GlobSetBuilder};
 
     // Build the glob set
     let patterns = vec!["src/**/*.rs".to_string()];
@@ -216,7 +215,7 @@ fn test_filter_changed_paths() {
     // Determine directories to watch
     let mut dirs = std::collections::HashSet::new();
     for patt in &patterns {
-        if let Some(dir) = bodo::plugins::watch_plugin::find_base_directory(patt) {
+        if let Some(dir) = WatchPlugin::find_base_directory(patt) {
             dirs.insert(dir);
         }
     }
@@ -250,7 +249,6 @@ fn test_filter_changed_paths() {
 
 #[test]
 fn test_watch_plugin_on_after_run() {
-    use bodo::plugin::PluginConfig;
     use std::fs::File;
     use std::io::Write;
     use std::thread;
@@ -303,10 +301,10 @@ fn test_watch_plugin_on_after_run() {
 
     // Run on_after_run in a separate thread
     let plugin_handle = {
-        let mut plugin_clone = plugin.clone();
-        let mut graph_clone = graph.clone();
+        let mut plugin = plugin;
+        let mut graph = graph;
         thread::spawn(move || {
-            plugin_clone.on_after_run(&mut graph_clone).unwrap();
+            plugin.on_after_run(&mut graph).unwrap();
         })
     };
 

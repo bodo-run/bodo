@@ -26,7 +26,8 @@ pub struct WatchPlugin {
 }
 
 #[derive(Debug)]
-struct WatchEntry {
+pub struct WatchEntry {
+    #[allow(dead_code)]
     task_name: String,
     glob_set: GlobSet,
     ignore_set: Option<GlobSet>,
@@ -68,7 +69,11 @@ impl WatchPlugin {
         Ok((watcher, rx))
     }
 
-    fn filter_changed_paths(&self, changed_paths: &[PathBuf], entry: &WatchEntry) -> Vec<PathBuf> {
+    pub fn filter_changed_paths(
+        &self,
+        changed_paths: &[PathBuf],
+        entry: &WatchEntry,
+    ) -> Vec<PathBuf> {
         let mut matched = vec![];
 
         let cwd = match std::env::current_dir() {
@@ -129,6 +134,47 @@ impl WatchPlugin {
         }
         matched
     }
+
+    pub fn find_base_directory(patt: &str) -> Option<PathBuf> {
+        let path = Path::new(patt);
+        if patt.starts_with("**/") {
+            return Some(PathBuf::from("."));
+        }
+        let components = path.components().collect::<Vec<_>>();
+        let first_wildcard = components
+            .iter()
+            .position(|c| c.as_os_str().to_string_lossy().contains('*'));
+        let base = if let Some(idx) = first_wildcard {
+            if idx == 0 {
+                PathBuf::from(".")
+            } else {
+                PathBuf::from_iter(&components[..idx])
+            }
+        } else if path.is_dir() {
+            path.to_path_buf()
+        } else {
+            path.parent()
+                .unwrap_or_else(|| Path::new("."))
+                .to_path_buf()
+        };
+        if base.as_os_str().is_empty() {
+            Some(PathBuf::from("."))
+        } else {
+            Some(base)
+        }
+    }
+
+    // A small helper that just returns some BodoConfig with "scripts/" as script dirs
+    fn graph_manager_config_snapshot() -> Result<crate::config::BodoConfig> {
+        Ok(crate::config::BodoConfig {
+            scripts_dirs: Some(vec!["scripts/".into()]),
+            ..Default::default()
+        })
+    }
+
+    // Rest of the implementation...
+
+    // ... (Rest of the methods remain unchanged)
 }
 
 impl Default for WatchPlugin {
@@ -228,7 +274,7 @@ impl Plugin for WatchPlugin {
 
                     let mut dirs = HashSet::new();
                     for patt in patterns {
-                        if let Some(dir) = find_base_directory(patt) {
+                        if let Some(dir) = Self::find_base_directory(patt) {
                             dirs.insert(dir);
                         }
                     }
@@ -361,41 +407,4 @@ impl Plugin for WatchPlugin {
         }
         Ok(())
     }
-}
-
-pub fn find_base_directory(patt: &str) -> Option<PathBuf> {
-    let path = Path::new(patt);
-    if patt.starts_with("**/") {
-        return Some(PathBuf::from("."));
-    }
-    let components = path.components().collect::<Vec<_>>();
-    let first_wildcard = components
-        .iter()
-        .position(|c| c.as_os_str().to_string_lossy().contains('*'));
-    let base = if let Some(idx) = first_wildcard {
-        if idx == 0 {
-            PathBuf::from(".")
-        } else {
-            PathBuf::from_iter(&components[..idx])
-        }
-    } else if path.is_dir() {
-        path.to_path_buf()
-    } else {
-        path.parent()
-            .unwrap_or_else(|| Path::new("."))
-            .to_path_buf()
-    };
-    if base.as_os_str().is_empty() {
-        Some(PathBuf::from("."))
-    } else {
-        Some(base)
-    }
-}
-
-// A small helper that just returns some BodoConfig with "scripts/" as script dirs
-fn graph_manager_config_snapshot() -> Result<crate::config::BodoConfig> {
-    Ok(crate::config::BodoConfig {
-        scripts_dirs: Some(vec!["scripts/".into()]),
-        ..Default::default()
-    })
 }
