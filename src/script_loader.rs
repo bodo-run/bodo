@@ -315,43 +315,25 @@ impl ScriptLoader {
         // Read the script file
         let content = fs::read_to_string(path)?;
 
-        // Parse YAML content line by line to detect duplicate task names
+        // Parse the content into a serde_yaml::Value to extract task names
+        let script_yaml: serde_yaml::Value = serde_yaml::from_str(&content)?;
+
+        // Now, collect task names and check for duplicates
         let mut task_names = HashSet::new();
-        let mut in_tasks = false;
-        let mut indent_level = 0;
 
-        for line in content.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-
-            let indent = line.chars().take_while(|c| c.is_whitespace()).count();
-
-            if trimmed == "tasks:" {
-                in_tasks = true;
-                indent_level = indent;
-                continue;
-            }
-
-            if in_tasks && indent > indent_level {
-                if let Some(task_name) = trimmed.split(':').next() {
-                    let task_name = task_name.trim();
-                    // Skip checking command and other task properties
-                    if !task_name.is_empty()
-                        && !task_name.contains(' ')
-                        && !task_name.starts_with('-')
-                        && !task_names.insert(task_name.to_string())
-                    {
-                        return Err(BodoError::PluginError(format!(
-                            "Duplicate task name '{}' found in '{}'",
-                            task_name,
-                            path.display()
-                        )));
+        if let Some(tasks) = script_yaml.get("tasks") {
+            if let Some(task_map) = tasks.as_mapping() {
+                for (key, _value) in task_map {
+                    if let Some(task_name) = key.as_str() {
+                        if !task_names.insert(task_name.to_string()) {
+                            return Err(BodoError::PluginError(format!(
+                                "Duplicate task name '{}' found in '{}'",
+                                task_name,
+                                path.display()
+                            )));
+                        }
                     }
                 }
-            } else if indent <= indent_level {
-                in_tasks = false;
             }
         }
 
