@@ -122,7 +122,7 @@ fn test_execution_plugin_with_concurrent_group() {
     // Adjust commands to write files using absolute paths
     let command1 = format!(
         "echo Hello from child 1 > \"{}\"",
-        output_file1.to_str().unwrap()
+        output_file1.to_string_lossy()
     );
     let command2 = format!(
         "echo Hello from child 2 > \"{}\"",
