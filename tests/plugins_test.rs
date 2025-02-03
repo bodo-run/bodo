@@ -113,15 +113,21 @@ fn test_execution_plugin_with_concurrent_group() {
     let temp_dir = TempDir::new().unwrap();
     let temp_dir_path = temp_dir.path();
 
-    // Since we are setting the working_dir to temp_dir_path, we can just use relative paths
+    // Since we're not relying on working_dir, use absolute paths
     let output_file1_name = "bodo_test_output_child1";
     let output_file2_name = "bodo_test_output_child2";
     let output_file1 = temp_dir_path.join(output_file1_name);
     let output_file2 = temp_dir_path.join(output_file2_name);
 
-    // Adjust commands to write files using relative paths
-    let command1 = format!("echo Hello from child 1 > {}", output_file1_name);
-    let command2 = format!("echo Hello from child 2 > {}", output_file2_name);
+    // Adjust commands to write files using absolute paths
+    let command1 = format!(
+        "echo Hello from child 1 > {}",
+        output_file1.to_str().unwrap()
+    );
+    let command2 = format!(
+        "echo Hello from child 2 > {}",
+        output_file2.to_str().unwrap()
+    );
 
     // Build a graph with a concurrent group
     let mut graph = Graph::new();
@@ -149,7 +155,7 @@ fn test_execution_plugin_with_concurrent_group() {
         name: "child_task1".to_string(),
         description: None,
         command: Some(command1.clone()),
-        working_dir: Some(temp_dir_path.to_str().unwrap().to_string()),
+        working_dir: None, // Not setting working_dir
         env: HashMap::new(),
         exec_paths: vec![],
         is_default: false,
@@ -167,7 +173,7 @@ fn test_execution_plugin_with_concurrent_group() {
         name: "child_task2".to_string(),
         description: None,
         command: Some(command2.clone()),
-        working_dir: Some(temp_dir_path.to_str().unwrap().to_string()),
+        working_dir: None, // Not setting working_dir
         env: HashMap::new(),
         exec_paths: vec![],
         is_default: false,
