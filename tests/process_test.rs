@@ -1,28 +1,51 @@
+// tests/process_test.rs
+
 use bodo::process::ProcessManager;
 
 #[test]
-fn test_spawn_command_success() {
-    let mut pm = ProcessManager::new(true);
-    let result = pm.spawn_command("echo_test", "echo 'Hello'", false, None, None);
-    assert!(result.is_ok());
+fn test_process_manager_spawn_and_run() {
+    let mut pm = ProcessManager::new(false);
+    pm.spawn_command("test_echo", "echo Hello", false, None, None)
+        .unwrap();
     pm.run_concurrently().unwrap();
 }
 
 #[test]
-fn test_spawn_command_failure() {
+fn test_process_manager_fail_fast() {
     let mut pm = ProcessManager::new(true);
-    let result = pm.spawn_command("fail_test", "exit 1", false, None, None);
-    assert!(result.is_ok());
-    let run_result = pm.run_concurrently();
-    assert!(run_result.is_err());
+    pm.spawn_command("fail_cmd", "false", false, None, None)
+        .unwrap();
+    pm.spawn_command("echo_cmd", "echo Should not run", false, None, None)
+        .unwrap();
+
+    let result = pm.run_concurrently();
+    assert!(result.is_err());
 }
 
 #[test]
-fn test_kill_all_processes() {
-    let mut pm = ProcessManager::new(true);
-    pm.spawn_command("sleep_test", "sleep 5", false, None, None)
+fn test_process_manager_kill_all() {
+    let mut pm = ProcessManager::new(false);
+    pm.spawn_command("sleep_cmd", "sleep 5", false, None, None)
         .unwrap();
     pm.kill_all().unwrap();
+}
+
+#[test]
+fn test_process_manager_no_fail_fast() {
+    let mut pm = ProcessManager::new(false);
+    pm.spawn_command("fail_cmd", "false", false, None, None)
+        .unwrap();
+    pm.spawn_command(
+        "echo_cmd",
+        "echo Should run even if previous fails",
+        false,
+        None,
+        None,
+    )
+    .unwrap();
+
+    let result = pm.run_concurrently();
+    assert!(result.is_err(), "Expected an error due to failed process");
 }
 
 #[test]

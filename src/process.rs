@@ -157,7 +157,10 @@ impl ProcessManager {
 
         if any_failed {
             debug!("One or more processes failed");
-            std::process::exit(1);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "One or more processes failed",
+            ));
         }
 
         Ok(())

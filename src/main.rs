@@ -44,7 +44,7 @@ fn run(args: Args) -> Result<(), BodoError> {
     let watch_mode = if args.auto_watch { true } else { args.watch };
 
     let config = BodoConfig {
-        root_script: None,
+        root_script: Some("scripts/script.yaml".into()), // Updated to scripts/script.yaml
         scripts_dirs: Some(vec!["scripts/".into()]),
         tasks: HashMap::new(),
         env: HashMap::new(),
