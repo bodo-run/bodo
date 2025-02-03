@@ -24,3 +24,19 @@ fn test_kill_all_processes() {
         .unwrap();
     pm.kill_all().unwrap();
 }
+
+#[test]
+fn test_spawn_command_with_invalid_prefix_color() {
+    let mut pm = ProcessManager::new(true);
+    // Using an invalid color name
+    let result = pm.spawn_command(
+        "color_test",
+        "echo 'Testing invalid color'",
+        true,
+        Some("label".to_string()),
+        Some("invalid_color".to_string()),
+    );
+    assert!(result.is_ok());
+    pm.run_concurrently().unwrap();
+    // Should not panic or crash due to invalid color
+}

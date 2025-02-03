@@ -181,14 +181,14 @@ impl ScriptLoader {
                         Dependency::Task { task } => {
                             let dep_id =
                                 self.resolve_dependency(task, Path::new("config"), &mut graph)?;
-                            graph.add_edge(*dep_id, task_id)?;
+                            graph.add_edge(dep_id, task_id)?;
                         }
                         Dependency::Command { command } => {
                             let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
                                 raw_command: command.clone(),
                                 description: None,
                                 working_dir: None,
-                                env: HashMap::new(),
+                                env: std::collections::HashMap::new(),
                                 watch: None,
                             }));
                             graph.add_edge(cmd_node_id, task_id)?;
@@ -201,14 +201,14 @@ impl ScriptLoader {
                         Dependency::Task { task } => {
                             let dep_id =
                                 self.resolve_dependency(task, Path::new("config"), &mut graph)?;
-                            graph.add_edge(task_id, *dep_id)?;
+                            graph.add_edge(task_id, dep_id)?;
                         }
                         Dependency::Command { command } => {
                             let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
                                 raw_command: command.clone(),
                                 description: None,
                                 working_dir: None,
-                                env: HashMap::new(),
+                                env: std::collections::HashMap::new(),
                                 watch: None,
                             }));
                             graph.add_edge(task_id, cmd_node_id)?;
@@ -293,7 +293,7 @@ impl ScriptLoader {
                 match dep {
                     Dependency::Task { task } => {
                         let dep_id = self.resolve_dependency(task, path, graph)?;
-                        graph.add_edge(*dep_id, node_id)?;
+                        graph.add_edge(dep_id, node_id)?;
                     }
                     Dependency::Command { command } => {
                         let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
@@ -312,7 +312,7 @@ impl ScriptLoader {
                 match dep {
                     Dependency::Task { task } => {
                         let dep_id = self.resolve_dependency(task, path, graph)?;
-                        graph.add_edge(node_id, *dep_id)?;
+                        graph.add_edge(node_id, dep_id)?;
                     }
                     Dependency::Command { command } => {
                         let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
@@ -412,7 +412,7 @@ impl ScriptLoader {
         dep: &str,
         referencing_file: &Path,
         graph: &mut Graph,
-    ) -> Result<&u64> {
+    ) -> Result<u64> {
         if let Some((script_path, task_name)) = self.parse_cross_file_ref(dep, referencing_file) {
             // Create empty global env for cross-file references
             let empty_global_env = HashMap::new();
@@ -431,17 +431,17 @@ impl ScriptLoader {
             )?;
             let full_key = format!("{} {}", script_path.display(), task_name);
             if let Some(id) = graph.task_registry.get(&full_key) {
-                return Ok(id);
+                return Ok(*id);
             }
         }
 
         if let Some(id) = graph.task_registry.get(dep) {
-            return Ok(id);
+            return Ok(*id);
         }
 
         let script_key = format!("{} {}", referencing_file.display(), dep);
         if let Some(id) = graph.task_registry.get(&script_key) {
-            return Ok(id);
+            return Ok(*id);
         }
 
         Err(BodoError::PluginError(format!(
