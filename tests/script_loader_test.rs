@@ -1,10 +1,9 @@
 use bodo::config::BodoConfig;
-use bodo::errors::{BodoError, Result};
+use bodo::errors::BodoError;
 use bodo::manager::GraphManager;
 use bodo::script_loader::ScriptLoader;
-use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tempfile::tempdir;
 
 #[test]
