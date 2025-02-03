@@ -49,7 +49,7 @@ fn test_plugin_manager() {
     let mut graph = Graph::new();
     manager.run_lifecycle(&mut graph, None).unwrap();
 
-    let plugin = manager.plugins[0]
+    let plugin = manager.get_plugins()[0]
         .as_any()
         .downcast_ref::<TestPlugin>()
         .unwrap();

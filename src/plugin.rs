@@ -57,6 +57,11 @@ impl PluginManager {
         self.plugins.push(plugin);
     }
 
+    /// Provide read-only access to the plugins, for testing purposes
+    pub fn get_plugins(&self) -> &[Box<dyn Plugin>] {
+        &self.plugins
+    }
+
     /// Runs the "lifecycle" in a blocking (synchronous) manner.
     pub fn run_lifecycle(&mut self, graph: &mut Graph, config: Option<PluginConfig>) -> Result<()> {
         let config = config.unwrap_or_default();
