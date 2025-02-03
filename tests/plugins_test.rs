@@ -121,11 +121,11 @@ fn test_execution_plugin_with_concurrent_group() {
 
     // Adjust commands to write files using absolute paths
     let command1 = format!(
-        "echo Hello from child 1 > {}",
+        "echo Hello from child 1 > \"{}\"",
         output_file1.to_str().unwrap()
     );
     let command2 = format!(
-        "echo Hello from child 2 > {}",
+        "echo Hello from child 2 > \"{}\"",
         output_file2.to_str().unwrap()
     );
 
@@ -223,10 +223,10 @@ fn test_execution_plugin_with_concurrent_group() {
     plugin.on_after_run(&mut graph).unwrap();
 
     // Verify that the commands executed by checking the output files
-    let output1 = std::fs::read_to_string(output_file1).expect("Failed to read output file 1");
+    let output1 = std::fs::read_to_string(&output_file1).expect("Failed to read output file 1");
     assert_eq!(output1.trim(), "Hello from child 1");
 
-    let output2 = std::fs::read_to_string(output_file2).expect("Failed to read output file 2");
+    let output2 = std::fs::read_to_string(&output_file2).expect("Failed to read output file 2");
     assert_eq!(output2.trim(), "Hello from child 2");
     // Clean up automatically when temp_dir goes out of scope
 }
