@@ -177,7 +177,7 @@ impl Plugin for ExecutionPlugin {
                         let final_cmd = expand_env_vars(cmd, &task_data.env);
                         self.print_command(&final_cmd);
                         let mut pm = ProcessManager::new(false);
-                        pm.spawn_command(&task_data.name, &final_cmd, false, None, None)
+                        pm.spawn_command(&task_data.name, &final_cmd, true, None, None)
                             .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
                         pm.run_concurrently()
                             .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
@@ -189,7 +189,7 @@ impl Plugin for ExecutionPlugin {
                     self.print_command(&final_cmd);
                     let mut pm = ProcessManager::new(false);
                     let label = format!("cmd-{}", node_id);
-                    pm.spawn_command(&label, &final_cmd, false, None, None)
+                    pm.spawn_command(&label, &final_cmd, true, None, None)
                         .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
                     pm.run_concurrently()
                         .map_err(|e| BodoError::PluginError(format!("{}", e)))?;
