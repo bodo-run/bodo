@@ -175,7 +175,7 @@ impl ScriptLoader {
                                 raw_command: command.clone(),
                                 description: None,
                                 working_dir: None,
-                                env: HashMap::new(),
+                                env: std::collections::HashMap::new(),
                                 watch: None,
                             }));
                             graph.add_edge(cmd_node_id, task_id)?;
@@ -195,7 +195,7 @@ impl ScriptLoader {
                                 raw_command: command.clone(),
                                 description: None,
                                 working_dir: None,
-                                env: HashMap::new(),
+                                env: std::collections::HashMap::new(),
                                 watch: None,
                             }));
                             graph.add_edge(task_id, cmd_node_id)?;
@@ -244,8 +244,70 @@ impl ScriptLoader {
         let script_env = script_config.env.clone();
         let script_exec_paths = script_config.exec_paths.clone();
 
-        // For each task in the script, create nodes in the graph
+        // Process default_task if present
         let script_id = path.display().to_string();
+
+        if let Some(default_task_config) = script_config.default_task {
+            let default_task_name = "default";
+            self.validate_task_config(&default_task_config, default_task_name, path)?;
+
+            let node_id = self.create_task_node(
+                graph,
+                &script_id,
+                script_display_name,
+                default_task_name, // Using "default" as the task name
+                &default_task_config,
+            );
+
+            // Update the task data with merged env and exec_paths
+            if let NodeKind::Task(ref mut task_data) = graph.nodes[node_id as usize].kind {
+                task_data.env = script_env.clone();
+                task_data.exec_paths = script_exec_paths.clone();
+            }
+
+            self.register_task(&script_id, default_task_name, node_id, graph)?;
+
+            // Handle dependencies
+            for dep in &default_task_config.pre_deps {
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(task, path, graph)?;
+                        graph.add_edge(dep_id, node_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command.clone(),
+                            description: None,
+                            working_dir: None,
+                            env: HashMap::new(),
+                            watch: None,
+                        }));
+                        graph.add_edge(cmd_node_id, node_id)?;
+                    }
+                }
+            }
+
+            for dep in &default_task_config.post_deps {
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(task, path, graph)?;
+                        graph.add_edge(node_id, dep_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command.clone(),
+                            description: None,
+                            working_dir: None,
+                            env: HashMap::new(),
+                            watch: None,
+                        }));
+                        graph.add_edge(node_id, cmd_node_id)?;
+                    }
+                }
+            }
+        }
+
+        // For each task in the script, create nodes in the graph
         for (task_name, task_config) in script_config.tasks {
             self.validate_task_config(&task_config, &task_name, path)?;
 
