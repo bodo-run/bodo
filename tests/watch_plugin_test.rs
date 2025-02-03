@@ -1,10 +1,11 @@
+// tests/watch_plugin_test.rs
+
 use bodo::config::WatchConfig;
 use bodo::graph::{NodeKind, TaskData};
 use bodo::plugin::Plugin;
 use bodo::plugins::watch_plugin::{WatchEntry, WatchPlugin};
 use bodo::Graph;
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 #[test]
 fn test_watch_plugin_on_init_no_watch() {
@@ -193,8 +194,15 @@ fn test_find_base_directory() {
 #[test]
 fn test_filter_changed_paths() {
     use globset::{Glob, GlobSetBuilder};
+    use std::fs;
+    
+    use tempfile::tempdir;
 
-    // Build the glob set
+    // Create a temporary directory
+    let temp_dir = tempdir().unwrap();
+    let temp_path = temp_dir.path();
+
+    // Create the watch patterns
     let patterns = vec!["src/**/*.rs".to_string()];
     let mut gbuilder = GlobSetBuilder::new();
     for patt in &patterns {
@@ -216,7 +224,7 @@ fn test_filter_changed_paths() {
     let mut dirs = std::collections::HashSet::new();
     for patt in &patterns {
         if let Some(dir) = WatchPlugin::find_base_directory(patt) {
-            dirs.insert(dir);
+            dirs.insert(temp_path.join(dir)); // Adjusted to temp_path
         }
     }
 
@@ -231,20 +239,53 @@ fn test_filter_changed_paths() {
     let plugin = WatchPlugin::new(true, false);
 
     // Prepare changed paths
-    let changed_paths = vec![
-        PathBuf::from("src/main.rs"),
-        PathBuf::from("src/lib.rs"),
-        PathBuf::from("src/ignored_file.rs"),
-        PathBuf::from("src/test_ignore.rs"),
-        PathBuf::from("README.md"),
+    let changed_paths_relative = vec![
+        "src/main.rs",
+        "src/lib.rs",
+        "src/ignored_file.rs",
+        "src/test_ignore.rs",
+        "README.md",
     ];
 
+    let mut changed_paths = vec![];
+
+    // Create the files in the temp directory and collect the full paths
+    for relative_path in &changed_paths_relative {
+        let full_path = temp_path.join(relative_path);
+        // Create the parent directories
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        // Create the file
+        fs::File::create(&full_path).unwrap();
+        changed_paths.push(full_path);
+    }
+
+    // Set the current directory to the temp directory
+    let original_cwd = std::env::current_dir().unwrap();
+    std::env::set_current_dir(temp_path).unwrap();
+
+    // Now, call filter_changed_paths
     let matched_paths = plugin.filter_changed_paths(&changed_paths, &watch_entry);
 
     assert_eq!(matched_paths.len(), 3);
-    assert!(matched_paths.contains(&PathBuf::from("src/main.rs")));
-    assert!(matched_paths.contains(&PathBuf::from("src/lib.rs")));
-    assert!(matched_paths.contains(&PathBuf::from("src/ignored_file.rs"))); // This one is not in ignore_patterns
+
+    let expected_matched_paths = vec![
+        temp_path.join("src/main.rs"),
+        temp_path.join("src/lib.rs"),
+        temp_path.join("src/ignored_file.rs"),
+    ];
+
+    for expected_path in expected_matched_paths {
+        assert!(
+            matched_paths.contains(&expected_path),
+            "Expected path {} not found in matched_paths",
+            expected_path.display()
+        );
+    }
+
+    // Restore the original current directory
+    std::env::set_current_dir(original_cwd).unwrap();
 }
 
 #[test]
