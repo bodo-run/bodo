@@ -144,6 +144,7 @@ pub struct ConcurrentlyOptions {
 
 /// Represents a CLI argument that can be passed to a task
 #[derive(Debug, Clone, Serialize, Deserialize, Validate, JsonSchema, PartialEq)]
+#[derive(Default)]
 pub struct TaskArgument {
     /// Name of the argument (used as environment variable)
     #[validate(length(min = 1, max = 64))]
@@ -161,16 +162,6 @@ pub struct TaskArgument {
     pub default: Option<String>,
 }
 
-impl Default for TaskArgument {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            description: None,
-            required: false,
-            default: None,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Validate, JsonSchema)]
 #[validate(schema(function = "validate_task_config"))]
