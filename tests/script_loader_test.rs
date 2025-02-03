@@ -1,5 +1,4 @@
 use bodo::config::BodoConfig;
-use bodo::errors::BodoError;
 use bodo::graph::{Graph, NodeKind, TaskData};
 use bodo::script_loader::ScriptLoader;
 use std::fs;
