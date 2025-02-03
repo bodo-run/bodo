@@ -1,6 +1,8 @@
 use bodo::config::BodoConfig;
+use bodo::errors::BodoError;
 use bodo::script_loader::ScriptLoader;
 use std::collections::HashMap;
+use std::fs;
 use std::path::PathBuf;
 
 #[test]
@@ -29,4 +31,62 @@ fn test_merge_envs() {
     assert_eq!(merged.get("GLOBAL"), Some(&"1".to_string()));
     assert_eq!(merged.get("SCRIPT"), Some(&"2".to_string()));
     assert_eq!(merged.get("TASK"), Some(&"3".to_string()));
+}
+
+#[test]
+fn test_register_duplicate_task() {
+    let mut loader = ScriptLoader::new();
+    let mut graph = bodo::graph::Graph::new();
+    let config = BodoConfig {
+        tasks: HashMap::from([
+            ("task1".to_string(), Default::default()),
+            ("task1".to_string(), Default::default()),
+        ]),
+        ..Default::default()
+    };
+    let result = loader.build_graph(config);
+    assert!(result.is_err());
+    if let Err(BodoError::PluginError(msg)) = result {
+        assert!(msg.contains("Duplicate task name"));
+    } else {
+        panic!("Expected PluginError due to duplicate task name");
+    }
+}
+
+#[test]
+fn test_resolve_dependency_not_found() {
+    let mut loader = ScriptLoader::new();
+    let mut graph = bodo::graph::Graph::new();
+    let result = loader.resolve_dependency(
+        "nonexistent",
+        PathBuf::from("script.yaml").as_path(),
+        &mut graph,
+    );
+    assert!(result.is_err());
+    if let Err(BodoError::PluginError(msg)) = result {
+        assert!(msg.contains("Dependency not found"));
+    } else {
+        panic!("Expected PluginError due to missing dependency");
+    }
+}
+
+#[test]
+fn test_parse_cross_file_ref() {
+    let loader = ScriptLoader::new();
+    let referencing_file = PathBuf::from("dir/script.yaml");
+    let dep = "../other.yaml/some-task";
+    let result = loader.parse_cross_file_ref(dep, &referencing_file);
+    assert!(result.is_some());
+    let (script_path, task_name) = result.unwrap();
+    assert_eq!(script_path, PathBuf::from("dir/../other.yaml"));
+    assert_eq!(task_name, "some-task".to_string());
+}
+
+#[test]
+fn test_parse_cross_file_ref_no_slash() {
+    let loader = ScriptLoader::new();
+    let referencing_file = PathBuf::from("dir/script.yaml");
+    let dep = "task-name";
+    let result = loader.parse_cross_file_ref(dep, &referencing_file);
+    assert!(result.is_none());
 }
