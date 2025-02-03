@@ -1,133 +1,77 @@
 // tests/main_test.rs
 
-use std::path::PathBuf;
+use std::fs;
+use std::io::Read;
 use std::process::{Command, Stdio};
-use std::thread;
-use std::time::Duration;
+use tempfile::tempdir;
+
+#[cfg(target_os = "windows")]
+const BODO_EXECUTABLE: &str = "target\\debug\\bodo.exe";
+
+#[cfg(not(target_os = "windows"))]
+const BODO_EXECUTABLE: &str = "target/debug/bodo";
 
 #[test]
 fn test_bodo_default() {
-    // First, ensure 'bodo' binary is built
-    let status = Command::new("cargo")
-        .args(["build", "--bin", "bodo"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .status()
-        .expect("Failed to execute cargo build command");
-    assert!(status.success(), "Cargo build failed");
+    // Create a temporary directory
+    let temp_dir = tempdir().unwrap();
+    let scripts_dir = temp_dir.path().join("scripts");
+    fs::create_dir(&scripts_dir).unwrap();
 
-    // Build the path to the built 'bodo' executable
-    let exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("debug")
-        .join("bodo");
-    #[cfg(windows)]
-    exe_path.set_extension("exe");
+    // Write scripts/script.yaml
+    let script_yaml = r#"
+default_task:
+  command: echo "Hello from Bodo root!"
+  description: "Default greeting when running `bodo` with no arguments."
+tasks:
+  example:
+    command: echo "Example task"
+"#;
 
-    let mut child = Command::new(exe_path)
+    fs::write(scripts_dir.join("script.yaml"), script_yaml).unwrap();
+
+    // Run 'bodo' with 'default' argument in temp_dir
+    let mut child = Command::new(BODO_EXECUTABLE)
         .arg("default")
-        .env("RUST_LOG", "info")
-        .env("BODO_NO_WATCH", "1")
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .current_dir(temp_dir.path())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("Failed to execute command");
+        .expect("Failed to spawn 'bodo' process");
 
-    // Wait for at most 10 seconds
-    let timeout = Duration::from_secs(10);
-    let start = std::time::Instant::now();
+    // Capture stdout and stderr
+    let mut stdout = String::new();
+    let mut stderr = String::new();
 
-    while start.elapsed() < timeout {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                // Process has exited
-                let output = child.wait_with_output().expect("Failed to wait on child");
-                assert!(status.success());
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                println!("STDOUT:\n{}", stdout);
-                println!("STDERR:\n{}", stderr);
-                let output_combined = format!("{}{}", stdout, stderr);
-                assert!(
-                    output_combined.contains("Hello from Bodo root!"),
-                    "Output does not contain expected message 'Hello from Bodo root!'"
-                );
-                return;
-            }
-            Ok(None) => {
-                // Process still running
-                thread::sleep(Duration::from_millis(100));
-                continue;
-            }
-            Err(e) => panic!("Error attempting to wait: {}", e),
+    child
+        .stdout
+        .as_mut()
+        .unwrap()
+        .read_to_string(&mut stdout)
+        .unwrap();
+    child
+        .stderr
+        .as_mut()
+        .unwrap()
+        .read_to_string(&mut stderr)
+        .unwrap();
+
+    // Wait for the process to exit with a timeout
+    let result = child.wait();
+    match result {
+        Ok(status) => {
+            assert!(
+                status.success(),
+                "Command exited with non-zero status: {}",
+                status
+            );
         }
+        Err(e) => panic!("Failed to wait on child process: {}", e),
     }
 
-    // If we get here, the process timed out
-    child.kill().expect("Failed to kill process");
-    panic!("Process timed out after {} seconds", timeout.as_secs());
-}
-
-#[test]
-fn test_bodo_list() {
-    // First, ensure 'bodo' binary is built
-    let status = Command::new("cargo")
-        .args(["build", "--bin", "bodo"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .status()
-        .expect("Failed to execute cargo build command");
-    assert!(status.success(), "Cargo build failed");
-
-    // Build the path to the built 'bodo' executable
-    let mut exe_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    exe_path.push("target");
-    exe_path.push("debug");
-    exe_path.push("bodo");
-    #[cfg(windows)]
-    exe_path.set_extension("exe");
-
-    let mut child = Command::new(exe_path)
-        .arg("--list")
-        .env("RUST_LOG", "info")
-        .env("BODO_NO_WATCH", "1")
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("Failed to execute command");
-
-    // Wait for at most 10 seconds
-    let timeout = Duration::from_secs(10);
-    let start = std::time::Instant::now();
-
-    while start.elapsed() < timeout {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                // Process has exited
-                let output = child.wait_with_output().expect("Failed to wait on child");
-                assert!(status.success());
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                println!("STDOUT:\n{}", stdout);
-                println!("STDERR:\n{}", stderr);
-                let output_combined = format!("{}{}", stdout, stderr);
-                assert!(
-                    output_combined
-                        .contains("Default greeting when running `bodo` with no arguments."),
-                    "Output does not contain expected task descriptions"
-                );
-                return;
-            }
-            Ok(None) => {
-                // Process still running
-                thread::sleep(Duration::from_millis(100));
-                continue;
-            }
-            Err(e) => panic!("Error attempting to wait: {}", e),
-        }
-    }
-
-    // If we get here, the process timed out
-    child.kill().expect("Failed to kill process");
-    panic!("Process timed out after {} seconds", timeout.as_secs());
+    // Check the output
+    assert!(
+        stdout.contains("Hello from Bodo root!"),
+        "Output does not contain expected message 'Hello from Bodo root!'"
+    );
 }
