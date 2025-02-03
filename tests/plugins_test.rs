@@ -113,12 +113,15 @@ fn test_execution_plugin_with_concurrent_group() {
     let temp_dir = TempDir::new().unwrap();
     let temp_dir_path = temp_dir.path();
 
-    let output_file1 = temp_dir_path.join("bodo_test_output_child1");
-    let output_file2 = temp_dir_path.join("bodo_test_output_child2");
+    // Since we are setting the working_dir to temp_dir_path, we can just use relative paths
+    let output_file1_name = "bodo_test_output_child1";
+    let output_file2_name = "bodo_test_output_child2";
+    let output_file1 = temp_dir_path.join(output_file1_name);
+    let output_file2 = temp_dir_path.join(output_file2_name);
 
-    // Adjust commands to write files using absolute paths
-    let command1 = format!("echo Hello from child 1 > {}", output_file1.display());
-    let command2 = format!("echo Hello from child 2 > {}", output_file2.display());
+    // Adjust commands to write files using relative paths
+    let command1 = format!("echo Hello from child 1 > {}", output_file1_name);
+    let command2 = format!("echo Hello from child 2 > {}", output_file2_name);
 
     // Build a graph with a concurrent group
     let mut graph = Graph::new();
