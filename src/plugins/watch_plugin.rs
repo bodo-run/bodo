@@ -363,7 +363,7 @@ impl Plugin for WatchPlugin {
     }
 }
 
-fn find_base_directory(patt: &str) -> Option<PathBuf> {
+pub(crate) fn find_base_directory(patt: &str) -> Option<PathBuf> {
     let path = Path::new(patt);
     if patt.starts_with("**/") {
         return Some(PathBuf::from("."));
