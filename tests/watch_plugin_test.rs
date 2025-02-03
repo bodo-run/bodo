@@ -1,6 +1,8 @@
-/// tests/watch_plugin_test.rs
-
-// ... [Previous code] ...
+use bodo::config::WatchConfig;
+use bodo::graph::{NodeKind, TaskData};
+use bodo::plugins::watch_plugin::WatchPlugin;
+use bodo::Graph;
+use std::collections::HashMap;
 
 #[test]
 fn test_watch_plugin_on_graph_build_with_tasks() {
@@ -34,5 +36,3 @@ fn test_watch_plugin_on_graph_build_with_tasks() {
 
     // Since we cannot access private fields, we cannot verify internal data
 }
-
-// ... [Rest of the code] ...
