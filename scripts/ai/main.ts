@@ -99,39 +99,29 @@ function getOpenAiClient() {
   switch (provider) {
     case "ollama": {
       const apiKey = "";
-      const openai = new OpenAI({
+      return new OpenAI({
         apiKey,
         baseURL: "http://127.0.0.1:11434/v1",
       });
-      return {
-        openai,
-        modelName: "mistral-small",
-      };
     }
     case "fireworks": {
       const apiKey = Deno.env.get("FIREWORKS_AI_API_KEY");
       if (!apiKey) throw new Error("Missing FIREWORKS_AI_API_KEY env var.");
 
-      const openai = new OpenAI({
+      return new OpenAI({
         apiKey,
         baseURL: "https://api.fireworks.ai/inference/v1/",
       });
-      const modelName = "accounts/fireworks/models/deepseek-r1";
-      return { openai, modelName };
     }
     case "openai": {
       const apiKey = Deno.env.get("OPENAI_API_KEY");
       if (!apiKey) throw new Error("Missing OPENAI_API_KEY env var.");
-      const openai = new OpenAI({ apiKey });
-      const modelName = "o1-preview";
-      return { openai, modelName };
+      return new OpenAI({ apiKey });
     }
     case "deepseek": {
       const apiKey = Deno.env.get("DEEPSEEK_API_KEY");
       if (!apiKey) throw new Error("Missing DEEPSEEK_API_KEY env var.");
-      const openai = new OpenAI({ apiKey });
-      const modelName = "deepseek-reasoner";
-      return { openai, modelName, baseURL: "https://api.deepseek.com/v1" };
+      return new OpenAI({ apiKey, baseURL: "https://api.deepseek.com/v1" });
     }
     default: {
       throw new Error(`Unknown AI provider: ${provider}`);
@@ -178,7 +168,8 @@ async function callAi(
   text: string,
   { printOutput = true }: { printOutput?: boolean } = {}
 ) {
-  const { openai, modelName } = getOpenAiClient();
+  const openai = getOpenAiClient();
+  const modelName = Deno.env.get("AI_MODEL") || "mistral-small";
   const encoder = new TextEncoder();
   const chatParams: ChatCompletionCreateParams = {
     model: modelName,
