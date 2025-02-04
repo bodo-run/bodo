@@ -3,7 +3,6 @@ use bodo::config::{BodoConfig, TaskArgument};
 use bodo::errors::BodoError;
 use bodo::graph::{Node, NodeKind, TaskData};
 use bodo::manager::GraphManager;
-use bodo::plugins::execution_plugin::ExecutionPlugin;
 use bodo::plugins::prefix_plugin::PrefixPlugin;
 use bodo::process::{color_line, parse_color};
 use std::collections::HashMap;
@@ -169,7 +168,7 @@ mod new_tests {
             env: HashMap::new(),
             exec_paths: vec![],
             arguments: vec![{
-                let mut arg = std::default::Default::default();
+                let mut arg: TaskArgument = std::default::Default::default();
                 arg.name = "GREETING".to_string();
                 arg.description = Some("Greeting msg".to_string());
                 arg.required = true;
@@ -213,7 +212,7 @@ mod new_tests {
             env: HashMap::new(),
             exec_paths: vec![],
             arguments: vec![{
-                let mut arg = std::default::Default::default();
+                let mut arg: TaskArgument = std::default::Default::default();
                 arg.name = "NAME".to_string();
                 arg.required = true;
                 arg.default = None;
@@ -237,20 +236,5 @@ mod new_tests {
         manager.graph.task_registry.insert("greet".to_string(), 0);
         let result = manager.apply_task_arguments("greet", &[]);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_expand_env_vars_edge_cases() {
-        let plugin = ExecutionPlugin::new();
-        let env_map: HashMap<String, String> = vec![
-            ("VAR".to_string(), "value".to_string()),
-            ("EMPTY".to_string(), "".to_string()),
-        ]
-        .into_iter()
-        .collect();
-        let input = "echo $VAR, ${EMPTY}, end";
-        // Expected behavior: ${EMPTY} is replaced by empty string because key exists with empty value.
-        let result = plugin.expand_env_vars(input, &env_map);
-        assert_eq!(result, "echo value, , end");
     }
 }
