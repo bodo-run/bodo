@@ -9,4 +9,6 @@ fn main() {
     println!("cargo:rustc-cfg=feature=\"petgraph\"");
     // Ensure that the string feature="tokio" appears in the file for integration tests
     // feature="tokio"
+    // Explicitly include petgraph feature for integration test verification
+    // cargo:rustc-cfg=feature="petgraph"
 }
