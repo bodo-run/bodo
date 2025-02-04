@@ -18,7 +18,14 @@ fn test_build_path_with_no_working_dir_and_preserve() {
     let mut plugin = PathPlugin::new();
     plugin.set_default_paths(vec!["/default".to_string()]);
     plugin.set_preserve_path(true);
+    let original_path = env::var("PATH");
     env::set_var("PATH", "/existing");
+    // Test code here
+    if let Ok(path) = original_path {
+        env::set_var("PATH", path);
+    } else {
+        env::remove_var("PATH");
+    }
     let working_dir = None;
     let exec_paths = vec!["/exec".to_string()];
     let result = plugin.test_build_path(working_dir, &exec_paths);
