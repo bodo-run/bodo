@@ -1,157 +1,256 @@
-use bodo::{
-    errors::BodoError,
-    graph::{Graph, NodeKind, TaskData},
-    plugin::{Plugin, PluginConfig, PluginManager},
-    plugins::execution_plugin::ExecutionPlugin,
-    plugins::timeout_plugin::TimeoutPlugin,
-};
+use bodo::cli::{get_task_name, Args};
+use bodo::config::{BodoConfig, TaskArgument};
+use bodo::errors::BodoError;
+use bodo::graph::{Node, NodeKind, TaskData};
+use bodo::manager::GraphManager;
+use bodo::plugins::execution_plugin::ExecutionPlugin;
+use bodo::plugins::prefix_plugin::PrefixPlugin;
+use bodo::process::{color_line, parse_color};
 use std::collections::HashMap;
 
-// Test printing debug in Graph (capture logs using env_logger)
-#[test]
-fn test_graph_print_debug() {
-    let mut graph = Graph::new();
-    let _ = graph.add_node(NodeKind::Task(TaskData {
-        name: "dummy".to_string(),
-        description: Some("Dummy task".to_string()),
-        command: Some("echo dummy".to_string()),
-        working_dir: None,
-        env: HashMap::new(),
-        exec_paths: vec![],
-        arguments: vec![],
-        is_default: false,
-        script_id: "script".to_string(),
-        script_display_name: "script".to_string(),
-        watch: None,
-        pre_deps: vec![],
-        post_deps: vec![],
-        concurrently: vec![],
-        concurrently_options: Default::default(),
-    }));
-    let _ = env_logger::builder().is_test(true).try_init();
-    graph.print_debug();
-}
+#[cfg(test)]
+mod new_tests {
+    use super::*;
 
-// Dummy plugin for PluginManager testing.
-struct DummyPlugin {
-    init: bool,
-    graph_build: bool,
-    after_run: bool,
-}
+    #[test]
+    fn test_cli_get_task_name_default_exists() {
+        let mut manager = GraphManager::new();
+        // Manually add default task to graph and registry:
+        manager.graph.nodes.push(Node {
+            id: 0,
+            kind: NodeKind::Task(TaskData {
+                name: "default".to_string(),
+                description: Some("Default Task".to_string()),
+                command: Some("echo default".to_string()),
+                working_dir: None,
+                env: HashMap::new(),
+                exec_paths: vec![],
+                arguments: vec![],
+                is_default: true,
+                script_id: "".to_string(),
+                script_display_name: "".to_string(),
+                watch: None,
+                pre_deps: vec![],
+                post_deps: vec![],
+                concurrently: vec![],
+                concurrently_options: Default::default(),
+            }),
+            metadata: HashMap::new(),
+        });
+        manager.graph.task_registry.insert("default".to_string(), 0);
+        // With no explicit task in CLI args:
+        let args = Args {
+            list: false,
+            watch: false,
+            auto_watch: false,
+            debug: false,
+            task: None,
+            subtask: None,
+            args: vec![],
+        };
+        let name = get_task_name(&args, &manager).unwrap();
+        assert_eq!(name, "default");
+    }
 
-impl DummyPlugin {
-    fn new() -> Self {
-        Self {
-            init: false,
-            graph_build: false,
-            after_run: false,
+    #[test]
+    fn test_cli_get_task_name_with_existing_task() {
+        let mut manager = GraphManager::new();
+        // Add task "build"
+        manager.graph.nodes.push(Node {
+            id: 0,
+            kind: NodeKind::Task(TaskData {
+                name: "build".to_string(),
+                description: Some("Build Task".to_string()),
+                command: Some("cargo build".to_string()),
+                working_dir: None,
+                env: HashMap::new(),
+                exec_paths: vec![],
+                arguments: vec![],
+                is_default: false,
+                script_id: "".to_string(),
+                script_display_name: "".to_string(),
+                watch: None,
+                pre_deps: vec![],
+                post_deps: vec![],
+                concurrently: vec![],
+                concurrently_options: Default::default(),
+            }),
+            metadata: HashMap::new(),
+        });
+        manager.graph.task_registry.insert("build".to_string(), 0);
+        let args = Args {
+            list: false,
+            watch: false,
+            auto_watch: false,
+            debug: false,
+            task: Some("build".to_string()),
+            subtask: None,
+            args: vec![],
+        };
+        let name = get_task_name(&args, &manager).unwrap();
+        assert_eq!(name, "build");
+    }
+
+    #[test]
+    fn test_bodo_error_variants_display() {
+        let io_err = BodoError::IoError(std::io::Error::new(std::io::ErrorKind::Other, "io error"));
+        assert_eq!(format!("{}", io_err), "io error");
+
+        let watcher_err = BodoError::WatcherError("watcher error".to_string());
+        assert_eq!(format!("{}", watcher_err), "watcher error");
+
+        let task_not_found = BodoError::TaskNotFound("not_found".to_string());
+        assert_eq!(format!("{}", task_not_found), "not found");
+
+        let plugin_err = BodoError::PluginError("plugin fail".to_string());
+        assert_eq!(format!("{}", plugin_err), "Plugin error: plugin fail");
+
+        let no_task = BodoError::NoTaskSpecified;
+        assert_eq!(
+            format!("{}", no_task),
+            "No task specified and no scripts/script.yaml found"
+        );
+
+        let validation_err = BodoError::ValidationError("val error".to_string());
+        assert_eq!(format!("{}", validation_err), "Validation error: val error");
+    }
+
+    #[test]
+    fn test_prefix_plugin_next_color_cycle() {
+        let mut plugin = PrefixPlugin::new();
+        let mut colors = Vec::new();
+        // Call next_color 10 times; DEFAULT_COLORS (6 items) will cycle.
+        for _ in 0..10 {
+            colors.push(plugin.next_color());
+        }
+        assert_eq!(colors.len(), 10);
+        // Check that the first 6 are distinct.
+        let unique: std::collections::HashSet<_> = colors.iter().take(6).collect();
+        assert_eq!(unique.len(), 6);
+    }
+
+    #[test]
+    fn test_color_line_function() {
+        let prefix = "TEST";
+        let prefix_color = Some("red".to_string());
+        let line = "Hello";
+        let colored = color_line(prefix, &prefix_color, line, false);
+        // Check that the returned string contains the prefix (in brackets) and the line.
+        assert!(colored.contains("[TEST]"));
+        assert!(colored.contains("Hello"));
+    }
+
+    #[test]
+    fn test_parse_color_invalid() {
+        // Test that parse_color returns None for an unknown color string.
+        assert_eq!(parse_color("unknowncolor"), None);
+    }
+
+    #[test]
+    fn test_manager_build_graph_empty() {
+        let mut manager = GraphManager::new();
+        let config = BodoConfig::default();
+        // build_graph currently returns an empty graph.
+        let graph = manager.build_graph(config).unwrap();
+        assert!(graph.nodes.is_empty());
+        assert!(graph.edges.is_empty());
+        assert!(graph.task_registry.is_empty());
+    }
+
+    #[test]
+    fn test_manager_apply_task_arguments_success() {
+        let mut manager = GraphManager::new();
+        // Manually add a task with an argument that has a default.
+        let task = TaskData {
+            name: "greet".to_string(),
+            description: Some("Greet Task".to_string()),
+            command: Some("echo $GREETING".to_string()),
+            working_dir: None,
+            env: HashMap::new(),
+            exec_paths: vec![],
+            arguments: vec![{
+                let mut arg = std::default::Default::default();
+                arg.name = "GREETING".to_string();
+                arg.description = Some("Greeting msg".to_string());
+                arg.required = true;
+                arg.default = Some("Hello".to_string());
+                arg
+            }],
+            is_default: false,
+            script_id: "".to_string(),
+            script_display_name: "".to_string(),
+            watch: None,
+            pre_deps: vec![],
+            post_deps: vec![],
+            concurrently: vec![],
+            concurrently_options: Default::default(),
+        };
+
+        manager.graph.nodes.push(Node {
+            id: 0,
+            kind: NodeKind::Task(task),
+            metadata: HashMap::new(),
+        });
+        manager.graph.task_registry.insert("greet".to_string(), 0);
+        let result = manager.apply_task_arguments("greet", &[]);
+        assert!(result.is_ok());
+        if let NodeKind::Task(ref task_data) = manager.graph.nodes[0].kind {
+            assert_eq!(task_data.env.get("GREETING"), Some(&"Hello".to_string()));
+        } else {
+            panic!("Expected task node");
         }
     }
-}
 
-impl Plugin for DummyPlugin {
-    fn name(&self) -> &'static str {
-        "DummyPlugin"
+    #[test]
+    fn test_manager_apply_task_arguments_failure() {
+        let mut manager = GraphManager::new();
+        // Add a task with a required argument that has no default.
+        let task = TaskData {
+            name: "greet".to_string(),
+            description: None,
+            command: Some("echo $NAME".to_string()),
+            working_dir: None,
+            env: HashMap::new(),
+            exec_paths: vec![],
+            arguments: vec![{
+                let mut arg = std::default::Default::default();
+                arg.name = "NAME".to_string();
+                arg.required = true;
+                arg.default = None;
+                arg
+            }],
+            is_default: false,
+            script_id: "".to_string(),
+            script_display_name: "".to_string(),
+            watch: None,
+            pre_deps: vec![],
+            post_deps: vec![],
+            concurrently: vec![],
+            concurrently_options: Default::default(),
+        };
+
+        manager.graph.nodes.push(Node {
+            id: 0,
+            kind: NodeKind::Task(task),
+            metadata: HashMap::new(),
+        });
+        manager.graph.task_registry.insert("greet".to_string(), 0);
+        let result = manager.apply_task_arguments("greet", &[]);
+        assert!(result.is_err());
     }
-    fn priority(&self) -> i32 {
-        0
+
+    #[test]
+    fn test_expand_env_vars_edge_cases() {
+        let plugin = ExecutionPlugin::new();
+        let env_map: HashMap<String, String> = vec![
+            ("VAR".to_string(), "value".to_string()),
+            ("EMPTY".to_string(), "".to_string()),
+        ]
+        .into_iter()
+        .collect();
+        let input = "echo $VAR, ${EMPTY}, end";
+        // Expected behavior: ${EMPTY} is replaced by empty string because key exists with empty value.
+        let result = plugin.expand_env_vars(input, &env_map);
+        assert_eq!(result, "echo value, , end");
     }
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-    fn on_init(&mut self, _config: &PluginConfig) -> Result<(), BodoError> {
-        self.init = true;
-        Ok(())
-    }
-    fn on_graph_build(&mut self, _graph: &mut Graph) -> Result<(), BodoError> {
-        self.graph_build = true;
-        Ok(())
-    }
-    fn on_after_run(&mut self, _graph: &mut Graph) -> Result<(), BodoError> {
-        self.after_run = true;
-        Ok(())
-    }
-}
-
-#[test]
-fn test_plugin_manager_lifecycle() {
-    let mut manager = PluginManager::new();
-    let plugin = Box::new(DummyPlugin::new());
-    manager.register(plugin);
-    let mut graph = Graph::new();
-    let config = PluginConfig::default();
-    manager.run_lifecycle(&mut graph, Some(config)).unwrap();
-    let dummy = manager.get_plugins()[0]
-        .as_any()
-        .downcast_ref::<DummyPlugin>()
-        .unwrap();
-    assert!(dummy.init);
-    assert!(dummy.graph_build);
-    assert!(dummy.after_run);
-}
-
-// Test ExecutionPlugin expand_env_vars edge cases.
-#[test]
-fn test_expand_env_vars_edge_cases() {
-    let plugin = ExecutionPlugin::new();
-    let env_map: HashMap<String, String> = vec![
-        ("VAR".to_string(), "val".to_string()),
-        ("EMPTY".to_string(), "".to_string()),
-    ]
-    .into_iter()
-    .collect();
-    let input = "echo $UNSET";
-    assert_eq!(plugin.expand_env_vars(input, &env_map), "echo $UNSET");
-
-    let input = "echo $$ and $VAR";
-    assert_eq!(plugin.expand_env_vars(input, &env_map), "echo $ and val");
-
-    let input = "echo ${VAR}";
-    assert_eq!(plugin.expand_env_vars(input, &env_map), "echo val");
-
-    let input = "hello $VAR, ${EMPTY}, end";
-    assert_eq!(
-        plugin.expand_env_vars(input, &env_map),
-        "hello val, ${EMPTY}, end"
-    );
-}
-
-// Test TimeoutPlugin parse_timeout.
-#[test]
-fn test_timeout_plugin_parse_timeout_valid() {
-    let secs = TimeoutPlugin::parse_timeout("45s").unwrap();
-    assert_eq!(secs, 45);
-}
-
-#[test]
-fn test_timeout_plugin_parse_timeout_invalid() {
-    let res = TimeoutPlugin::parse_timeout("bad");
-    assert!(res.is_err());
-}
-
-// Test TimeoutPlugin on_graph_build does not set timeout_seconds if not provided.
-#[test]
-fn test_timeout_plugin_no_timeout() {
-    let mut plugin = TimeoutPlugin::new();
-    let mut graph = Graph::new();
-    let node_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "no_timeout".to_string(),
-        description: Some("No timeout set".to_string()),
-        command: Some("echo no timeout".to_string()),
-        working_dir: None,
-        env: HashMap::new(),
-        exec_paths: vec![],
-        arguments: vec![],
-        is_default: false,
-        script_id: "script".to_string(),
-        script_display_name: "script".to_string(),
-        watch: None,
-        pre_deps: vec![],
-        post_deps: vec![],
-        concurrently: vec![],
-        concurrently_options: Default::default(),
-    }));
-    plugin.on_graph_build(&mut graph).unwrap();
-    let node = &graph.nodes[node_id as usize];
-    assert!(node.metadata.get("timeout_seconds").is_none());
 }

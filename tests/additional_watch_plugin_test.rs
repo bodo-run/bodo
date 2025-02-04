@@ -25,7 +25,7 @@ fn test_find_base_directory_with_wildcard_in_middle() {
 
 #[test]
 fn test_filter_changed_paths() {
-    // Create a temporary directory structure and file.
+    // Create a temporary directory and file.
     let temp_dir = tempfile::tempdir().unwrap();
     let watch_dir = temp_dir.path().join("watch_dir");
     fs::create_dir_all(&watch_dir).unwrap();
@@ -33,7 +33,9 @@ fn test_filter_changed_paths() {
     fs::write(&file_path, "dummy").unwrap();
 
     let mut directories_to_watch = HashSet::new();
-    directories_to_watch.insert(watch_dir.clone());
+    // Use canonicalized absolute path for the watch directory.
+    let watch_abs = watch_dir.canonicalize().unwrap();
+    directories_to_watch.insert(watch_abs.clone());
 
     let mut glob_builder = globset::GlobSetBuilder::new();
     let glob = globset::Glob::new("foo.txt").unwrap();
@@ -48,21 +50,21 @@ fn test_filter_changed_paths() {
         debounce_ms: 500,
     };
 
-    // Set current directory to temp_dir
-    let original_dir = env::current_dir().unwrap();
-    env::set_current_dir(temp_dir.path()).unwrap();
+    // Set current directory to temp_dir.
+    let cwd = temp_dir.path().canonicalize().unwrap();
+    env::set_current_dir(&cwd).unwrap();
 
-    let changed_paths = vec![PathBuf::from("watch_dir/foo.txt")];
-    let matches = WatchPlugin::new(false, false).filter_changed_paths(&changed_paths, &watch_entry);
+    // Use canonical absolute path for changed path.
+    let changed_path = cwd.join("watch_dir").join("foo.txt");
+    let changed_paths = vec![changed_path];
+    let plugin = WatchPlugin::new(false, false);
+    let matches = plugin.filter_changed_paths(&changed_paths, &watch_entry);
     assert_eq!(matches.len(), 1);
-
-    // Restore original directory
-    env::set_current_dir(&original_dir).unwrap();
 }
 
 #[test]
 fn test_filter_changed_paths_ignore() {
-    // Create a temporary directory structure and file.
+    // Create a temporary directory and file.
     let temp_dir = tempfile::tempdir().unwrap();
     let watch_dir = temp_dir.path().join("watch_dir");
     fs::create_dir_all(&watch_dir).unwrap();
@@ -78,7 +80,8 @@ fn test_filter_changed_paths_ignore() {
     let ignore_set = Some(ignore_builder.build().unwrap());
 
     let mut directories_to_watch = HashSet::new();
-    directories_to_watch.insert(watch_dir.clone());
+    let watch_abs = watch_dir.canonicalize().unwrap();
+    directories_to_watch.insert(watch_abs.clone());
 
     let watch_entry = WatchEntry {
         task_name: "dummy".to_string(),
@@ -88,14 +91,14 @@ fn test_filter_changed_paths_ignore() {
         debounce_ms: 500,
     };
 
-    let original_dir = env::current_dir().unwrap();
-    env::set_current_dir(temp_dir.path()).unwrap();
+    let cwd = temp_dir.path().canonicalize().unwrap();
+    env::set_current_dir(&cwd).unwrap();
 
-    let changed_paths = vec![PathBuf::from("watch_dir/ignore.txt")];
-    let matches = WatchPlugin::new(false, false).filter_changed_paths(&changed_paths, &watch_entry);
+    let changed_path = cwd.join("watch_dir").join("ignore.txt");
+    let changed_paths = vec![changed_path];
+    let plugin = WatchPlugin::new(false, false);
+    let matches = plugin.filter_changed_paths(&changed_paths, &watch_entry);
     assert_eq!(matches.len(), 0);
-
-    env::set_current_dir(&original_dir).unwrap();
 }
 
 #[test]
