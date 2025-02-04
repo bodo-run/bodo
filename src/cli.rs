@@ -1,5 +1,3 @@
-use crate::errors::{BodoError, Result};
-use crate::manager::GraphManager;
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -36,7 +34,10 @@ pub struct Args {
     pub args: Vec<String>,
 }
 
-pub fn get_task_name(args: &Args, manager: &GraphManager) -> Result<String> {
+pub fn get_task_name(
+    args: &Args,
+    manager: &crate::manager::GraphManager,
+) -> Result<String, crate::errors::BodoError> {
     if let Some(task) = &args.task {
         let name = if let Some(subtask) = &args.subtask {
             format!("{} {}", task, subtask)
@@ -46,11 +47,11 @@ pub fn get_task_name(args: &Args, manager: &GraphManager) -> Result<String> {
         if manager.task_exists(&name) {
             Ok(name)
         } else {
-            Err(BodoError::TaskNotFound(name))
+            Err(crate::errors::BodoError::TaskNotFound(name))
         }
     } else if manager.task_exists("default") {
         Ok("default".to_string())
     } else {
-        Err(BodoError::NoTaskSpecified)
+        Err(crate::errors::BodoError::NoTaskSpecified)
     }
 }
