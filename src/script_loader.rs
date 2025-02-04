@@ -155,7 +155,7 @@ impl ScriptLoader {
                     &mut graph,
                     &script_id,
                     &script_display_name,
-                    "default", // Using "default" as the task name
+                    "default",
                     default_task_config,
                 );
 
