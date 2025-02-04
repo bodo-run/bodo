@@ -99,6 +99,7 @@ fn test_print_list_plugin_as_any() {
     use bodo::plugins::print_list_plugin::PrintListPlugin;
     let plp = PrintListPlugin;
     let any_ref = plp.as_any();
+    assert!(any_ref.is::<PrintListPlugin>());
     // Check its name via the trait method.
     assert_eq!(plp.name(), "PrintListPlugin");
     // We cannot further check inner type but this ensures as_any works.
