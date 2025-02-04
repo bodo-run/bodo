@@ -1,128 +1,306 @@
 use bodo::graph::{CommandData, Graph, NodeKind, TaskData};
 use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
+use bodo::Plugin;
 use serde_json::json;
 use std::collections::HashMap;
 
 #[test]
-fn test_concurrent_plugin_object_dependency_task() {
+fn test_concurrent_plugin() {
+    let mut plugin = ConcurrentPlugin::new();
+
     let mut graph = Graph::new();
-    // Create a main task with "concurrently" metadata set to a JSON object with "task" key.
-    let main_task = TaskData {
-        name: "main".to_string(),
+
+    // Create tasks
+    let task_data_main = TaskData {
+        name: "main_task".to_string(),
         description: None,
-        command: Some("echo main".to_string()),
+        command: None, // No command, will have concurrent tasks
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
         watch: None,
-        pre_deps: vec![],
-        post_deps: vec![],
-        concurrently: vec![],
-        concurrently_options: Default::default(),
     };
-    let main_id = graph.add_node(NodeKind::Task(main_task));
-    // Set concurrently metadata to [{"task": "test_task"}]
-    graph.nodes[main_id as usize].metadata.insert(
-        "concurrently".to_string(),
-        json!([{"task": "test_task"}]).to_string(),
-    );
 
-    // Create the dependency task "test_task"
-    let dep_task = TaskData {
-        name: "test_task".to_string(),
+    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+
+    let task_data_child1 = TaskData {
+        name: "child_task1".to_string(),
         description: None,
-        command: Some("echo test_task".to_string()),
+        command: Some("echo Child 1".to_string()),
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
-        is_default: false,
-        script_id: "dep_script".to_string(),
-        script_display_name: "dep_script".to_string(),
-        watch: None,
-        pre_deps: vec![],
-        post_deps: vec![],
         concurrently: vec![],
         concurrently_options: Default::default(),
+        is_default: false,
+        script_id: "script".to_string(),
+        script_display_name: "script".to_string(),
+        watch: None,
     };
-    let dep_id = graph.add_node(NodeKind::Task(dep_task));
-    graph.task_registry.insert("test_task".to_string(), dep_id);
 
-    let mut plugin = ConcurrentPlugin::new();
-    let res = plugin.on_graph_build(&mut graph);
-    assert!(res.is_ok());
+    let child1_id = graph.add_node(NodeKind::Task(task_data_child1));
 
-    // Verify that the concurrent group node includes the dependency task.
+    let task_data_child2 = TaskData {
+        name: "child_task2".to_string(),
+        description: None,
+        command: Some("echo Child 2".to_string()),
+        working_dir: None,
+        env: HashMap::new(),
+        exec_paths: vec![],
+        arguments: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
+        is_default: false,
+        script_id: "script".to_string(),
+        script_display_name: "script".to_string(),
+        watch: None,
+    };
+
+    let child2_id = graph.add_node(NodeKind::Task(task_data_child2));
+
+    // Register child tasks in task_registry
+    graph
+        .task_registry
+        .insert("child_task1".to_string(), child1_id);
+    graph
+        .task_registry
+        .insert("child_task2".to_string(), child2_id);
+
+    // Set up the main_task to have concurrent tasks
+    let main_node = &mut graph.nodes[main_task_id as usize];
+    // Set the metadata 'concurrently' directly as a JSON array string
+    main_node.metadata.insert(
+        "concurrently".to_string(),
+        "[\"child_task1\", \"child_task2\"]".to_string(),
+    );
+    // Also set 'fail_fast' and 'max_concurrent' in metadata
+    main_node
+        .metadata
+        .insert("fail_fast".to_string(), "true".to_string());
+    main_node
+        .metadata
+        .insert("max_concurrent".to_string(), "2".to_string());
+
+    // Apply the plugin
+    let result = plugin.on_graph_build(&mut graph);
+    assert!(
+        result.is_ok(),
+        "Plugin on_graph_build returned an error: {:?}",
+        result.unwrap_err()
+    );
+
+    // Check that a ConcurrentGroup node has been added
     let group_nodes: Vec<_> = graph
         .nodes
         .iter()
-        .filter(|node| matches!(node.kind, NodeKind::ConcurrentGroup(_)))
+        .filter_map(|node| {
+            if let NodeKind::ConcurrentGroup(group_data) = &node.kind {
+                Some((node.id, group_data))
+            } else {
+                None
+            }
+        })
         .collect();
-    assert_eq!(group_nodes.len(), 1);
-    if let NodeKind::ConcurrentGroup(ref group_data) = group_nodes[0].kind {
-        assert!(group_data.child_nodes.contains(&dep_id));
-    } else {
-        panic!("Expected a concurrent group node");
+
+    assert_eq!(group_nodes.len(), 1, "Expected one concurrent group node");
+
+    let (group_id, group_data) = &group_nodes[0];
+    assert_eq!(group_data.child_nodes.len(), 2);
+    assert!(group_data.child_nodes.contains(&child1_id));
+    assert!(group_data.child_nodes.contains(&child2_id));
+
+    // Check the 'fail_fast' and 'max_concurrent' settings
+    assert!(group_data.fail_fast, "Expected fail_fast to be true");
+    assert_eq!(
+        group_data.max_concurrent,
+        Some(2),
+        "Expected max_concurrent to be 2"
+    );
+
+    // Check that edges have been added appropriately
+    // Edge from main_task to group
+    assert!(graph
+        .edges
+        .iter()
+        .any(|edge| edge.from == main_task_id && edge.to == *group_id));
+
+    // Edges from group to child tasks
+    assert!(graph
+        .edges
+        .iter()
+        .any(|edge| edge.from == *group_id && edge.to == child1_id));
+    assert!(graph
+        .edges
+        .iter()
+        .any(|edge| edge.from == *group_id && edge.to == child2_id));
+}
+
+#[test]
+fn test_concurrent_plugin_with_commands() {
+    let mut plugin = ConcurrentPlugin::new();
+
+    let mut graph = Graph::new();
+
+    // Create a main task
+    let task_data_main = TaskData {
+        name: "main_task".to_string(),
+        description: None,
+        command: None, // No command, will have concurrent commands
+        working_dir: None,
+        env: HashMap::new(),
+        exec_paths: vec![],
+        arguments: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
+        is_default: true,
+        script_id: "script".to_string(),
+        script_display_name: "script".to_string(),
+        watch: None,
+    };
+
+    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+
+    // Set up the main_task to have concurrent commands
+    let main_node = &mut graph.nodes[main_task_id as usize];
+    // Set the metadata 'concurrently' directly
+    main_node.metadata.insert(
+        "concurrently".to_string(),
+        r#"[{"command": "echo Command 1"}, {"command": "echo Command 2"}]"#.to_string(),
+    );
+
+    // Apply the plugin
+    let result = plugin.on_graph_build(&mut graph);
+    assert!(
+        result.is_ok(),
+        "Plugin on_graph_build returned an error: {:?}",
+        result.unwrap_err()
+    );
+
+    // Check that a ConcurrentGroup node has been added
+    let group_nodes: Vec<_> = graph
+        .nodes
+        .iter()
+        .filter_map(|node| {
+            if let NodeKind::ConcurrentGroup(group_data) = &node.kind {
+                Some((node.id, group_data))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    assert_eq!(group_nodes.len(), 1, "Expected one concurrent group node");
+
+    let (group_id, group_data) = &group_nodes[0];
+    assert_eq!(group_data.child_nodes.len(), 2);
+
+    // The child nodes should be Command nodes
+    for &child_id in &group_data.child_nodes {
+        let child_node = &graph.nodes[child_id as usize];
+        if let NodeKind::Command(cmd_data) = &child_node.kind {
+            assert!(
+                cmd_data.raw_command == "echo Command 1"
+                    || cmd_data.raw_command == "echo Command 2"
+            );
+        } else {
+            panic!("Expected Command node");
+        }
     }
 }
 
 #[test]
-fn test_concurrent_plugin_object_dependency_command() {
+fn test_concurrent_plugin_nonexistent_task() {
+    let mut plugin = ConcurrentPlugin::new();
+
     let mut graph = Graph::new();
-    // Create a main task with "concurrently" metadata set to a JSON object with "command" key.
-    let main_task = TaskData {
-        name: "main".to_string(),
+
+    // Create a main task
+    let task_data_main = TaskData {
+        name: "main_task".to_string(),
         description: None,
-        command: Some("echo main".to_string()),
+        command: None,
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
         watch: None,
-        pre_deps: vec![],
-        post_deps: vec![],
-        concurrently: vec![],
-        concurrently_options: Default::default(),
     };
-    let main_id = graph.add_node(NodeKind::Task(main_task));
-    // Set concurrently metadata to [{"command": "echo object command"}]
-    graph.nodes[main_id as usize].metadata.insert(
+
+    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+
+    // Set up the main_task to have a nonexistent concurrent task
+    let main_node = &mut graph.nodes[main_task_id as usize];
+    main_node.metadata.insert(
         "concurrently".to_string(),
-        json!([{"command": "echo object command"}]).to_string(),
+        "[\"nonexistent_task\"]".to_string(),
     );
 
-    let mut plugin = ConcurrentPlugin::new();
-    let res = plugin.on_graph_build(&mut graph);
-    assert!(res.is_ok());
-
-    // Verify that a Command node was created and included in the concurrent group.
-    let group_nodes: Vec<_> = graph
-        .nodes
-        .iter()
-        .filter(|node| matches!(node.kind, NodeKind::ConcurrentGroup(_)))
-        .collect();
-    assert_eq!(group_nodes.len(), 1);
-    let group_data = if let NodeKind::ConcurrentGroup(ref group_data) = group_nodes[0].kind {
-        group_data
-    } else {
-        panic!("Expected a concurrent group node");
-    };
-    let command_found = group_data.child_nodes.iter().any(|&child_id| {
-        if let NodeKind::Command(ref cmd_data) = graph.nodes[child_id as usize].kind {
-            cmd_data.raw_command == "echo object command"
-        } else {
-            false
-        }
-    });
+    // Apply the plugin
+    let result = plugin.on_graph_build(&mut graph);
     assert!(
-        command_found,
-        "Concurrent group should contain the command node"
+        result.is_err(),
+        "Expected error due to nonexistent task, but got success"
+    );
+    let error = result.unwrap_err();
+    assert!(
+        matches!(error, BodoError::PluginError(_)),
+        "Expected PluginError, got {:?}",
+        error
+    );
+}
+
+#[test]
+fn test_concurrent_plugin_invalid_dependency_format() {
+    let mut plugin = ConcurrentPlugin::new();
+
+    let mut graph = Graph::new();
+
+    // Create a main task
+    let task_data_main = TaskData {
+        name: "main_task".to_string(),
+        description: None,
+        command: None,
+        working_dir: None,
+        env: HashMap::new(),
+        exec_paths: vec![],
+        arguments: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
+        is_default: true,
+        script_id: "script".to_string(),
+        script_display_name: "script".to_string(),
+        watch: None,
+    };
+
+    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+
+    // Set up the main_task with invalid 'concurrently' metadata
+    let main_node = &mut graph.nodes[main_task_id as usize];
+    main_node
+        .metadata
+        .insert("concurrently".to_string(), "[123, true]".to_string()); // Invalid format
+
+    let result = plugin.on_graph_build(&mut graph);
+    assert!(
+        result.is_err(),
+        "Expected error due to invalid dependency format, but got success"
+    );
+    let error = result.unwrap_err();
+    assert!(
+        matches!(error, BodoError::PluginError(_)),
+        "Expected PluginError, got {:?}",
+        error
     );
 }
