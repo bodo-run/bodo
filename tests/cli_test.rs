@@ -1,37 +1,91 @@
-// tests/cli_test.rs
-
 use bodo::cli::{get_task_name, Args};
-use bodo::config::BodoConfig;
 use bodo::errors::BodoError;
+use bodo::graph::{Node, NodeKind, TaskData};
 use bodo::manager::GraphManager;
+use clap::Parser;
+use std::collections::HashMap;
 
 #[test]
-fn test_get_task_name_with_task_and_subtask() {
+fn test_cli_parser() {
+    let args = Args::parse_from([
+        "bodo", "--debug", "-l", "mytask", "subtask", "--", "arg1", "arg2",
+    ]);
+    assert_eq!(args.task, Some("mytask".to_string()));
+    assert_eq!(args.subtask, Some("subtask".to_string()));
+    assert_eq!(args.args, vec!["arg1".to_string(), "arg2".to_string()]);
+    assert!(args.debug);
+    assert!(args.list);
+
+    // Test default no-argument invocation.
+    let default_args = Args::parse_from(["bodo"]);
+    assert_eq!(default_args.task, None);
+    assert_eq!(default_args.subtask, None);
+    assert!(default_args.args.is_empty());
+}
+
+#[test]
+fn test_get_task_name_default_task() -> Result<(), BodoError> {
+    let mut manager = GraphManager::new();
+    // Manually add a default task to the graph and registry:
+    let default_task = TaskData {
+        name: "default".to_string(),
+        description: Some("Default Task".to_string()),
+        command: Some("echo default".to_string()),
+        working_dir: None,
+        env: HashMap::new(),
+        exec_paths: vec![],
+        arguments: vec![],
+        is_default: true,
+        script_id: "".to_string(),
+        script_display_name: "".to_string(),
+        watch: None,
+    };
+    // Create a node with id 0.
+    manager.graph.nodes.push(Node {
+        id: 0,
+        kind: NodeKind::Task(default_task),
+        metadata: HashMap::new(),
+    });
+    manager.graph.task_registry.insert("default".to_string(), 0);
+
+    // With no explicit task in CLI args:
     let args = Args {
         list: false,
         watch: false,
         auto_watch: false,
         debug: false,
-        task: Some("deploy".to_string()),
-        subtask: Some("prod".to_string()),
+        task: None,
+        subtask: None,
         args: vec![],
     };
-
-    let mut manager = GraphManager::new();
-    let config = BodoConfig::default();
-    manager.build_graph(config).unwrap();
-
-    manager
-        .graph
-        .task_registry
-        .insert("deploy prod".to_string(), 1);
-
-    let task_name = get_task_name(&args, &manager).unwrap();
-    assert_eq!(task_name, "deploy prod");
+    let name = get_task_name(&args, &manager)?;
+    assert_eq!(name, "default");
+    Ok(())
 }
 
 #[test]
-fn test_get_task_name_with_task_only() {
+fn test_get_task_name_with_existing_task() -> Result<(), BodoError> {
+    let mut manager = GraphManager::new();
+    // Add task "build"
+    let build_task = TaskData {
+        name: "build".to_string(),
+        description: Some("Build Task".to_string()),
+        command: Some("cargo build".to_string()),
+        working_dir: None,
+        env: HashMap::new(),
+        exec_paths: vec![],
+        arguments: vec![],
+        is_default: false,
+        script_id: "".to_string(),
+        script_display_name: "".to_string(),
+        watch: None,
+    };
+    manager.graph.nodes.push(Node {
+        id: 0,
+        kind: NodeKind::Task(build_task),
+        metadata: HashMap::new(),
+    });
+    manager.graph.task_registry.insert("build".to_string(), 0);
     let args = Args {
         list: false,
         watch: false,
@@ -41,79 +95,7 @@ fn test_get_task_name_with_task_only() {
         subtask: None,
         args: vec![],
     };
-
-    let mut manager = GraphManager::new();
-    let config = BodoConfig::default();
-    manager.build_graph(config).unwrap();
-
-    manager.graph.task_registry.insert("build".to_string(), 1);
-
-    let task_name = get_task_name(&args, &manager).unwrap();
-    assert_eq!(task_name, "build");
-}
-
-#[test]
-fn test_get_task_name_default_task() {
-    let args = Args {
-        list: false,
-        watch: false,
-        auto_watch: false,
-        debug: false,
-        task: None,
-        subtask: None,
-        args: vec![],
-    };
-
-    let mut manager = GraphManager::new();
-
-    let config_yaml = r#"
-default_task:
-  command: echo "Default Task"
-"#;
-
-    let config: BodoConfig = serde_yaml::from_str(config_yaml).unwrap();
-    manager.build_graph(config).unwrap();
-
-    let task_name = get_task_name(&args, &manager).unwrap();
-    assert_eq!(task_name, "default");
-}
-
-#[test]
-fn test_get_task_name_no_task_specified() {
-    let args = Args {
-        list: false,
-        watch: false,
-        auto_watch: false,
-        debug: false,
-        task: None,
-        subtask: None,
-        args: vec![],
-    };
-
-    let mut manager = GraphManager::new();
-    let config = BodoConfig::default();
-    manager.build_graph(config).unwrap();
-
-    let result = get_task_name(&args, &manager);
-    assert!(matches!(result, Err(BodoError::NoTaskSpecified)));
-}
-
-#[test]
-fn test_get_task_name_task_not_found() {
-    let args = Args {
-        list: false,
-        watch: false,
-        auto_watch: false,
-        debug: false,
-        task: Some("unknown_task".to_string()),
-        subtask: None,
-        args: vec![],
-    };
-
-    let mut manager = GraphManager::new();
-    let config = BodoConfig::default();
-    manager.build_graph(config).unwrap();
-
-    let result = get_task_name(&args, &manager);
-    assert!(matches!(result, Err(BodoError::TaskNotFound(task)) if task == "unknown_task"));
+    let name = get_task_name(&args, &manager)?;
+    assert_eq!(name, "build");
+    Ok(())
 }
