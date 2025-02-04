@@ -115,7 +115,7 @@ impl ScriptLoader {
 
         let mut graph = Graph::new();
 
-        for (path, script_name) in paths_to_load {
+        for (path, script_display) in paths_to_load {
             self.load_script(
                 &mut graph,
                 &path,
@@ -124,7 +124,7 @@ impl ScriptLoader {
                 } else {
                     path.display().to_string()
                 },
-                &script_name,
+                &script_display,
                 &global_env,
                 &global_exec_paths,
             )?;
@@ -462,7 +462,7 @@ impl ScriptLoader {
             }
         }
 
-        Ok(graph)
+        Ok(())
     }
 
     fn validate_task_config(
