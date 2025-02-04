@@ -57,7 +57,7 @@ impl ScriptLoader {
     pub fn build_graph(&mut self, config: BodoConfig) -> Result<Graph> {
         config.validate().map_err(BodoError::from)?;
 
-        let mut graph = Graph::new();
+        let mut graph = crate::graph::Graph::new();
         let mut paths_to_load = vec![];
         let mut root_script_abs: Option<PathBuf> = None;
 
@@ -539,7 +539,7 @@ impl ScriptLoader {
         if let Some(&node_id) = graph.task_registry.get(&full_task_name) {
             Ok(node_id)
         } else {
-            // Fallback: search for any task whose key ends with space + task or equals task
+            // Fallback: search for any task whose key ends with " " + task or equals task
             for (key, &id) in &graph.task_registry {
                 if key == task || key.ends_with(&format!(" {}", task)) {
                     return Ok(id);
