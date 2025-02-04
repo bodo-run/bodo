@@ -1,8 +1,12 @@
-use bodo::plugins::{
-    concurrent_plugin::ConcurrentPlugin, env_plugin::EnvPlugin, execution_plugin::ExecutionPlugin,
-    path_plugin::PathPlugin, prefix_plugin::PrefixPlugin, print_list_plugin::PrintListPlugin,
-    timeout_plugin::TimeoutPlugin, watch_plugin::WatchPlugin,
-};
+use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
+use bodo::plugins::env_plugin::EnvPlugin;
+use bodo::plugins::execution_plugin::ExecutionPlugin;
+use bodo::plugins::path_plugin::PathPlugin;
+use bodo::plugins::prefix_plugin::PrefixPlugin;
+use bodo::plugins::print_list_plugin::PrintListPlugin;
+use bodo::plugins::timeout_plugin::TimeoutPlugin;
+use bodo::plugins::watch_plugin::WatchPlugin;
+use bodo::Plugin;
 
 #[test]
 fn test_as_any_methods() {
