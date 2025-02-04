@@ -1,4 +1,3 @@
-
 use bodo::cli::Args;
 use bodo::BodoError;
 use bodo::Graph;

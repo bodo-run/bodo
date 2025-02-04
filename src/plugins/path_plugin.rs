@@ -44,8 +44,7 @@ impl PathPlugin {
         paths.join(":")
     }
 
-    #[cfg(test)]
-    // This function is added for testing purposes only.
+    // This function is intended for testing purposes.
     pub fn test_build_path(&self, working_dir: Option<&String>, exec_paths: &[String]) -> String {
         self.build_path(working_dir, exec_paths)
     }
