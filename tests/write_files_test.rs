@@ -15,7 +15,7 @@ Second line.
 Another file content.";
     let temp_dir = tempdir().unwrap();
     let input_path = temp_dir.path().join("input.txt");
-    fs::write(&input_path, input_content).unwrap();
+    fs::write(&input_path, input_content).expect("Failed to write input file");
 
     // Ensure that the write_files.sh script exists in the repository root.
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
