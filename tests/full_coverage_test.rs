@@ -1,12 +1,7 @@
 use clap::Parser;
 
 use bodo::cli::Args;
-use bodo::config::BodoConfig;
-use bodo::errors::BodoError;
 use bodo::graph::Graph;
-use bodo::manager::GraphManager;
-use bodo::plugin::Plugin;
-use bodo::Result;
 
 #[test]
 fn test_cli_parser() {
