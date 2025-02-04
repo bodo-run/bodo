@@ -1,8 +1,8 @@
 use bodo::cli::{get_task_name, Args};
-use bodo::config::{BodoConfig, TaskArgument};
 use bodo::errors::BodoError;
 use bodo::graph::{Node, NodeKind, TaskData};
-use bodo::manager::GraphManager; // ADDED
+use bodo::manager::GraphManager;
+use bodo::plugins::prefix_plugin::PrefixPlugin;
 use std::collections::HashMap;
 
 #[cfg(test)]
@@ -114,7 +114,7 @@ mod new_tests {
 
     #[test]
     fn test_prefix_plugin_next_color_cycle() {
-        let mut plugin = crate::bodo::plugins::prefix_plugin::PrefixPlugin::new();
+        let mut plugin = PrefixPlugin::new();
         let mut colors = Vec::new();
         // Call next_color 10 times; DEFAULT_COLORS (6 items) will cycle.
         for _ in 0..10 {
