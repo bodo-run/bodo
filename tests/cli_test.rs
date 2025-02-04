@@ -86,24 +86,27 @@ fn test_cli_get_task_name_with_existing_task() {
 
 #[test]
 fn test_bodo_error_variants_display() {
-    let io_err = BodoError::IoError(std::io::Error::new(std::io::ErrorKind::Other, "io error"));
+    let io_err = bodo::errors::BodoError::IoError(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "io error",
+    ));
     assert_eq!(format!("{}", io_err), "io error");
 
-    let watcher_err = BodoError::WatcherError("watcher error".to_string());
+    let watcher_err = bodo::errors::BodoError::WatcherError("watcher error".to_string());
     assert_eq!(format!("{}", watcher_err), "watcher error");
 
-    let task_not_found = BodoError::TaskNotFound("not_found".to_string());
+    let task_not_found = bodo::errors::BodoError::TaskNotFound("not_found".to_string());
     assert_eq!(format!("{}", task_not_found), "not found");
 
-    let plugin_err = BodoError::PluginError("plugin fail".to_string());
+    let plugin_err = bodo::errors::BodoError::PluginError("plugin fail".to_string());
     assert_eq!(format!("{}", plugin_err), "Plugin error: plugin fail");
 
-    let no_task = BodoError::NoTaskSpecified;
+    let no_task = bodo::errors::BodoError::NoTaskSpecified;
     assert_eq!(
         format!("{}", no_task),
         "No task specified and no scripts/script.yaml found"
     );
 
-    let validation_err = BodoError::ValidationError("val error".to_string());
+    let validation_err = bodo::errors::BodoError::ValidationError("val error".to_string());
     assert_eq!(format!("{}", validation_err), "Validation error: val error");
 }
