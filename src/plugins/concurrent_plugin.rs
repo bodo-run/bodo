@@ -39,10 +39,17 @@ impl Plugin for ConcurrentPlugin {
         for node in &graph.nodes {
             if let NodeKind::Task(_) = &node.kind {
                 if let Some(concurrent_meta) = node.metadata.get("concurrently") {
-                    let concur_deps: Vec<Value> =
-                        serde_json::from_str(concurrent_meta).map_err(|e| {
+                    // If the concurrently metadata is an object, wrap it in an array.
+                    let concur_deps: Vec<Value> = if concurrent_meta.trim().starts_with('{') {
+                        let single: Value = serde_json::from_str(concurrent_meta).map_err(|e| {
                             BodoError::PluginError(format!("Invalid concurrency JSON: {}", e))
                         })?;
+                        vec![single]
+                    } else {
+                        serde_json::from_str(concurrent_meta).map_err(|e| {
+                            BodoError::PluginError(format!("Invalid concurrency JSON: {}", e))
+                        })?
+                    };
                     let fail_fast = node
                         .metadata
                         .get("fail_fast")
@@ -64,15 +71,17 @@ impl Plugin for ConcurrentPlugin {
                         if let Some(&dep_id) = graph.task_registry.get(&task_name) {
                             child_ids.push(dep_id);
                         } else {
-                            return Err(BodoError::PluginError(format!(
-                                "Concurrent task not found: {}",
-                                task_name
-                            )));
-                        }
-                    }
-                    Value::Object(cmd) => {
-                        if let Some(Value::String(task_name)) = cmd.get("task") {
-                            if let Some(&dep_id) = graph.task_registry.get(task_name) {
+                            // fallback search: check for keys that equal task_name or end with " {task_name}"
+                            let mut found = None;
+                            for (key, &id) in &graph.task_registry {
+                                if key.as_str() == task_name.as_str()
+                                    || key.ends_with(&format!(" {}", task_name))
+                                {
+                                    found = Some(id);
+                                    break;
+                                }
+                            }
+                            if let Some(dep_id) = found {
                                 child_ids.push(dep_id);
                             } else {
                                 return Err(BodoError::PluginError(format!(
@@ -80,13 +89,39 @@ impl Plugin for ConcurrentPlugin {
                                     task_name
                                 )));
                             }
+                        }
+                    }
+                    Value::Object(cmd) => {
+                        if let Some(Value::String(task_name)) = cmd.get("task") {
+                            if let Some(&dep_id) = graph.task_registry.get(task_name) {
+                                child_ids.push(dep_id);
+                            } else {
+                                // fallback search for task dependency in object format
+                                let mut found = None;
+                                for (key, &id) in &graph.task_registry {
+                                    if key.as_str() == task_name.as_str()
+                                        || key.ends_with(&format!(" {}", task_name))
+                                    {
+                                        found = Some(id);
+                                        break;
+                                    }
+                                }
+                                if let Some(dep_id) = found {
+                                    child_ids.push(dep_id);
+                                } else {
+                                    return Err(BodoError::PluginError(format!(
+                                        "Concurrent task not found: {}",
+                                        task_name
+                                    )));
+                                }
+                            }
                         } else if let Some(Value::String(command)) = cmd.get("command") {
                             let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
                                 raw_command: command.clone(),
                                 description: None,
                                 working_dir: None,
-                                watch: None,
                                 env: std::collections::HashMap::new(),
+                                watch: None,
                             }));
                             child_ids.push(cmd_node_id);
                         } else {
