@@ -69,6 +69,12 @@ impl WatchPlugin {
         Ok((watcher, rx))
     }
 
+    // This function is intended for testing purposes.
+    #[cfg(test)]
+    pub fn create_watcher_test() -> Result<(RecommendedWatcher, Receiver<notify::Result<Event>>)> {
+        create_watcher()
+    }
+
     pub fn filter_changed_paths(
         &self,
         changed_paths: &[PathBuf],
@@ -407,12 +413,4 @@ impl Plugin for WatchPlugin {
         }
         Ok(())
     }
-}
-
-#[cfg(test)]
-pub fn create_watcher_test() -> crate::Result<(
-    notify::RecommendedWatcher,
-    std::sync::mpsc::Receiver<notify::Result<notify::Event>>,
-)> {
-    WatchPlugin::create_watcher()
 }
