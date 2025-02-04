@@ -12,7 +12,7 @@ pub struct Args {
     pub watch: bool,
 
     /// Auto watch mode – if tasks specify auto_watch, enable it even if --watch was not passed
-    #[arg(long)]
+    #[arg(long, default_value_t = false)]
     pub auto_watch: bool,
 
     /// Disable watch mode completely, even if tasks define auto_watch.
