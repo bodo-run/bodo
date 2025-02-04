@@ -57,19 +57,17 @@ fn test_prefix_plugin_on_graph_build() {
     }));
 
     // For the group node, update each child by adding prefix metadata if needed.
-    let user_color = None;
+    let user_color: Option<String> = None;
     for &child_id in &[task1_id, task2_id] {
         let child_node = &graph.nodes[child_id as usize];
-        let (label, _) = match &child_node.kind {
-            NodeKind::Task(t) => (t.name.clone(), self_next_color()),
-            NodeKind::Command(_) => (format!("cmd-{}", child_id), self_next_color()),
-            NodeKind::ConcurrentGroup(_) => (format!("group-{}", child_id), self_next_color()),
+        let (label, default_color) = match &child_node.kind {
+            NodeKind::Task(t) => (t.name.clone(), plugin.next_color()),
+            NodeKind::Command(_) => (format!("cmd-{}", child_id), plugin.next_color()),
+            NodeKind::ConcurrentGroup(_) => (format!("group-{}", child_id), plugin.next_color()),
         };
-        // Simulate metadata update: in real plugin this gets done through updates.
-        // Here we just check that after on_graph_build, metadata exists.
-        // (The test on_graph_build in PrintListPlugin is more involved, but here we just cover metadata insertion.)
+        let chosen_color = user_color.clone().unwrap_or(default_color);
+        // (Simulate updating metadata if needed; this test primarily checks on_graph_build)
     }
-    // Call on_graph_build of the plugin
     let result = plugin.on_graph_build(&mut graph);
     assert!(result.is_ok());
 
@@ -89,9 +87,4 @@ fn test_prefix_plugin_on_graph_build() {
     );
     assert!(child2.metadata.get("prefix_label").is_some());
     assert!(child2.metadata.get("prefix_color").is_some());
-}
-
-fn self_next_color() -> String {
-    // Dummy next_color function for test purpose
-    "blue".to_string()
 }
