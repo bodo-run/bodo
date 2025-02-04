@@ -1,4 +1,3 @@
-use humantime::parse_duration;
 use std::collections::HashMap;
 
 use bodo::errors::{BodoError, Result};

@@ -1,5 +1,5 @@
 use bodo::config::{BodoConfig, TaskConfig};
-use bodo::graph::{Graph, NodeKind, TaskData};
+use bodo::graph::NodeKind;
 use bodo::script_loader::ScriptLoader;
 use std::fs;
 use tempfile::tempdir;
