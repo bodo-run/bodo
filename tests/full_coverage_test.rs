@@ -6,8 +6,8 @@ use bodo::errors::BodoError;
 use bodo::graph::Graph;
 use bodo::manager::GraphManager;
 use bodo::plugin::Plugin;
+use bodo::Result;
 
-// Test for CLI arguments parsing using clap's Parser trait.
 #[test]
 fn test_cli_parser() {
     let args = Args::parse_from([
@@ -53,7 +53,10 @@ fn test_graph_detect_cycle_none() {
         script_id: "".to_string(),
         script_display_name: "".to_string(),
         watch: None,
-        ..Default::default()
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     }));
     assert!(graph.detect_cycle().is_none());
 }
@@ -74,7 +77,10 @@ fn test_graph_detect_cycle_some() {
             script_id: "".to_string(),
             script_display_name: "".to_string(),
             watch: None,
-            ..Default::default()
+            pre_deps: vec![],
+            post_deps: vec![],
+            concurrently: vec![],
+            concurrently_options: Default::default(),
         })),
         graph.add_node(bodo::graph::NodeKind::Task(bodo::graph::TaskData {
             name: "b".to_string(),
@@ -88,7 +94,10 @@ fn test_graph_detect_cycle_some() {
             script_id: "".to_string(),
             script_display_name: "".to_string(),
             watch: None,
-            ..Default::default()
+            pre_deps: vec![],
+            post_deps: vec![],
+            concurrently: vec![],
+            concurrently_options: Default::default(),
         })),
     );
     graph.add_edge(id1, id2).unwrap();
@@ -98,7 +107,7 @@ fn test_graph_detect_cycle_some() {
 }
 
 #[test]
-fn test_graph_topological_sort_order() -> crate::Result<()> {
+fn test_graph_topological_sort_order() -> bodo::Result<()> {
     let mut graph = Graph::new();
     let a = graph.add_node(bodo::graph::NodeKind::Task(bodo::graph::TaskData {
         name: "A".to_string(),
@@ -112,7 +121,10 @@ fn test_graph_topological_sort_order() -> crate::Result<()> {
         script_id: "".to_string(),
         script_display_name: "".to_string(),
         watch: None,
-        ..Default::default()
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     }));
     let b = graph.add_node(bodo::graph::NodeKind::Task(bodo::graph::TaskData {
         name: "B".to_string(),
@@ -126,11 +138,13 @@ fn test_graph_topological_sort_order() -> crate::Result<()> {
         script_id: "".to_string(),
         script_display_name: "".to_string(),
         watch: None,
-        ..Default::default()
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     }));
     graph.add_edge(a, b).unwrap();
     let sorted = graph.topological_sort()?;
-    assert_eq!(sorted.len(), 2);
-    assert!(sorted[0] == a && sorted[1] == b);
+    assert_eq!(sorted, vec![a, b]);
     Ok(())
 }

@@ -1,5 +1,5 @@
 use bodo::cli::{get_task_name, Args};
-use bodo::config::{BodoConfig, TaskArgument};
+use bodo::config::BodoConfig;
 use bodo::errors::BodoError;
 use bodo::graph::{Graph, NodeKind, TaskData};
 use bodo::manager::GraphManager;
