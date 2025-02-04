@@ -7,6 +7,10 @@ on:
         description: "Base branch to run"
         required: true
         default: "main"
+      prompt:
+        description: "Prompt"
+        required: false
+        type: string
       attempts:
         description: "Max attempts"
         default: "40"
@@ -59,6 +63,7 @@ jobs:
       LLVM_PROFILE_FILE: "coverage/bodo-%p-%m.profraw"
       AI_PROVIDER: ${{ github.event.inputs.provider }}
       AI_MODEL: ${{ github.event.inputs.model }}
+      AI_PROMPT: ${{ github.event.inputs.prompt }}
 
     steps:
       - name: Print inputs
@@ -121,6 +126,7 @@ jobs:
           MAX_ATTEMPTS: ${{ env.MAX_ATTEMPTS }}
           AI_PROVIDER: ${{ env.AI_PROVIDER }}
           AI_MODEL: ${{ env.AI_MODEL }}
+          AI_PROMPT: ${{ env.AI_PROMPT }}
           BASE_BRANCH: ${{ env.BASE_BRANCH }}
           NEW_BRANCH: ${{ env.NEW_BRANCH }}
         run: |

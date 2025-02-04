@@ -10,17 +10,27 @@ const START_TAG = "__FILE_CONTENT_START__";
 const END_TAG = "__FILE_CONTENT_END__";
 const ALL_GOOD_TAG = "DONE_ALL_TESTS_PASS_AND_COVERAGE_IS_GOOD";
 const DEFAULT_PROMPT = `
-You are given the full respository, results of the test run, and the coverage report.
-Your task is first to fix the tests that are failing. 
+You are given the full repository, results of the test run, build errors, clippy errors, and the coverage report.
+Your task is first to fix the tests that are failing and then fix any build or clippy errors if they exist.
 Pick one test and try to fix that one failing test if multiple tests are failing.
 DO NOT remove any existing implementations to make the tests pass.
+Pay attention to DESGIN.md and USAGE.md files to understand the overall design and usage of the project.
 If all tests are passing, pay attention to the coverage report and add new tests to add more 
 coverage as needed. Code coverage should be executed 100%;
-Provide only and only code updates. Do not provide any other text. You response can be multiple files.
+Provide only and only code updates. Do not provide any other text. Your response can be multiple files.
 DO NOT DELETE EXISTING IMPLEMENTATIONS. DO NOT DELETE EXISTING TEST. ONLY ADD TESTS.
-
 Important: Add test files to the tests/ directory. Do not add tests in src/ files
 `.trim();
+
+const RESPONSE_FORMAT = `
+If all tests pass, and coverage is at 100%, return "${ALL_GOOD_TAG}".
+When you return updated code, format your response as follows:
+${FILE_TAG}
+<relative/path/to/file>
+${START_TAG}
+<complete updated file content>
+${END_TAG}
+`;
 
 // make sure coverage dir exists
 Deno.mkdirSync("coverage", { recursive: true });
@@ -35,36 +45,45 @@ const { stdout: repo } = await runCommand("yek --tokens 120k");
 // Get a summary of changes made so far
 const summary = await getChangesSummary(repo);
 
+// Run build and clippy to capture errors (errors only)
+const buildResult = await runCommand("cargo build");
+const clippyResult = await runCommand("cargo clippy");
+
 const aiPrompt = Deno.env.get("AI_PROMPT") || DEFAULT_PROMPT;
 
-// Ask AI to write code
 const textToAi = [
   `Repository:`,
   repo,
+  "",
+  "",
   `Summary of changes we made so far:`,
   summary,
+  "",
+  "",
   `cargo llvm-cov exit code: ${code}`,
-  `STDOUT:`,
+  `Test STDOUT:`,
   stdout,
-  `STDERR:`,
+  `Test STDERR:`,
   stderr,
-  `Instructions:`,
-  aiPrompt,
-  `If all tests pass, and coverage is at 100%, return "${ALL_GOOD_TAG}".`,
-  `When you return updated code, format your response as follows:`,
-  FILE_TAG,
-  `<relative/path/to/file>`,
-  START_TAG,
-  `<complete updated file content>`,
-  END_TAG,
-]
+  "",
+  "",
+];
+
+if (buildResult.code !== 0) {
+  textToAi.push(`BUILD ERRORS:`, buildResult.stderr, "", "");
+}
+textToAi.push(`CLIPPY:`, clippyResult.stdout, clippyResult.stderr, "", "");
+textToAi.push(`Instructions:`, aiPrompt, "", "");
+textToAi.push(RESPONSE_FORMAT, "", "");
+
+const request = textToAi
   .map((line) => stripAnsi(line))
   .join("\n")
   .trim();
 
-console.log("AI prompt:", textToAi);
+console.log("AI prompt:", request);
 
-const aiContent = await callAi(textToAi);
+const aiContent = await callAi(request);
 
 // Otherwise, parse out any updated code
 const updatedFiles = parseUpdatedFiles(aiContent);
