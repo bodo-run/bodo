@@ -4,6 +4,7 @@ import OpenAI from "npm:openai";
 import stripAnsi from "npm:strip-ansi";
 import type { ChatCompletionCreateParams } from "npm:openai/resources/chat/completions";
 import path from "node:path";
+import tokenizer from "npm:gpt-tokenizer/model/gpt-4o";
 
 const FILE_TAG = "__FILENAME__";
 const START_TAG = "__FILE_CONTENT_START__";
@@ -81,7 +82,8 @@ const request = textToAi
   .join("\n")
   .trim();
 
-console.log("AI prompt:", request);
+const tokenCount = tokenizer.encode(request).length;
+console.log("AI prompt token count:", tokenCount.toLocaleString());
 
 const aiContent = await callAi(request);
 
