@@ -1,4 +1,5 @@
 use bodo::graph::{Graph, NodeKind, TaskData};
+use bodo::plugin::Plugin;
 use bodo::plugins::timeout_plugin::TimeoutPlugin;
 use std::collections::HashMap;
 
@@ -8,7 +9,7 @@ fn test_timeout_plugin_no_timeout() {
     let mut graph = Graph::new();
     let task_id = graph.add_node(NodeKind::Task(TaskData {
         name: "no_timeout".to_string(),
-        description: None,
+        description: Some("Task with no timeout".to_string()),
         command: Some("echo no timeout".to_string()),
         working_dir: None,
         env: HashMap::new(),
