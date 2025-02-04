@@ -1,15 +1,16 @@
-use bodo::errors::Result;
+use bodo::errors::BodoError;
 use bodo::graph::{Graph, NodeKind, TaskData};
+use bodo::plugin::Plugin;
 use bodo::plugins::timeout_plugin::TimeoutPlugin;
 use std::collections::HashMap;
 
 #[test]
-fn test_timeout_plugin_on_graph_build_sets_timeout() -> Result<()> {
+fn test_timeout_plugin_on_graph_build_sets_timeout() -> Result<(), BodoError> {
     let mut plugin = TimeoutPlugin::new();
     let mut graph = Graph::new();
     let task_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "task_timeout".to_string(),
-        description: None,
+        name: "test_task".to_string(),
+        description: Some("A test task".to_string()),
         command: Some("sleep 5".to_string()),
         working_dir: None,
         env: HashMap::new(),
@@ -24,7 +25,7 @@ fn test_timeout_plugin_on_graph_build_sets_timeout() -> Result<()> {
         concurrently: vec![],
         concurrently_options: Default::default(),
     }));
-    // Set the timeout metadata manually for testing.
+    // Set up a node with a timeout in metadata
     let node = &mut graph.nodes[task_id as usize];
     node.metadata
         .insert("timeout".to_string(), "30s".to_string());
