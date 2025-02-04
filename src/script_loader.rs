@@ -499,10 +499,11 @@ impl ScriptLoader {
         };
         let node_id = graph.add_node(NodeKind::Task(task_data));
         if !task_config.concurrently.is_empty() {
-            let json_string = serde_json::to_string(&task_config.concurrently).unwrap();
-            graph.nodes[node_id as usize]
-                .metadata
-                .insert("concurrently".to_string(), json_string);
+            if let Ok(json_string) = serde_json::to_string(&task_config.concurrently) {
+                graph.nodes[node_id as usize]
+                    .metadata
+                    .insert("concurrently".to_string(), json_string);
+            }
         }
         node_id
     }
