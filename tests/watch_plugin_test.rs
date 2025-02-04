@@ -1,6 +1,18 @@
-use bodo::graph::{Graph, NodeKind, TaskData};
 use bodo::plugins::watch_plugin::{WatchEntry, WatchPlugin};
-use std::collections::HashMap;
+use bodo::Plugin;
+use std::sync::mpsc::RecvTimeoutError;
+use std::time::Duration;
+
+#[test]
+fn test_create_watcher_test() {
+    let (watcher, rx) = WatchPlugin::create_watcher_test().expect("Failed to create watcher");
+    // Expect timeout since no events occur.
+    match rx.recv_timeout(Duration::from_millis(100)) {
+        Err(RecvTimeoutError::Timeout) => assert!(true),
+        _ => panic!("Expected timeout when no events occur"),
+    }
+    drop(watcher);
+}
 
 #[test]
 fn test_watch_plugin_on_init_no_watch() {
@@ -30,14 +42,14 @@ fn test_watch_plugin_on_graph_build_with_auto_watch_and_env_var_set() {
 
     std::env::set_var("BODO_NO_WATCH", "1");
 
-    let mut graph = Graph::new();
+    let mut graph = bodo::graph::Graph::new();
 
-    let task_data = TaskData {
+    let task_data = bodo::graph::TaskData {
         name: "watch_task".to_string(),
         description: None,
         command: Some("echo 'Watching files'".to_string()),
         working_dir: None,
-        env: HashMap::new(),
+        env: std::collections::HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
         is_default: false,
@@ -55,7 +67,7 @@ fn test_watch_plugin_on_graph_build_with_auto_watch_and_env_var_set() {
         concurrently_options: Default::default(),
     };
 
-    let _node_id = graph.add_node(NodeKind::Task(task_data));
+    let _node_id = graph.add_node(bodo::graph::NodeKind::Task(task_data));
 
     plugin.on_graph_build(&mut graph).unwrap();
 
@@ -70,14 +82,14 @@ fn test_watch_plugin_on_graph_build_with_auto_watch() {
 
     std::env::remove_var("BODO_NO_WATCH");
 
-    let mut graph = Graph::new();
+    let mut graph = bodo::graph::Graph::new();
 
-    let task_data = TaskData {
+    let task_data = bodo::graph::TaskData {
         name: "watch_task".to_string(),
         description: None,
         command: Some("echo 'Watching files'".to_string()),
         working_dir: None,
-        env: HashMap::new(),
+        env: std::collections::HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
         is_default: false,
@@ -95,7 +107,7 @@ fn test_watch_plugin_on_graph_build_with_auto_watch() {
         concurrently_options: Default::default(),
     };
 
-    let _node_id = graph.add_node(NodeKind::Task(task_data));
+    let _node_id = graph.add_node(bodo::graph::NodeKind::Task(task_data));
 
     plugin.on_graph_build(&mut graph).unwrap();
 
@@ -107,14 +119,14 @@ fn test_watch_plugin_on_graph_build_with_auto_watch() {
 fn test_watch_plugin_no_auto_watch_no_watch_mode() {
     let mut plugin = WatchPlugin::new(false, false);
 
-    let mut graph = Graph::new();
+    let mut graph = bodo::graph::Graph::new();
 
-    let task_data = TaskData {
+    let task_data = bodo::graph::TaskData {
         name: "watch_task".to_string(),
         description: None,
         command: Some("echo 'Watching files'".to_string()),
         working_dir: None,
-        env: HashMap::new(),
+        env: std::collections::HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
         is_default: false,
@@ -132,7 +144,7 @@ fn test_watch_plugin_no_auto_watch_no_watch_mode() {
         concurrently_options: Default::default(),
     };
 
-    let _node_id = graph.add_node(NodeKind::Task(task_data));
+    let _node_id = graph.add_node(bodo::graph::NodeKind::Task(task_data));
 
     plugin.on_graph_build(&mut graph).unwrap();
 
@@ -142,14 +154,14 @@ fn test_watch_plugin_no_auto_watch_no_watch_mode() {
 #[test]
 fn test_watch_plugin_on_graph_build_with_tasks() {
     let mut plugin = WatchPlugin::new(true, false);
-    let mut graph = Graph::new();
+    let mut graph = bodo::graph::Graph::new();
 
-    let task_data = TaskData {
+    let task_data = bodo::graph::TaskData {
         name: "watch_task".to_string(),
         description: None,
         command: Some(format!("cat {}", "dummy.txt")),
         working_dir: Some(".".to_string()),
-        env: HashMap::new(),
+        env: std::collections::HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
         is_default: true,
@@ -167,7 +179,7 @@ fn test_watch_plugin_on_graph_build_with_tasks() {
         concurrently_options: Default::default(),
     };
 
-    let _node_id = graph.add_node(NodeKind::Task(task_data));
+    let _node_id = graph.add_node(bodo::graph::NodeKind::Task(task_data));
     plugin.on_graph_build(&mut graph).unwrap();
 
     assert_eq!(plugin.get_watch_entry_count(), 1);
