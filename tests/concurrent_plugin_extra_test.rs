@@ -1,5 +1,5 @@
-use bodo::errors::BodoError;
 use bodo::graph::{Graph, NodeKind, TaskData};
+use bodo::plugin::Plugin;
 use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
 use serde_json::json;
 use std::collections::HashMap;
@@ -36,7 +36,7 @@ fn test_concurrent_plugin_invalid_object_dependency() {
 
     let result = plugin.on_graph_build(&mut graph);
     match result {
-        Err(BodoError::PluginError(msg)) => {
+        Err(bodo::errors::BodoError::PluginError(msg)) => {
             assert!(
                 msg.contains("Invalid concurrency dependency format"),
                 "Unexpected error message: {}",
