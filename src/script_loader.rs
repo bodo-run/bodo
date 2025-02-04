@@ -552,26 +552,3 @@ impl ScriptLoader {
         }
     }
 }
-
-#[cfg(test)]
-pub fn merge_envs_fn(
-    global_env: &HashMap<String, String>,
-    script_env: &HashMap<String, String>,
-    task_env: &HashMap<String, String>,
-) -> HashMap<String, String> {
-    ScriptLoader::merge_envs(global_env, script_env, task_env)
-}
-
-#[cfg(test)]
-pub fn merge_exec_paths_fn(
-    global_paths: &[String],
-    script_paths: &[String],
-    task_paths: &[String],
-) -> Vec<String> {
-    ScriptLoader::merge_exec_paths(global_paths, script_paths, task_paths)
-}
-
-#[cfg(test)]
-pub use merge_envs_fn as merge_envs;
-#[cfg(test)]
-pub use merge_exec_paths_fn as merge_exec_paths;
