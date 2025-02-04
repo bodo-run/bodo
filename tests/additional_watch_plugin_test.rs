@@ -1,12 +1,21 @@
-use bodo::plugins::watch_plugin::{WatchEntry, WatchPlugin};
-use std::collections::HashSet;
-use std::env;
-use std::fs;
+use bodo::plugins::watch_plugin::WatchPlugin;
 use std::path::PathBuf;
+use std::sync::mpsc::RecvTimeoutError;
+use std::time::Duration;
 
 #[test]
-fn test_find_base_directory() {
-    // When pattern starts with **/, expect "."
+fn test_create_watcher_test() {
+    let (watcher, rx) = WatchPlugin::create_watcher_test().expect("Failed to create watcher");
+    // Expect timeout since no events occur.
+    match rx.recv_timeout(Duration::from_millis(100)) {
+        Err(RecvTimeoutError::Timeout) => assert!(true),
+        _ => panic!("Expected timeout when no events occur"),
+    }
+    drop(watcher);
+}
+
+#[test]
+fn test_find_base_directory_with_double_wildcard() {
     let base = WatchPlugin::find_base_directory("**/foo/bar").unwrap();
     assert_eq!(base, PathBuf::from("."));
 }
@@ -25,89 +34,68 @@ fn test_find_base_directory_with_wildcard_in_middle() {
 
 #[test]
 fn test_filter_changed_paths() {
-    // Create a temporary directory and file.
-    let temp_dir = tempfile::tempdir().unwrap();
-    let watch_dir = temp_dir.path().join("watch_dir");
-    fs::create_dir_all(&watch_dir).unwrap();
-    let file_path = watch_dir.join("foo.txt");
-    fs::write(&file_path, "dummy").unwrap();
+    // Build a glob set that matches "test_dir/foo.txt" exactly.
+    let mut builder = globset::GlobSetBuilder::new();
+    let glob = globset::Glob::new("test_dir/foo.txt").unwrap();
+    builder.add(glob);
+    let glob_set = builder.build().unwrap();
 
-    let mut directories_to_watch = HashSet::new();
-    // Use canonicalized absolute path for the watch directory.
-    let watch_abs = watch_dir.canonicalize().unwrap();
-    directories_to_watch.insert(watch_abs.clone());
-
-    let mut glob_builder = globset::GlobSetBuilder::new();
-    let glob = globset::Glob::new("foo.txt").unwrap();
-    glob_builder.add(glob);
-    let glob_set = glob_builder.build().unwrap();
-
-    let watch_entry = WatchEntry {
+    // Create a dummy WatchEntry with a directory to watch: "test_dir"
+    let watch_entry = bodo::plugins::watch_plugin::WatchEntry {
         task_name: "dummy".to_string(),
         glob_set,
         ignore_set: None,
-        directories_to_watch,
+        directories_to_watch: {
+            let mut set = std::collections::HashSet::new();
+            set.insert(PathBuf::from("test_dir"));
+            set
+        },
         debounce_ms: 500,
     };
 
-    // Set current directory to temp_dir.
-    let cwd = temp_dir.path().canonicalize().unwrap();
-    env::set_current_dir(&cwd).unwrap();
-
-    // Use canonical absolute path for changed path.
-    let changed_path = cwd.join("watch_dir").join("foo.txt");
+    let cwd = std::env::current_dir().unwrap();
+    // Create a changed path that is within "test_dir"
+    let changed_path = cwd.join("test_dir").join("foo.txt");
     let changed_paths = vec![changed_path];
     let plugin = WatchPlugin::new(false, false);
-    let matches = plugin.filter_changed_paths(&changed_paths, &watch_entry);
-    assert_eq!(matches.len(), 1);
+    let matched = plugin.filter_changed_paths(&changed_paths, &watch_entry);
+    // Should match since "test_dir/foo.txt" matches and is under test_dir.
+    assert_eq!(matched.len(), 1);
 }
 
 #[test]
 fn test_filter_changed_paths_ignore() {
-    // Create a temporary directory and file.
-    let temp_dir = tempfile::tempdir().unwrap();
-    let watch_dir = temp_dir.path().join("watch_dir");
-    fs::create_dir_all(&watch_dir).unwrap();
-    let file_path = watch_dir.join("ignore.txt");
-    fs::write(&file_path, "content").unwrap();
+    // Build a glob set that matches "test_dir/*.txt"
+    let mut builder = globset::GlobSetBuilder::new();
+    let glob = globset::Glob::new("test_dir/*.txt").unwrap();
+    builder.add(glob);
+    let glob_set = builder.build().unwrap();
 
-    let mut glob_builder = globset::GlobSetBuilder::new();
-    glob_builder.add(globset::Glob::new("*.txt").unwrap());
-    let glob_set = glob_builder.build().unwrap();
-
+    // Create a dummy ignore glob set that matches "test_dir/ignore.txt"
     let mut ignore_builder = globset::GlobSetBuilder::new();
-    ignore_builder.add(globset::Glob::new("ignore.txt").unwrap());
+    let ignore_glob = globset::Glob::new("test_dir/ignore.txt").unwrap();
+    ignore_builder.add(ignore_glob);
     let ignore_set = Some(ignore_builder.build().unwrap());
 
-    let mut directories_to_watch = HashSet::new();
-    let watch_abs = watch_dir.canonicalize().unwrap();
-    directories_to_watch.insert(watch_abs.clone());
-
-    let watch_entry = WatchEntry {
+    // Create a dummy WatchEntry with a directory to watch: "test_dir"
+    let watch_entry = bodo::plugins::watch_plugin::WatchEntry {
         task_name: "dummy".to_string(),
         glob_set,
         ignore_set,
-        directories_to_watch,
+        directories_to_watch: {
+            let mut set = std::collections::HashSet::new();
+            set.insert(PathBuf::from("test_dir"));
+            set
+        },
         debounce_ms: 500,
     };
 
-    let cwd = temp_dir.path().canonicalize().unwrap();
-    env::set_current_dir(&cwd).unwrap();
-
-    let changed_path = cwd.join("watch_dir").join("ignore.txt");
+    let cwd = std::env::current_dir().unwrap();
+    // Create a changed path that is within "test_dir" and should be ignored.
+    let changed_path = cwd.join("test_dir").join("ignore.txt");
     let changed_paths = vec![changed_path];
     let plugin = WatchPlugin::new(false, false);
-    let matches = plugin.filter_changed_paths(&changed_paths, &watch_entry);
-    assert_eq!(matches.len(), 0);
-}
-
-#[test]
-fn test_create_watcher_test() {
-    let (watcher, rx) = WatchPlugin::create_watcher_test().expect("Failed to create watcher");
-    // Expect timeout since no events occur.
-    match rx.recv_timeout(std::time::Duration::from_millis(100)) {
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => assert!(true),
-        _ => panic!("Expected timeout when no events occur"),
-    }
-    drop(watcher);
+    let matched = plugin.filter_changed_paths(&changed_paths, &watch_entry);
+    // Should not match since ignore_set matches
+    assert_eq!(matched.len(), 0);
 }
