@@ -464,7 +464,7 @@ impl ScriptLoader {
             }
         }
 
-        Ok(graph)
+        Ok(())
     }
 
     fn validate_task_config(
