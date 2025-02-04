@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: "Base branch to run"
+        description: "Base branch to run against"
         required: true
         default: "main"
       prompt:
-        description: "Prompt"
+        description: "Prompt (optional)"
         required: false
         type: string
       attempts:
@@ -21,7 +21,7 @@ on:
         type: boolean
       provider:
         description: "AI provider"
-        default: "fireworks"
+        default: "openai"
         required: true
         type: choice
         options:
@@ -31,7 +31,7 @@ on:
           - azure
       model:
         description: "AI model"
-        default: "accounts/fireworks/models/deepseek-r1"
+        default: "o3-mini"
         required: true
         type: choice
         options:

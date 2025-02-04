@@ -69,7 +69,8 @@ impl ScriptLoader {
             let root_path = PathBuf::from(root_script);
             if root_path.exists() {
                 root_script_abs = Some(root_path.canonicalize()?);
-                paths_to_load.insert(0, (root_path, "".to_string()));
+                // Use the root_path's display string as the script id instead of an empty string.
+                paths_to_load.insert(0, (root_path, root_path.display().to_string()));
             }
         }
 
@@ -121,8 +122,9 @@ impl ScriptLoader {
             self.load_script(
                 &mut graph,
                 &path,
+                // If this script is the root script, use its display string as script id.
                 &if Some(&path) == root_script_abs.as_ref() {
-                    "".to_string()
+                    path.display().to_string()
                 } else {
                     path.display().to_string()
                 },
@@ -464,7 +466,7 @@ impl ScriptLoader {
             }
         }
 
-        Ok(())
+        Ok(graph)
     }
 
     fn validate_task_config(
