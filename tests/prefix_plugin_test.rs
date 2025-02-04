@@ -1,4 +1,3 @@
-
 use bodo::graph::{ConcurrentGroupData, Graph, NodeKind, TaskData};
 use bodo::plugin::Plugin;
 use bodo::plugins::prefix_plugin::PrefixPlugin;
