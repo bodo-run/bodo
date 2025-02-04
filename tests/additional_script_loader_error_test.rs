@@ -1,4 +1,4 @@
-use bodo::config::{BodoConfig, TaskConfig};
+use bodo::config::BodoConfig;
 use bodo::errors::BodoError;
 use bodo::plugin::Plugin;
 use bodo::script_loader::ScriptLoader;

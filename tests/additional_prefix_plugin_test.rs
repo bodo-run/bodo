@@ -1,15 +1,13 @@
-use bodo::Plugin;
 use colored::Colorize;
 use log::info;
 use std::{any::Any, cmp::Ordering, collections::HashMap};
 
 use bodo::{
-    graph::{Graph, NodeKind, TaskData},
+    graph::{Graph, NodeKind},
     plugin::Plugin,
     Result,
 };
 
-// Task info represents (task_name, description, script_id)
 type TaskInfo = (String, Option<String>, String);
 type ScriptTasks = Vec<(String, Vec<TaskInfo>)>;
 
