@@ -1,4 +1,5 @@
-use bodo::cli::{get_task_name, Args};
+use bodo::cli::get_task_name;
+use bodo::cli::Args;
 use bodo::errors::BodoError;
 use bodo::graph::{Node, NodeKind, TaskData};
 use bodo::manager::GraphManager;
@@ -24,10 +25,9 @@ fn test_cli_parser() {
 }
 
 #[test]
-fn test_get_task_name_default_task() -> Result<(), BodoError> {
+fn test_get_task_name_default_task() -> Result<String, BodoError> {
     let mut manager = GraphManager::new();
-    // Manually add a default task to the graph and registry:
-    let default_task = TaskData {
+    let task = TaskData {
         name: "default".to_string(),
         description: Some("Default Task".to_string()),
         command: Some("echo default".to_string()),
@@ -39,16 +39,17 @@ fn test_get_task_name_default_task() -> Result<(), BodoError> {
         script_id: "".to_string(),
         script_display_name: "".to_string(),
         watch: None,
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     };
-    // Create a node with id 0.
     manager.graph.nodes.push(Node {
         id: 0,
-        kind: NodeKind::Task(default_task),
+        kind: NodeKind::Task(task),
         metadata: HashMap::new(),
     });
     manager.graph.task_registry.insert("default".to_string(), 0);
-
-    // With no explicit task in CLI args:
     let args = Args {
         list: false,
         watch: false,
@@ -60,14 +61,13 @@ fn test_get_task_name_default_task() -> Result<(), BodoError> {
     };
     let name = get_task_name(&args, &manager)?;
     assert_eq!(name, "default");
-    Ok(())
+    Ok(name)
 }
 
 #[test]
-fn test_get_task_name_with_existing_task() -> Result<(), BodoError> {
+fn test_get_task_name_with_existing_task() -> Result<String, BodoError> {
     let mut manager = GraphManager::new();
-    // Add task "build"
-    let build_task = TaskData {
+    let task = TaskData {
         name: "build".to_string(),
         description: Some("Build Task".to_string()),
         command: Some("cargo build".to_string()),
@@ -79,10 +79,14 @@ fn test_get_task_name_with_existing_task() -> Result<(), BodoError> {
         script_id: "".to_string(),
         script_display_name: "".to_string(),
         watch: None,
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     };
     manager.graph.nodes.push(Node {
         id: 0,
-        kind: NodeKind::Task(build_task),
+        kind: NodeKind::Task(task),
         metadata: HashMap::new(),
     });
     manager.graph.task_registry.insert("build".to_string(), 0);
@@ -97,5 +101,5 @@ fn test_get_task_name_with_existing_task() -> Result<(), BodoError> {
     };
     let name = get_task_name(&args, &manager)?;
     assert_eq!(name, "build");
-    Ok(())
+    Ok(name)
 }

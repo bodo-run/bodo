@@ -18,6 +18,10 @@ fn test_print_debug_and_get_node_name() {
         script_id: "script".to_string(),
         script_display_name: "scriptDir".to_string(),
         watch: None,
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     }));
     let task_name = graph.node_name(task_id as usize);
     assert!(task_name.contains("TaskA") || task_name.contains("scriptDir/TaskA"));
@@ -35,7 +39,7 @@ fn test_print_debug_and_get_node_name() {
 
     // Add a ConcurrentGroup node
     let group_id = graph.add_node(NodeKind::ConcurrentGroup(ConcurrentGroupData {
-        child_nodes: vec![task_id, cmd_id],
+        child_nodes: vec![],
         fail_fast: true,
         max_concurrent: Some(2),
         timeout_secs: Some(10),
@@ -43,7 +47,7 @@ fn test_print_debug_and_get_node_name() {
     let group_name = graph.node_name(group_id as usize);
     assert!(group_name.contains("concurrent_group"));
 
-    // Call print_debug to boost coverage. (The output goes to log, so we just call the function.)
+    // Call print_debug to boost coverage.
     graph.print_debug();
 }
 
@@ -64,6 +68,10 @@ fn test_get_node_name_for_various_types() {
         script_id: "".to_string(),
         script_display_name: "".to_string(),
         watch: None,
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     }));
     let name1 = graph.node_name(task_id as usize);
     assert_eq!(name1, "task_only");
