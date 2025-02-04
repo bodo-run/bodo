@@ -1,0 +1,23 @@
+[profile.ci]
+# Use 2 threads for running tests
+test-threads = 2
+# Show output for failing tests only
+failure-output = "immediate"
+# Show output for successful tests
+success-output = "never"
+# Retry failed tests
+retries = 2
+# Fail fast if a test fails
+fail-fast = true
+
+[profile.coverage]
+# Use 1 thread for more accurate coverage
+test-threads = 1
+# Show output for failing tests
+failure-output = "immediate"
+# Show output for successful tests
+success-output = "never"
+# Don't retry tests for coverage
+retries = 0
+# Don't fail fast for coverage
+fail-fast = false 

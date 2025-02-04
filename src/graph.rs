@@ -1,9 +1,3 @@
-use crate::config::WatchConfig;
-use crate::errors::BodoError;
-use crate::Result;
-use log::debug;
-use std::collections::HashMap;
-
 pub type NodeId = u64;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -13,18 +7,23 @@ pub enum NodeKind {
     ConcurrentGroup(ConcurrentGroupData),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct TaskData {
     pub name: String,
     pub description: Option<String>,
     pub command: Option<String>,
     pub working_dir: Option<String>,
-    pub env: HashMap<String, String>,
+    pub env: std::collections::HashMap<String, String>,
     pub exec_paths: Vec<String>,
     pub is_default: bool,
     pub script_id: String,
     pub script_display_name: String,
-    pub watch: Option<WatchConfig>,
+    pub watch: Option<crate::config::WatchConfig>,
+    pub arguments: Vec<crate::config::TaskArgument>,
+    pub pre_deps: Vec<crate::config::Dependency>,
+    pub post_deps: Vec<crate::config::Dependency>,
+    pub concurrently: Vec<crate::config::Dependency>,
+    pub concurrently_options: crate::config::ConcurrentlyOptions,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,7 +31,7 @@ pub struct CommandData {
     pub raw_command: String,
     pub description: Option<String>,
     pub working_dir: Option<String>,
-    pub env: HashMap<String, String>,
+    pub env: std::collections::HashMap<String, String>,
     pub watch: Option<String>,
 }
 
@@ -48,7 +47,14 @@ pub struct ConcurrentGroupData {
 pub struct Node {
     pub id: NodeId,
     pub kind: NodeKind,
-    pub metadata: HashMap<String, String>,
+    pub metadata: std::collections::HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Graph {
+    pub nodes: Vec<Node>,
+    pub edges: Vec<Edge>,
+    pub task_registry: std::collections::HashMap<String, NodeId>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,19 +63,12 @@ pub struct Edge {
     pub to: NodeId,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct Graph {
-    pub nodes: Vec<Node>,
-    pub edges: Vec<Edge>,
-    pub task_registry: HashMap<String, NodeId>,
-}
-
 impl Graph {
     pub fn new() -> Self {
         Self {
             nodes: Vec::new(),
             edges: Vec::new(),
-            task_registry: HashMap::new(),
+            task_registry: std::collections::HashMap::new(),
         }
     }
 
@@ -78,69 +77,71 @@ impl Graph {
         self.nodes.push(Node {
             id,
             kind,
-            metadata: HashMap::new(),
+            metadata: std::collections::HashMap::new(),
         });
         id
     }
 
-    pub fn add_edge(&mut self, from: NodeId, to: NodeId) -> Result<()> {
+    pub fn add_edge(&mut self, from: NodeId, to: NodeId) -> crate::Result<()> {
         if from as usize >= self.nodes.len() || to as usize >= self.nodes.len() {
-            return Err(BodoError::PluginError("Invalid node ID".to_string()));
+            return Err(crate::errors::BodoError::PluginError(
+                "Invalid node ID".to_string(),
+            ));
         }
         self.edges.push(Edge { from, to });
         Ok(())
     }
 
     pub fn print_debug(&self) {
-        debug!("\nGraph Debug Info:");
-        debug!("Nodes: {}", self.nodes.len());
+        log::debug!("\nGraph Debug Info:");
+        log::debug!("Nodes: {}", self.nodes.len());
         for node in &self.nodes {
             match &node.kind {
                 NodeKind::Task(task) => {
-                    debug!("  Task[{}]: {}", node.id, task.name);
+                    log::debug!("  Task[{}]: {}", node.id, task.name);
                     if let Some(desc) = &task.description {
-                        debug!("    Description: {}", desc);
+                        log::debug!("    Description: {}", desc);
                     }
                     if let Some(cmd) = &task.command {
-                        debug!("    Command: {}", cmd);
+                        log::debug!("    Command: {}", cmd);
                     }
                     if let Some(dir) = &task.working_dir {
-                        debug!("    Working Dir: {}", dir);
+                        log::debug!("    Working Dir: {}", dir);
                     }
                     if !task.env.is_empty() {
-                        debug!("    Environment:");
+                        log::debug!("    Environment:");
                         for (k, v) in &task.env {
-                            debug!("      {}={}", k, v);
+                            log::debug!("      {}={}", k, v);
                         }
                     }
                 }
                 NodeKind::Command(cmd) => {
-                    debug!("  Command[{}]: {}", node.id, cmd.raw_command);
+                    log::debug!("  Command[{}]: {}", node.id, cmd.raw_command);
                 }
                 NodeKind::ConcurrentGroup(group) => {
-                    debug!("  ConcurrentGroup[{}]:", node.id);
-                    debug!("    Children: {:?}", group.child_nodes);
-                    debug!("    Fail Fast: {}", group.fail_fast);
+                    log::debug!("  ConcurrentGroup[{}]:", node.id);
+                    log::debug!("    Children: {:?}", group.child_nodes);
+                    log::debug!("    Fail Fast: {}", group.fail_fast);
                     if let Some(max) = group.max_concurrent {
-                        debug!("    Max Concurrent: {}", max);
+                        log::debug!("    Max Concurrent: {}", max);
                     }
                     if let Some(timeout) = group.timeout_secs {
-                        debug!("    Timeout: {}s", timeout);
+                        log::debug!("    Timeout: {}s", timeout);
                     }
                 }
             }
             if !node.metadata.is_empty() {
-                debug!("    Metadata:");
+                log::debug!("    Metadata:");
                 for (k, v) in &node.metadata {
-                    debug!("      {}={}", k, v);
+                    log::debug!("      {}={}", k, v);
                 }
             }
         }
-        debug!("\nEdges: {}", self.edges.len());
+        log::debug!("\nEdges: {}", self.edges.len());
         for edge in &self.edges {
-            debug!("  {} -> {}", edge.from, edge.to);
+            log::debug!("  {} -> {}", edge.from, edge.to);
         }
-        debug!("");
+        log::debug!("");
     }
 
     pub fn detect_cycle(&self) -> Option<Vec<NodeId>> {
@@ -231,7 +232,11 @@ impl Graph {
         }
     }
 
-    pub fn topological_sort(&self) -> Result<Vec<NodeId>> {
+    pub fn node_name(&self, node_id: usize) -> String {
+        self.get_node_name(node_id)
+    }
+
+    pub fn topological_sort(&self) -> crate::Result<Vec<NodeId>> {
         let mut in_degree = vec![0; self.nodes.len()];
         for e in &self.edges {
             in_degree[e.to as usize] += 1;
@@ -255,7 +260,7 @@ impl Graph {
             }
         }
         if sorted.len() != self.nodes.len() {
-            return Err(BodoError::PluginError(
+            return Err(crate::errors::BodoError::PluginError(
                 "Graph has cycles or is disconnected".to_string(),
             ));
         }

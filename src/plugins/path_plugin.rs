@@ -44,6 +44,11 @@ impl PathPlugin {
         paths.join(":")
     }
 
+    // This function is intended for testing purposes.
+    pub fn test_build_path(&self, working_dir: Option<&String>, exec_paths: &[String]) -> String {
+        self.build_path(working_dir, exec_paths)
+    }
+
     pub fn get_default_paths(&self) -> &Vec<String> {
         &self.default_paths
     }
@@ -82,7 +87,7 @@ impl Plugin for PathPlugin {
                 if let Some(arr) = paths.as_array() {
                     self.default_paths = arr
                         .iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .filter_map(|v| v.as_str().map(String::from))
                         .collect();
                 }
             }
@@ -106,7 +111,6 @@ impl Plugin for PathPlugin {
                     }
                 }
                 NodeKind::Command(cmd_data) => {
-                    // For commands, we'll just use default paths and working dir since they don't have exec_paths
                     let path_str = self.build_path(cmd_data.working_dir.as_ref(), &[]);
                     if !path_str.is_empty() {
                         cmd_data.env.insert("PATH".to_string(), path_str);
@@ -115,6 +119,10 @@ impl Plugin for PathPlugin {
                 _ => {}
             }
         }
+        Ok(())
+    }
+
+    fn on_after_run(&mut self, _graph: &mut Graph) -> Result<()> {
         Ok(())
     }
 

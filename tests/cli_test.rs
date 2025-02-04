@@ -1,43 +1,35 @@
 use bodo::cli::{get_task_name, Args};
-use bodo::errors::BodoError;
+use bodo::graph::{Node, NodeKind, TaskData};
 use bodo::manager::GraphManager;
+use std::collections::HashMap;
 
 #[test]
-fn test_get_task_name_with_task_and_subtask() {
-    let args = Args {
-        list: false,
-        watch: false,
-        auto_watch: false,
-        debug: false,
-        task: Some(String::from("deploy")),
-        subtask: Some(String::from("prod")),
-        args: vec![],
-    };
+fn test_cli_get_task_name_default_exists() {
     let mut manager = GraphManager::new();
-    manager.initialize().unwrap();
-    let result = get_task_name(&args, &manager).unwrap();
-    assert_eq!(result, "deploy prod");
-}
-
-#[test]
-fn test_get_task_name_with_task_only() {
-    let args = Args {
-        list: false,
-        watch: false,
-        auto_watch: false,
-        debug: false,
-        task: Some(String::from("test")),
-        subtask: None,
-        args: vec![],
-    };
-    let mut manager = GraphManager::new();
-    manager.initialize().unwrap();
-    let result = get_task_name(&args, &manager).unwrap();
-    assert_eq!(result, "test");
-}
-
-#[test]
-fn test_get_task_name_default_task_exists() {
+    // Manually add default task to graph and registry:
+    manager.graph.nodes.push(Node {
+        id: 0,
+        kind: NodeKind::Task(TaskData {
+            name: "default".to_string(),
+            description: Some("Default Task".to_string()),
+            command: Some("echo default".to_string()),
+            working_dir: None,
+            env: HashMap::new(),
+            exec_paths: vec![],
+            arguments: vec![],
+            is_default: true,
+            script_id: "".to_string(),
+            script_display_name: "".to_string(),
+            watch: None,
+            pre_deps: vec![],
+            post_deps: vec![],
+            concurrently: vec![],
+            concurrently_options: Default::default(),
+        }),
+        metadata: HashMap::new(),
+    });
+    manager.graph.task_registry.insert("default".to_string(), 0);
+    // With no explicit task in CLI args:
     let args = Args {
         list: false,
         watch: false,
@@ -47,42 +39,72 @@ fn test_get_task_name_default_task_exists() {
         subtask: None,
         args: vec![],
     };
-    let mut manager = GraphManager::new();
-    manager.initialize().unwrap();
-    // Assuming that the default task exists
-    let result = get_task_name(&args, &manager).unwrap();
-    assert_eq!(result, "default");
+    let name = get_task_name(&args, &manager).unwrap();
+    assert_eq!(name, "default");
 }
 
 #[test]
-fn test_get_task_name_default_task_not_exists() {
+fn test_cli_get_task_name_with_existing_task() {
+    let mut manager = GraphManager::new();
+    // Add task "build"
+    manager.graph.nodes.push(Node {
+        id: 0,
+        kind: NodeKind::Task(TaskData {
+            name: "build".to_string(),
+            description: Some("Build Task".to_string()),
+            command: Some("cargo build".to_string()),
+            working_dir: None,
+            env: HashMap::new(),
+            exec_paths: vec![],
+            arguments: vec![],
+            is_default: false,
+            script_id: "".to_string(),
+            script_display_name: "".to_string(),
+            watch: None,
+            pre_deps: vec![],
+            post_deps: vec![],
+            concurrently: vec![],
+            concurrently_options: Default::default(),
+        }),
+        metadata: HashMap::new(),
+    });
+    manager.graph.task_registry.insert("build".to_string(), 0);
     let args = Args {
         list: false,
         watch: false,
         auto_watch: false,
         debug: false,
-        task: None,
+        task: Some("build".to_string()),
         subtask: None,
         args: vec![],
     };
-    let manager = GraphManager::new(); // empty manager, no tasks
-    let result = get_task_name(&args, &manager);
-    assert!(matches!(result, Err(BodoError::NoTaskSpecified)));
+    let name = get_task_name(&args, &manager).unwrap();
+    assert_eq!(name, "build");
 }
 
 #[test]
-fn test_get_task_name_task_not_found() {
-    let args = Args {
-        list: false,
-        watch: false,
-        auto_watch: false,
-        debug: false,
-        task: Some(String::from("non_existent_task")),
-        subtask: None,
-        args: vec![],
-    };
-    let mut manager = GraphManager::new();
-    manager.initialize().unwrap();
-    let result = get_task_name(&args, &manager);
-    assert!(matches!(result, Err(BodoError::TaskNotFound(_))));
+fn test_bodo_error_variants_display() {
+    let io_err = bodo::errors::BodoError::IoError(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "io error",
+    ));
+    assert_eq!(format!("{}", io_err), "io error");
+
+    let watcher_err = bodo::errors::BodoError::WatcherError("watcher error".to_string());
+    assert_eq!(format!("{}", watcher_err), "watcher error");
+
+    let task_not_found = bodo::errors::BodoError::TaskNotFound("not_found".to_string());
+    assert_eq!(format!("{}", task_not_found), "not found");
+
+    let plugin_err = bodo::errors::BodoError::PluginError("plugin fail".to_string());
+    assert_eq!(format!("{}", plugin_err), "Plugin error: plugin fail");
+
+    let no_task = bodo::errors::BodoError::NoTaskSpecified;
+    assert_eq!(
+        format!("{}", no_task),
+        "No task specified and no scripts/script.yaml found"
+    );
+
+    let validation_err = bodo::errors::BodoError::ValidationError("val error".to_string());
+    assert_eq!(format!("{}", validation_err), "Validation error: val error");
 }

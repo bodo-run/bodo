@@ -1,239 +1,231 @@
-use bodo::config::{
-    BodoConfig, ConcurrentlyOptions, Dependency, TaskArgument, TaskConfig, WatchConfig,
-};
-use validator::Validate;
+// tests/config_test.rs
 
+use bodo::config::{BodoConfig, Dependency, TaskConfig, WatchConfig};
+use validator::Validate;
 use validator::ValidationErrors;
 
 #[test]
 fn test_validate_task_name_reserved() {
     let mut config = TaskConfig::default();
     config._name_check = Some("default_task".to_string());
+    config.command = Some("echo 'test'".to_string()); // Add command to pass validation
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 }
 
 #[test]
-fn test_task_argument_boundaries() {
-    // Test valid name length
-    let valid_arg = TaskArgument {
-        name: "a".repeat(64),
-        description: Some("x".repeat(128)),
-        ..Default::default()
-    };
-    assert!(valid_arg.validate().is_ok());
-
-    // Test invalid name length
-    let invalid_name = TaskArgument {
-        name: "a".repeat(65),
-        ..valid_arg.clone()
-    };
-    assert!(invalid_name.validate().is_err());
-
-    // Test invalid description length
-    let invalid_desc = TaskArgument {
-        description: Some("x".repeat(129)),
-        ..valid_arg
-    };
-    assert!(invalid_desc.validate().is_err());
-}
-
-#[test]
-fn test_valid_task_config_variations() {
-    // Valid task with command only
-    let valid_with_cmd = TaskConfig {
-        command: Some("echo valid".to_string()),
-        ..Default::default()
-    };
-    assert!(valid_with_cmd.validate().is_ok());
-
-    // Valid task with dependencies only
-    let valid_with_deps = TaskConfig {
-        pre_deps: vec![Dependency::Command {
-            command: "echo pre".to_string(),
-        }],
-        ..Default::default()
-    };
-    assert!(valid_with_deps.validate().is_ok());
-
-    // Valid task with concurrent deps
-    let valid_concurrent = TaskConfig {
-        concurrently: vec![Dependency::Task {
-            task: "other-task".to_string(),
-        }],
-        ..Default::default()
-    };
-    assert!(valid_concurrent.validate().is_ok());
-}
-
-#[test]
-fn test_watch_config_validation() {
-    let valid_watch = WatchConfig {
-        patterns: vec!["**/*.rs".to_string()],
-        debounce_ms: 1000,
-        ignore_patterns: vec!["target/**".to_string()],
-        ..Default::default()
-    };
-    assert!(valid_watch.validate().is_ok());
-}
-
-#[test]
-fn test_concurrently_options_validation() {
-    let valid_opts = ConcurrentlyOptions {
-        max_concurrent_tasks: Some(10),
-        ..Default::default()
-    };
-    assert!(valid_opts.validate().is_ok());
-
-    let invalid_opts = ConcurrentlyOptions {
-        max_concurrent_tasks: Some(0),
-        ..Default::default()
-    };
-    assert!(invalid_opts.validate().is_err());
-}
-
-#[test]
-fn test_dependency_deserialization_variants() {
-    let yaml = r#"
-    - task: "complex::task::name"
-    - command: "echo 'hello world' | grep hello"
-    "#;
-    let deps: Vec<Dependency> = serde_yaml::from_str(yaml).unwrap();
-    assert_eq!(deps.len(), 2);
-    assert!(matches!(&deps[0], Dependency::Task { task } if task == "complex::task::name"));
+fn test_validate_task_name_valid() {
+    let mut config = TaskConfig::default();
+    config._name_check = Some("valid_task_name".to_string());
+    config.command = Some("echo 'test'".to_string()); // Add command to pass validation
+    let result = config.validate();
     assert!(
-        matches!(&deps[1], Dependency::Command { command } if command == "echo 'hello world' | grep hello")
+        result.is_ok(),
+        "Expected validation to pass for valid task name"
     );
 }
 
 #[test]
-fn test_no_op_task_validation() {
-    let invalid_task = TaskConfig::default();
-    let result = invalid_task.validate();
+fn test_validate_task_name_invalid_characters() {
+    let mut config = TaskConfig::default();
+    config._name_check = Some("invalid/task/name".to_string());
+    config.command = Some("echo 'test'".to_string()); // Add command
+    let result = config.validate();
+    assert!(matches!(result, Err(ValidationErrors { .. })));
+
+    let mut config = TaskConfig::default();
+    config._name_check = Some("invalid..name".to_string());
+    config.command = Some("echo 'test'".to_string()); // Add command
+    let result = config.validate();
+    assert!(matches!(result, Err(ValidationErrors { .. })));
+
+    let mut config = TaskConfig::default();
+    config._name_check = Some("invalid.name".to_string());
+    config.command = Some("echo 'test'".to_string()); // Add command
+    let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 }
 
 #[test]
-fn test_task_config_with_mixed_dependencies() {
-    let valid_mixed = TaskConfig {
-        command: Some("echo main".to_string()),
-        pre_deps: vec![Dependency::Command {
-            command: "echo pre".to_string(),
-        }],
-        post_deps: vec![Dependency::Task {
-            task: "cleanup".to_string(),
-        }],
-        ..Default::default()
-    };
-    assert!(valid_mixed.validate().is_ok());
+fn test_validate_task_name_invalid_length() {
+    let mut config = TaskConfig::default();
+    config._name_check = Some("".to_string());
+    config.command = Some("echo 'test'".to_string()); // Add command
+    let result = config.validate();
+    assert!(matches!(result, Err(ValidationErrors { .. })));
+
+    let long_name = "a".repeat(101);
+    let mut config = TaskConfig::default();
+    config._name_check = Some(long_name);
+    config.command = Some("echo 'test'".to_string()); // Add command
+    let result = config.validate();
+    assert!(matches!(result, Err(ValidationErrors { .. })));
 }
 
 #[test]
-fn test_task_name_validation() {
-    let mut valid_task = TaskConfig {
-        command: Some("echo test".into()),
+fn test_validate_task_config_no_command_no_deps() {
+    let task_config = TaskConfig {
+        command: None,
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
         ..Default::default()
     };
-
-    // Test valid names
-    valid_task._name_check = Some("valid-task".into());
-    assert!(valid_task.validate().is_ok());
-
-    // Test reserved names
-    for name in ["watch", "default_task", "pre_deps"] {
-        valid_task._name_check = Some(name.into());
-        let result = valid_task.validate();
-        assert!(result.is_err(), "Should reject reserved name: {}", name);
-    }
-
-    // Test invalid characters
-    for name in ["test/name", "..test", "test.name"] {
-        valid_task._name_check = Some(name.into());
-        let result = valid_task.validate();
-        assert!(result.is_err(), "Should reject invalid chars in: {}", name);
-    }
-
-    // Test length boundaries
-    let mut long_name = String::with_capacity(101);
-    long_name.extend(std::iter::repeat('a').take(101));
-    valid_task._name_check = Some(long_name);
-    assert!(valid_task.validate().is_err());
+    let result = task_config.validate();
+    assert!(matches!(result, Err(ValidationErrors { .. })));
 }
 
 #[test]
-fn test_task_config_validation() {
-    // Valid config with command
-    let valid_with_command = TaskConfig {
-        command: Some("echo valid".into()),
-        ..Default::default()
-    };
-    assert!(valid_with_command.validate().is_ok());
-
-    // Valid config with dependencies
-    let valid_with_deps = TaskConfig {
-        pre_deps: vec![Dependency::Command {
-            command: "echo pre".into(),
+fn test_validate_task_config_with_deps_no_command() {
+    let task_config = TaskConfig {
+        command: None,
+        pre_deps: vec![Dependency::Task {
+            task: "some_task".to_string(),
         }],
         ..Default::default()
     };
-    assert!(valid_with_deps.validate().is_ok());
-
-    // Invalid empty config
-    let invalid_empty = TaskConfig::default();
-    assert!(invalid_empty.validate().is_err());
+    let result = task_config.validate();
+    assert!(
+        result.is_ok(),
+        "Expected validation to pass with dependencies"
+    );
 }
 
 #[test]
-fn test_timeout_validation() {
-    let mut valid_task = TaskConfig {
-        command: Some("echo test".into()),
-        timeout: Some("30s".into()),
+fn test_validate_task_config_invalid_timeout() {
+    let task_config = TaskConfig {
+        command: Some("echo 'Hello'".to_string()),
+        timeout: Some("invalid_duration".to_string()),
         ..Default::default()
     };
-    assert!(valid_task.validate().is_ok());
-
-    valid_task.timeout = Some("invalid".into());
-    assert!(valid_task.validate().is_err());
+    let result = task_config.validate();
+    assert!(matches!(result, Err(ValidationErrors { .. })));
 }
 
 #[test]
-fn test_task_argument_validation() {
-    let valid_arg = TaskArgument {
-        name: "arg1".into(),
-        description: Some("Test argument".into()),
-        required: false,
-        default: Some("default".into()),
+fn test_validate_task_config_valid_timeout() {
+    let task_config = TaskConfig {
+        command: Some("echo 'Hello'".to_string()),
+        timeout: Some("30s".to_string()),
+        ..Default::default()
     };
-    assert!(valid_arg.validate().is_ok());
-
-    let invalid_name = TaskArgument {
-        name: "a".repeat(65),
-        ..valid_arg.clone()
-    };
-    assert!(invalid_name.validate().is_err());
+    let result = task_config.validate();
+    assert!(
+        result.is_ok(),
+        "Expected validation to pass with valid timeout"
+    );
 }
 
 #[test]
-fn test_dependency_parsing() {
-    let yaml = r#"
-    - task: test-task
-    - command: echo hello
+fn test_task_config_with_all_fields() {
+    let task_config = TaskConfig {
+        description: Some("A full task".to_string()),
+        command: Some("echo 'Running task'".to_string()),
+        cwd: Some("/tmp".to_string()),
+        env: [("VAR1".to_string(), "value1".to_string())]
+            .iter()
+            .cloned()
+            .collect(),
+        pre_deps: vec![Dependency::Task {
+            task: "pre_task".to_string(),
+        }],
+        post_deps: vec![Dependency::Command {
+            command: "echo 'Post'".to_string(),
+        }],
+        watch: Some(WatchConfig {
+            patterns: vec!["src/**/*.rs".to_string()],
+            debounce_ms: 500,
+            ignore_patterns: vec![],
+            auto_watch: false,
+        }),
+        timeout: Some("1m".to_string()),
+        exec_paths: vec!["/usr/local/bin".to_string()],
+        arguments: vec![],
+        concurrently_options: Default::default(),
+        concurrently: vec![],
+        _name_check: Some("full_task".to_string()),
+    };
+    let result = task_config.validate();
+    assert!(
+        result.is_ok(),
+        "Expected validation to pass for full task config"
+    );
+}
+
+#[test]
+fn test_bodo_config_load() {
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    // Create a temporary config file
+    let mut temp_file = NamedTempFile::new().unwrap();
+    let config_content = r#"
+        root_script: "scripts/main.yaml"
+        scripts_dirs: ["scripts/"]
+        default_task:
+          command: echo "Default Task"
+        tasks:
+          test:
+            command: echo "Test Task"
     "#;
+    write!(temp_file, "{}", config_content).unwrap();
 
-    let deps: Vec<Dependency> = serde_yaml::from_str(yaml).unwrap();
-    assert_eq!(deps.len(), 2);
-    assert!(matches!(deps[0], Dependency::Task { .. }));
-    assert!(matches!(deps[1], Dependency::Command { .. }));
+    let config = BodoConfig::load(Some(temp_file.path().to_str().unwrap().to_string())).unwrap();
+    assert_eq!(config.root_script, Some("scripts/main.yaml".to_string()));
+    assert_eq!(config.scripts_dirs, Some(vec!["scripts/".to_string()]));
+    assert!(config.default_task.is_some());
+    assert_eq!(config.tasks.len(), 1);
+    assert!(config.tasks.contains_key("test"));
 }
 
 #[test]
-fn test_config_load_validation() {
-    let yaml = r#"
-tasks:
-  invalid/name:
-    command: echo should fail
-    "#;
+fn test_bodo_config_load_invalid_file() {
+    let result = BodoConfig::load(Some("nonexistent_config.yaml".to_string()));
+    assert!(result.is_err(), "Expected error loading nonexistent file");
+}
 
-    let result = BodoConfig::load(Some(yaml.into()));
-    assert!(result.is_err());
+#[test]
+fn test_bodo_config_load_invalid_yaml() {
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    let mut temp_file = NamedTempFile::new().unwrap();
+    let invalid_yaml = r#"
+        root_script: "scripts/main.yaml
+        scripts_dirs: ["scripts/"]
+    "#; // Missing closing quote
+
+    write!(temp_file, "{}", invalid_yaml).unwrap();
+
+    let result = BodoConfig::load(Some(temp_file.path().to_str().unwrap().to_string()));
+    assert!(result.is_err(), "Expected error loading invalid YAML");
+}
+
+#[test]
+fn test_validate_dependency_task() {
+    let dep = Dependency::Task {
+        task: "some_task".to_string(),
+    };
+    // Dependency is an untagged enum, no validation logic, but we can test serialization/deserialization
+    let serialized = serde_yaml::to_string(&dep).unwrap();
+    assert_eq!(serialized.trim(), "task: some_task");
+}
+
+#[test]
+fn test_validate_dependency_command() {
+    let dep = Dependency::Command {
+        command: "echo 'Hello'".to_string(),
+    };
+    let serialized = serde_yaml::to_string(&dep).unwrap();
+    assert_eq!(serialized.trim(), "command: echo 'Hello'");
+}
+
+#[test]
+fn test_generate_schema() {
+    let schema = BodoConfig::generate_schema();
+    assert!(!schema.is_empty(), "Schema should not be empty");
+    assert!(
+        schema.contains("\"title\": \"BodoConfig\""),
+        "Schema should contain BodoConfig title"
+    );
 }

@@ -25,7 +25,7 @@ impl PrefixPlugin {
         Self { color_index: 0 }
     }
 
-    fn next_color(&mut self) -> String {
+    pub fn next_color(&mut self) -> String {
         let c = DEFAULT_COLORS[self.color_index % DEFAULT_COLORS.len()];
         self.color_index += 1;
         format!("{:?}", c).to_lowercase()
