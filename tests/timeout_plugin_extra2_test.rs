@@ -25,11 +25,13 @@ fn test_timeout_plugin_on_graph_build_sets_timeout() -> Result<(), BodoError> {
         concurrently: vec![],
         concurrently_options: Default::default(),
     }));
-    // Set up a node with a timeout in metadata
-    let node = &mut graph.nodes[task_id as usize];
-    node.metadata
-        .insert("timeout".to_string(), "30s".to_string());
+    {
+        let node = &mut graph.nodes[task_id as usize];
+        node.metadata
+            .insert("timeout".to_string(), "30s".to_string());
+    }
     plugin.on_graph_build(&mut graph)?;
+    let node = &graph.nodes[task_id as usize];
     assert_eq!(
         node.metadata.get("timeout_seconds"),
         Some(&"30".to_string())
