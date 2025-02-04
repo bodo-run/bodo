@@ -2,9 +2,8 @@ use bodo::graph::{Graph, NodeKind, TaskData};
 use std::collections::HashMap;
 
 #[test]
-fn test_topological_sort_order() {
+fn test_topological_sort_order() -> bodo::Result<()> {
     let mut graph = Graph::new();
-
     let a = graph.add_node(NodeKind::Task(TaskData {
         name: "A".to_string(),
         description: None,
@@ -17,8 +16,11 @@ fn test_topological_sort_order() {
         script_id: "".to_string(),
         script_display_name: "".to_string(),
         watch: None,
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     }));
-
     let b = graph.add_node(NodeKind::Task(TaskData {
         name: "B".to_string(),
         description: None,
@@ -31,10 +33,13 @@ fn test_topological_sort_order() {
         script_id: "".to_string(),
         script_display_name: "".to_string(),
         watch: None,
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     }));
-
-    // a -> b
     graph.add_edge(a, b).unwrap();
-    let sorted = graph.topological_sort().unwrap();
+    let sorted = graph.topological_sort()?;
     assert_eq!(sorted, vec![a, b]);
+    Ok(())
 }
