@@ -409,3 +409,11 @@ impl Plugin for WatchPlugin {
         Ok(())
     }
 }
+
+#[cfg(test)]
+pub fn create_watcher_test() -> crate::Result<(
+    notify::RecommendedWatcher,
+    std::sync::mpsc::Receiver<notify::Result<notify::Event>>,
+)> {
+    Self::create_watcher()
+}
