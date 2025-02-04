@@ -70,7 +70,6 @@ impl WatchPlugin {
     }
 
     // This function is intended for testing purposes.
-    #[cfg(test)]
     pub fn create_watcher_test() -> Result<(RecommendedWatcher, Receiver<notify::Result<Event>>)> {
         Self::create_watcher()
     }
