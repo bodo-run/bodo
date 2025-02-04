@@ -1,4 +1,4 @@
-use bodo::script_loader::{merge_envs, merge_exec_paths};
+use bodo::script_loader::ScriptLoader;
 use std::collections::HashMap;
 
 #[test]
@@ -6,7 +6,7 @@ fn test_merge_envs() {
     let global = HashMap::from([("A".to_string(), "1".to_string())]);
     let script = HashMap::from([("B".to_string(), "2".to_string())]);
     let task = HashMap::from([("C".to_string(), "3".to_string())]);
-    let merged = merge_envs(&global, &script, &task);
+    let merged = ScriptLoader::merge_envs(&global, &script, &task);
     assert_eq!(merged.get("A"), Some(&"1".to_string()));
     assert_eq!(merged.get("B"), Some(&"2".to_string()));
     assert_eq!(merged.get("C"), Some(&"3".to_string()));
@@ -17,7 +17,7 @@ fn test_merge_exec_paths() {
     let global = vec!["/global".to_string()];
     let script = vec!["/script".to_string()];
     let task = vec!["/task".to_string()];
-    let merged = merge_exec_paths(&global, &script, &task);
+    let merged = ScriptLoader::merge_exec_paths(&global, &script, &task);
     assert_eq!(
         merged,
         vec![
