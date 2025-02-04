@@ -48,9 +48,11 @@ impl ScriptLoader {
         task_paths: &[String],
     ) -> Vec<String> {
         let mut merged = Vec::new();
-        merged.extend(global_paths.iter().cloned());
-        merged.extend(script_paths.iter().cloned());
-        merged.extend(task_paths.iter().cloned());
+        for p in global_paths.iter().chain(script_paths).chain(task_paths) {
+            if !merged.contains(p) {
+                merged.push(p.clone());
+            }
+        }
         merged
     }
 
@@ -462,7 +464,7 @@ impl ScriptLoader {
             }
         }
 
-        Ok(())
+        Ok(graph)
     }
 
     fn validate_task_config(
