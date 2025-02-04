@@ -39,55 +39,53 @@ mod new_tests {
             list: false,
             watch: false,
             auto_watch: false,
+            no_watch: false,
             debug: false,
             task: None,
             subtask: None,
             args: vec![],
         };
-        let name = get_task_name(&args, &manager).unwrap();
-        assert_eq!(name, "default");
+        let task_name = get_task_name(&args, &manager).unwrap();
+        assert_eq!(task_name, "default");
     }
 
     #[test]
-    fn test_graph_topological_sort_order() -> Result<()> {
-        let mut graph = GraphManager::new().graph;
-        let a = graph.add_node(NodeKind::Task(TaskData {
-            name: "A".to_string(),
-            description: None,
-            command: Some("echo A".to_string()),
-            working_dir: None,
-            env: HashMap::new(),
-            exec_paths: vec![],
-            arguments: vec![],
-            is_default: false,
-            script_id: "".to_string(),
-            script_display_name: "".to_string(),
-            watch: None,
-            pre_deps: vec![],
-            post_deps: vec![],
-            concurrently: vec![],
-            concurrently_options: Default::default(),
-        }));
-        let b = graph.add_node(NodeKind::Task(TaskData {
-            name: "B".to_string(),
-            description: None,
-            command: Some("echo B".to_string()),
-            working_dir: None,
-            env: HashMap::new(),
-            exec_paths: vec![],
-            arguments: vec![],
-            is_default: false,
-            script_id: "".to_string(),
-            script_display_name: "".to_string(),
-            watch: None,
-            pre_deps: vec![],
-            post_deps: vec![],
-            concurrently: vec![],
-            concurrently_options: Default::default(),
-        }));
-        graph.add_edge(a, b).unwrap();
-        let sorted = graph.topological_sort()?;
-        assert_eq!(sorted, vec![a, b]);
-        Ok(())
+    fn test_cli_get_task_name_with_existing_task() {
+        let mut manager = GraphManager::new();
+        // Add task "build"
+        manager.graph.nodes.push(Node {
+            id: 0,
+            kind: NodeKind::Task(TaskData {
+                name: "build".to_string(),
+                description: Some("Build Task".to_string()),
+                command: Some("cargo build".to_string()),
+                working_dir: None,
+                env: HashMap::new(),
+                exec_paths: vec![],
+                arguments: vec![],
+                is_default: false,
+                script_id: "".to_string(),
+                script_display_name: "".to_string(),
+                watch: None,
+                pre_deps: vec![],
+                post_deps: vec![],
+                concurrently: vec![],
+                concurrently_options: Default::default(),
+            }),
+            metadata: HashMap::new(),
+        });
+        manager.graph.task_registry.insert("build".to_string(), 0);
+        let args = Args {
+            list: false,
+            watch: false,
+            auto_watch: false,
+            no_watch: false,
+            debug: false,
+            task: Some("build".to_string()),
+            subtask: None,
+            args: vec![],
+        };
+        let task_name = get_task_name(&args, &manager).unwrap();
+        assert_eq!(task_name, "build");
     }
 }
