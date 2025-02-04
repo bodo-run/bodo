@@ -552,3 +552,10 @@ impl ScriptLoader {
         }
     }
 }
+
+#[cfg(test)]
+pub use merge_envs;
+#[cfg(test)]
+pub use merge_exec_paths;
+
+// End of src/script_loader.rs
