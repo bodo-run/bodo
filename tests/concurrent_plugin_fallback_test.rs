@@ -1,7 +1,7 @@
-use bodo::errors::BodoError;
 use bodo::graph::{Graph, NodeKind, TaskData};
+use bodo::plugin::Plugin;
 use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
-use std::collections::HashMap;
+use std::collections::HashMap; // ADDED IMPORT
 
 #[test]
 fn test_concurrent_plugin_fallback() {
@@ -30,10 +30,11 @@ fn test_concurrent_plugin_fallback() {
     let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
 
     let main_node = &mut graph.nodes[main_task_id as usize];
-    // Set the metadata 'concurrently' as a JSON array (so that serde_json parses it as an array)
-    main_node
-        .metadata
-        .insert("concurrently".to_string(), "[\"test_task\"]".to_string());
+    // Set up the main_task to have concurrent tasks
+    main_node.metadata.insert(
+        "concurrently".to_string(),
+        "[\"nonexistent_task\"]".to_string(),
+    );
     // Add a fallback task in task_registry with a key that ends with " test_task"
     let fallback_task = TaskData {
         name: "fallback".to_string(),
