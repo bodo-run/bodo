@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use validator::Validate;
@@ -318,7 +318,7 @@ impl ScriptLoader {
         let script_yaml: serde_yaml::Value = serde_yaml::from_str(&content)?;
 
         // Now, collect task names and check for duplicates
-        let mut task_names = HashSet::new();
+        let mut task_names = std::collections::HashSet::new();
 
         if let Some(tasks) = script_yaml.get("tasks") {
             if let Some(task_map) = tasks.as_mapping() {
@@ -372,48 +372,6 @@ impl ScriptLoader {
             }
 
             self.register_task(script_id, default_task_name, node_id, graph)?;
-        }
-
-        // Process tasks
-        for (task_name, task_config) in &script_config.tasks {
-            self.validate_task_config(task_config, task_name, path)?;
-
-            // Merge environments and exec_paths for this task
-            let env = Self::merge_envs(global_env, &script_env, &task_config.env);
-            let exec_paths = Self::merge_exec_paths(
-                global_exec_paths,
-                &script_exec_paths,
-                &task_config.exec_paths,
-            );
-
-            // Create and register the task node
-            let node_id = self.create_task_node(
-                graph,
-                script_id,
-                script_display_name,
-                task_name,
-                task_config,
-            );
-
-            // Update the task data with merged env and exec_paths
-            if let NodeKind::Task(ref mut task_data) = graph.nodes[node_id as usize].kind {
-                task_data.env = env;
-                task_data.exec_paths = exec_paths;
-            }
-
-            self.register_task(script_id, task_name, node_id, graph)?;
-        }
-
-        // Now, process dependencies for the default_task
-        if let Some(ref default_task_config) = script_config.default_task {
-            let default_task_name = "default";
-            let full_task_name = if script_id.is_empty() {
-                default_task_name.to_string()
-            } else {
-                format!("{} {}", script_id, default_task_name)
-            };
-
-            let node_id = *graph.task_registry.get(&full_task_name).unwrap();
 
             // Handle dependencies
             for dep in &default_task_config.pre_deps {
@@ -455,15 +413,34 @@ impl ScriptLoader {
             }
         }
 
-        // Now, process dependencies for the tasks
+        // Now, process tasks
         for (task_name, task_config) in &script_config.tasks {
-            let full_task_name = if script_id.is_empty() {
-                task_name.clone()
-            } else {
-                format!("{} {}", script_id, task_name)
-            };
+            self.validate_task_config(task_config, task_name, path)?;
 
-            let node_id = *graph.task_registry.get(&full_task_name).unwrap();
+            // Merge environments and exec_paths for this task
+            let env = Self::merge_envs(global_env, &script_env, &task_config.env);
+            let exec_paths = Self::merge_exec_paths(
+                global_exec_paths,
+                &script_exec_paths,
+                &task_config.exec_paths,
+            );
+
+            // Create and register the task node
+            let node_id = self.create_task_node(
+                graph,
+                script_id,
+                script_display_name,
+                task_name,
+                task_config,
+            );
+
+            // Update the task data with merged env and exec_paths
+            if let NodeKind::Task(ref mut task_data) = graph.nodes[node_id as usize].kind {
+                task_data.env = env;
+                task_data.exec_paths = exec_paths;
+            }
+
+            self.register_task(script_id, task_name, node_id, graph)?;
 
             // Handle dependencies
             for dep in &task_config.pre_deps {
@@ -540,7 +517,14 @@ impl ScriptLoader {
             watch: task_config.watch.clone(),
             arguments: task_config.arguments.clone(),
         };
-        graph.add_node(NodeKind::Task(task_data))
+        let node_id = graph.add_node(NodeKind::Task(task_data));
+        if !task_config.concurrently.is_empty() {
+            let json_string = serde_json::to_string(&task_config.concurrently).unwrap();
+            graph.nodes[node_id as usize]
+                .metadata
+                .insert("concurrently".to_string(), json_string);
+        }
+        node_id
     }
 
     fn register_task(
