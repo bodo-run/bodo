@@ -1,6 +1,7 @@
-use bodo::cli::get_task_name;
+use bodo::cli::{get_task_name, Args};
 use bodo::graph::{Node, NodeKind, TaskData};
-use bodo::{GraphManager, Result};
+use bodo::manager::GraphManager;
+use bodo::Result;
 use std::collections::HashMap;
 
 #[test]
@@ -35,6 +36,7 @@ fn test_all_public_functions() -> Result<()> {
         list: false,
         watch: false,
         auto_watch: false,
+        no_watch: false,
         debug: false,
         task: None,
         subtask: None,
