@@ -41,8 +41,8 @@ Another file content.";
     assert!(dummy_txt.exists());
     assert!(another_txt.exists());
 
-    let dummy_content = fs::read_to_string(dummy_txt).unwrap();
+    let dummy_content = fs::read_to_string(dummy_txt).expect("Failed to read dummy.txt");
     assert_eq!(dummy_content, "Hello, world!\nSecond line.");
-    let another_content = fs::read_to_string(another_txt).unwrap();
+    let another_content = fs::read_to_string(another_txt).expect("Failed to read another.txt");
     assert_eq!(another_content, "Another file content.");
 }
