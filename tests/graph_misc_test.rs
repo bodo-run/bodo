@@ -1,5 +1,4 @@
-use bodo::graph::{Graph, NodeKind, TaskData};
-use std::collections::HashMap;
+use bodo::graph::Graph;
 
 #[test]
 fn test_format_cycle_error_empty() {
