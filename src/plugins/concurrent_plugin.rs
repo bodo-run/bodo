@@ -39,10 +39,17 @@ impl Plugin for ConcurrentPlugin {
         for node in &graph.nodes {
             if let NodeKind::Task(_) = &node.kind {
                 if let Some(concurrent_meta) = node.metadata.get("concurrently") {
-                    let concur_deps: Vec<Value> =
-                        serde_json::from_str(concurrent_meta).map_err(|e| {
+                    // If the concurrently metadata is an object, wrap it in an array.
+                    let concur_deps: Vec<Value> = if concurrent_meta.trim().starts_with('{') {
+                        let single: Value = serde_json::from_str(concurrent_meta).map_err(|e| {
                             BodoError::PluginError(format!("Invalid concurrency JSON: {}", e))
                         })?;
+                        vec![single]
+                    } else {
+                        serde_json::from_str(concurrent_meta).map_err(|e| {
+                            BodoError::PluginError(format!("Invalid concurrency JSON: {}", e))
+                        })?
+                    };
                     let fail_fast = node
                         .metadata
                         .get("fail_fast")
