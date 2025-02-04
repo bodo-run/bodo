@@ -37,6 +37,7 @@ fn test_plugin_on_run_default() {
         watch: None,
     }));
     let res = plugin.on_run(node_id as usize, &mut graph);
+    assert_eq!(node_id, 0);
     assert!(res.is_ok());
 }
 
