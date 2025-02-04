@@ -18,6 +18,9 @@ use std::{collections::HashMap, process::exit};
 fn main() {
     let args = Args::parse();
 
+    if args.no_watch {
+        std::env::set_var("BODO_NO_WATCH", "1");
+    }
     if args.debug {
         std::env::set_var("RUST_LOG", "bodo=debug");
     } else if std::env::var("RUST_LOG").is_err() {
@@ -41,13 +44,7 @@ fn main() {
 }
 
 fn run(args: Args) -> Result<(), BodoError> {
-    let watch_mode = if std::env::var("BODO_NO_WATCH").is_ok() {
-        false
-    } else if args.auto_watch {
-        true
-    } else {
-        args.watch
-    };
+    let watch_mode = args.watch;
 
     let root_script = std::env::var("BODO_ROOT_SCRIPT")
         .map(|s| s.to_string())

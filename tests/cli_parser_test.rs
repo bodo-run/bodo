@@ -11,10 +11,15 @@ fn test_cli_parser() {
     assert_eq!(args.args, vec!["arg1".to_string(), "arg2".to_string()]);
     assert!(args.debug);
     assert!(args.list);
+    // Ensure the new 'no_watch' flag defaults to false.
+    assert!(!args.no_watch);
+}
 
-    // Test default no-argument invocation.
-    let default_args = Args::parse_from(["bodo"]);
-    assert_eq!(default_args.task, None);
-    assert_eq!(default_args.subtask, None);
-    assert!(default_args.args.is_empty());
+#[test]
+fn test_default_no_args() {
+    let args = Args::parse_from(["bodo"]);
+    assert_eq!(args.task, None);
+    assert_eq!(args.subtask, None);
+    assert!(args.args.is_empty());
+    assert!(!args.no_watch);
 }

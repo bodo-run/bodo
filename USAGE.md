@@ -26,12 +26,12 @@ bodo [OPTIONS] [TASK] [SUBTASK] [ARGS...]
 
 ### Common Flags
 
-| Flag | Shorthand | Description |
-|------|-----------|-------------|
-| `--list` | `-l` | Lists all available tasks from all loaded scripts. |
-| `--watch` | `-w` | Runs the specified task and re-runs it whenever watched files change. |
-| `--auto-watch` | | Automatically enables watch mode if tasks define watch configurations. |
-| `--debug` | | Enables debug logging (sets `RUST_LOG=bodo=debug`). |
+| Flag       | Shorthand | Description                                                                                  |
+|------------|-----------|----------------------------------------------------------------------------------------------|
+| `--list`   | `-l`     | Lists all available tasks from all loaded scripts.                                           |
+| `--watch`  | `-w`     | Enables watch mode, causing tasks to be rerun when watched files change.                     |
+| `--no-watch`|          | Disables watch mode completely—even if tasks define auto_watch configuration in their settings. |
+| `--debug`  |          | Enables debug logging (sets `RUST_LOG=bodo=debug`).                                          |
 
 ### Examples
 
@@ -42,27 +42,32 @@ bodo [OPTIONS] [TASK] [SUBTASK] [ARGS...]
 
 - Run a specific task:
   ```bash
-  bodo test
+  bode test
   ```
 
 - Run a subtask:
   ```bash
-  bodo deploy prod
+  bode deploy prod
   ```
 
 - Pass additional arguments:
   ```bash
-  bodo test watch -- --nocapture --test-threads=1
+  bode test -- --nocapture --test-threads=1
   ```
 
 - Enable watch mode:
   ```bash
-  bodo --watch test
+  bode --watch test
+  ```
+
+- Disable watch mode:
+  ```bash
+  bode --no-watch test
   ```
 
 - List tasks:
   ```bash
-  bodo --list
+  bode --list
   ```
 
 ## How Bodo Finds and Loads Tasks
@@ -82,34 +87,11 @@ Bodo searches for task definitions in:
 Tasks are defined in YAML files. Here is an example of a task file:
 
 ```yaml
-name: "exampleScript"
-description: "This is an example script."
-
-default_task:
-  command: echo "Hello from default task!"
-  description: "Runs by default if no task is specified."
-
 tasks:
-  example:
-    description: "An example task."
-    command: echo "Running example task..."
-    env:
-      EXAMPLE_VAR: "123"
-    watch:
-      patterns:
-        - "src/**/*.rs"
-      debounce_ms: 1000
+  task_direct:
+    command: echo "Direct task"
+    description: "A task defined directly in config"
 ```
-
-### Available Task Fields
-- `description` (string): Brief help text.
-- `command` (string): Shell command to run (executed using `sh -c`).
-- `cwd` (string): Optional working directory.
-- `env` (map): Environment variables for the task.
-- `watch` (object): Configuration for file watching.
-- `timeout` (string): Timeout duration (e.g., "30s", "1m"); enforced by the TimeoutPlugin.
-- `pre_deps` and `post_deps` (arrays): Define tasks or commands to run before/after the task.
-- `concurrently` (array): Defines a group of tasks/commands to run in parallel (handled by the ConcurrentPlugin).
 
 ## Listing Tasks
 
@@ -164,6 +146,11 @@ Bodo will:
 1. Execute the test task.
 2. Monitor files matching the specified patterns.
 3. Re-run the task when changes are detected.
+
+To prevent file watching altogether—even if tasks specify watch settings—use:
+```bash
+bodo --no-watch test
+```
 
 ## Debug Logging
 
@@ -228,4 +215,3 @@ bodo test
    ```
 
 This usage document covers the current capabilities of Bodo. For additional features or changes, refer to the design documentation and plugin interface for further customization.
-
