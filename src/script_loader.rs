@@ -57,7 +57,6 @@ impl ScriptLoader {
     pub fn build_graph(&mut self, config: BodoConfig) -> Result<Graph> {
         config.validate().map_err(BodoError::from)?;
 
-        let mut graph = crate::graph::Graph::new();
         let mut paths_to_load = vec![];
         let mut root_script_abs: Option<PathBuf> = None;
 
@@ -114,16 +113,17 @@ impl ScriptLoader {
             }
         }
 
+        let mut graph = Graph::new();
+
         for (path, script_name) in paths_to_load {
-            let script_id = if Some(&path) == root_script_abs.as_ref() {
-                "".to_string()
-            } else {
-                path.display().to_string()
-            };
             self.load_script(
                 &mut graph,
                 &path,
-                &script_id,
+                &if Some(&path) == root_script_abs.as_ref() {
+                    "".to_string()
+                } else {
+                    path.display().to_string()
+                },
                 &script_name,
                 &global_env,
                 &global_exec_paths,
