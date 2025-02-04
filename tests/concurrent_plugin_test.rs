@@ -1,6 +1,7 @@
 use bodo::graph::{Graph, NodeKind, TaskData};
 use bodo::plugin::Plugin;
 use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
+use serde_json::json;
 use std::collections::HashMap;
 
 #[test]
@@ -18,6 +19,10 @@ fn test_concurrent_plugin() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -34,6 +39,10 @@ fn test_concurrent_plugin() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -50,6 +59,10 @@ fn test_concurrent_plugin() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -150,6 +163,10 @@ fn test_concurrent_plugin_with_commands() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -221,6 +238,10 @@ fn test_concurrent_plugin_nonexistent_task() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -265,6 +286,10 @@ fn test_concurrent_plugin_invalid_dependency_format() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -309,6 +334,10 @@ fn test_concurrent_plugin_empty_concurrently() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
@@ -351,5 +380,40 @@ fn test_concurrent_plugin_empty_concurrently() {
         group_data.child_nodes.len(),
         0,
         "Expected no child nodes in the group"
+    );
+}
+
+#[test]
+fn test_concurrent_plugin_nonexistent_task_in_object() {
+    let mut plugin = ConcurrentPlugin::new();
+    let mut graph = Graph::new();
+
+    let task_data_main = TaskData {
+        name: "main_task".to_string(),
+        description: None,
+        command: None,
+        working_dir: None,
+        env: HashMap::new(),
+        exec_paths: vec![],
+        arguments: vec![],
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
+        is_default: true,
+        script_id: "script".to_string(),
+        script_display_name: "script".to_string(),
+        watch: None,
+    };
+    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+    let main_node = &mut graph.nodes[main_task_id as usize];
+    main_node.metadata.insert(
+        "concurrently".to_string(),
+        serde_json::to_string(&json!([{"task": "nonexistent"}])).unwrap(),
+    );
+    let result = plugin.on_graph_build(&mut graph);
+    assert!(
+        result.is_err(),
+        "Expected error for nonexistent task in object dependency"
     );
 }

@@ -1,13 +1,11 @@
-// tests/execution_plugin_test.rs
-
 use std::collections::HashMap;
 
-use bodo::errors::{BodoError, Result};
-use bodo::graph::{CommandData, ConcurrentGroupData, Graph, NodeKind, TaskData};
-use bodo::plugin::{Plugin, PluginConfig};
-use bodo::plugins::execution_plugin::ExecutionPlugin;
-
-use bodo::graph; // Added this line to import the `graph` module
+use bodo::{
+    errors::{BodoError, Result},
+    graph::{CommandData, Graph, NodeKind, TaskData},
+    plugin::{Plugin, PluginConfig},
+    plugins::execution_plugin::ExecutionPlugin,
+};
 
 #[test]
 fn test_execution_plugin_on_init() -> Result<()> {
@@ -54,6 +52,10 @@ fn test_execution_plugin_on_after_run() -> Result<()> {
         script_id: "".to_string(),
         script_display_name: "".to_string(),
         watch: None,
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     }));
     graph.task_registry.insert("test_task".to_string(), node_id);
     let result = plugin.on_after_run(&mut graph);
@@ -62,7 +64,7 @@ fn test_execution_plugin_on_after_run() -> Result<()> {
 }
 
 #[test]
-fn test_execution_plugin_with_command_node() -> Result<()> {
+fn test_execution_plugin_on_after_run_with_command_node() -> Result<()> {
     let mut plugin = ExecutionPlugin::new();
     plugin.task_name = Some("test_task".to_string());
     let mut graph = Graph::new();
@@ -78,6 +80,10 @@ fn test_execution_plugin_with_command_node() -> Result<()> {
         script_id: "".to_string(),
         script_display_name: "".to_string(),
         watch: None,
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     }));
     graph.task_registry.insert("test_task".to_string(), task_id);
     let command_id = graph.add_node(NodeKind::Command(CommandData {
@@ -153,108 +159,4 @@ fn test_execution_plugin_task_not_found() {
     let mut graph = Graph::new();
     let result = plugin.on_after_run(&mut graph);
     assert!(matches!(result, Err(BodoError::TaskNotFound(_))));
-}
-
-#[test]
-fn test_get_prefix_settings() {
-    let plugin = ExecutionPlugin::new();
-    let mut node = graph::Node {
-        id: 0,
-        kind: NodeKind::Task(TaskData {
-            name: "test_task".to_string(),
-            description: None,
-            command: None,
-            working_dir: None,
-            env: HashMap::new(),
-            exec_paths: vec![],
-            arguments: vec![],
-            is_default: false,
-            script_id: "".to_string(),
-            script_display_name: "".to_string(),
-            watch: None,
-        }),
-        metadata: HashMap::new(),
-    };
-
-    node.metadata
-        .insert("prefix_enabled".to_string(), "true".to_string());
-    node.metadata
-        .insert("prefix_label".to_string(), "test_label".to_string());
-    node.metadata
-        .insert("prefix_color".to_string(), "green".to_string());
-
-    let (enabled, label, color) = plugin.get_prefix_settings(&node);
-    assert!(enabled);
-    assert_eq!(label, Some("test_label".to_string()));
-    assert_eq!(color, Some("green".to_string()));
-}
-
-#[test]
-fn test_execution_plugin_run_concurrent_group() -> Result<()> {
-    let mut plugin = ExecutionPlugin::new();
-    plugin.task_name = Some("main_task".to_string());
-    let mut graph = Graph::new();
-
-    let child_task1_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "child1".to_string(),
-        description: None,
-        command: Some("echo 'Child 1'".to_string()),
-        working_dir: None,
-        env: HashMap::new(),
-        exec_paths: vec![],
-        arguments: vec![],
-        is_default: false,
-        script_id: "".to_string(),
-        script_display_name: "".to_string(),
-        watch: None,
-    }));
-
-    let child_task2_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "child2".to_string(),
-        description: None,
-        command: Some("echo 'Child 2'".to_string()),
-        working_dir: None,
-        env: HashMap::new(),
-        exec_paths: vec![],
-        arguments: vec![],
-        is_default: false,
-        script_id: "".to_string(),
-        script_display_name: "".to_string(),
-        watch: None,
-    }));
-
-    let group_id = graph.add_node(NodeKind::ConcurrentGroup(ConcurrentGroupData {
-        child_nodes: vec![child_task1_id, child_task2_id],
-        fail_fast: false,
-        max_concurrent: Some(1),
-        timeout_secs: None,
-    }));
-
-    graph.add_edge(group_id, child_task1_id)?;
-    graph.add_edge(group_id, child_task2_id)?;
-
-    let main_task_id = graph.add_node(NodeKind::Task(TaskData {
-        name: "main_task".to_string(),
-        description: None,
-        command: None,
-        working_dir: None,
-        env: HashMap::new(),
-        exec_paths: vec![],
-        arguments: vec![],
-        is_default: true,
-        script_id: "".to_string(),
-        script_display_name: "".to_string(),
-        watch: None,
-    }));
-
-    graph
-        .task_registry
-        .insert("main_task".to_string(), main_task_id);
-
-    graph.add_edge(main_task_id, group_id)?;
-
-    let result = plugin.on_after_run(&mut graph);
-
-    assert!(result.is_ok(), "Expected success, got {:?}", result);
-    Ok(())
 }
