@@ -87,6 +87,14 @@ ${END_TAG}
     return;
   }
 
+  // if custom prompt is provided, run it
+  const customPrompt = Deno.env.get("AI_PROMPT");
+  if (customPrompt) {
+    console.log("Running custom prompt...");
+    await runCustomPrompt(repo, customPrompt);
+    return;
+  }
+
   const coverageResult = await runCommand(
     "cargo llvm-cov test --ignore-run-fail"
   );
@@ -117,10 +125,15 @@ function getMaxTokens() {
  * @returns
  */
 function generatePrompt(
+  repo: string,
   inputs: [title: string, prompt: string][],
   maxTokens: number = getMaxTokens()
 ) {
-  const lines = inputs
+  const lines = [
+    ["Repository", repo],
+    ...inputs,
+    ["Response format", RESPONSE_FORMAT],
+  ]
     .flatMap(([title, prompt]) => [`# ${title}:`, prompt, "", "", ""])
     .map((line) => stripAnsi(line));
 
@@ -131,15 +144,20 @@ function generatePrompt(
   return lines.join("\n");
 }
 
+async function runCustomPrompt(repo: string, prompt: string) {
+  const request = generatePrompt(repo, [["Instructions", prompt]]);
+
+  const aiContent = await callAi(request);
+  await applyChanges(aiContent);
+}
+
 async function fixBuildErrors(
   repo: string,
   buildResult: { code: number; stderr: string }
 ) {
-  const request = generatePrompt([
-    ["Repository", repo],
+  const request = generatePrompt(repo, [
     ["Build errors", buildResult.stderr],
     ["Instructions", BUILD_ERROR_PROMPT],
-    ["Response format", RESPONSE_FORMAT],
   ]);
 
   const aiContent = await callAi(request);
@@ -150,11 +168,9 @@ async function fixClippyErrors(
   repo: string,
   clippyResult: { code: number; stderr: string }
 ) {
-  const request = generatePrompt([
-    ["Repository", repo],
+  const request = generatePrompt(repo, [
     ["Clippy errors", clippyResult.stderr],
     ["Instructions", CLIPPY_ERROR_PROMPT],
-    ["Response format", RESPONSE_FORMAT],
   ]);
 
   const aiContent = await callAi(request);
@@ -165,11 +181,9 @@ async function fixTestErrors(
   repo: string,
   testResult: { code: number; stderr: string }
 ) {
-  const request = generatePrompt([
-    ["Repository", repo],
+  const request = generatePrompt(repo, [
     ["Test errors", testResult.stderr],
     ["Instructions", TEST_ERROR_PROMPT],
-    ["Response format", RESPONSE_FORMAT],
   ]);
 
   const aiContent = await callAi(request);
@@ -181,12 +195,10 @@ async function fixCoverage(
   coverageResult: { code: number; stderr: string },
   summary: string
 ) {
-  const request = generatePrompt([
-    ["Repository", repo],
+  const request = generatePrompt(repo, [
     ["Coverage report", coverageResult.stderr],
     ["Changes summary", summary],
     ["Instructions", COVERAGE_PROMPT],
-    ["Response format", RESPONSE_FORMAT],
   ]);
 
   const aiContent = await callAi(request);
