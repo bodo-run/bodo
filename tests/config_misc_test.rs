@@ -1,6 +1,5 @@
-use bodo::config::{BodoConfig, Dependency, TaskConfig, WatchConfig};
+use bodo::config::{Dependency, TaskConfig, WatchConfig};
 use validator::Validate;
-use validator::ValidationErrors;
 
 #[test]
 fn test_validate_task_config_no_command_no_deps() {
