@@ -31,8 +31,8 @@ on:
         required: true
         type: choice
         options:
-          - o1-mini # OpenAI
-          - o1-preview # OpenAI
+          - o3-mini # OpenAI
+          - o1 # OpenAI
           - accounts/fireworks/models/deepseek-r1 # Fireworks AI
           - accounts/fireworks/models/deepseek-coder # Fireworks AI
           - deepseek-reasoner # DeepSeek AI
