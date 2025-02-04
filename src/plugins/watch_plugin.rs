@@ -165,7 +165,6 @@ impl WatchPlugin {
     }
 
     // Rest of the implementation...
-
     // ... (Rest of the methods remain unchanged)
 }
 
@@ -297,7 +296,7 @@ impl Plugin for WatchPlugin {
             return Ok(());
         }
 
-        let (mut watcher, rx) = Self::create_watcher()?;
+        let (mut watcher, rx) = WatchPlugin::create_watcher()?;
         let mut all_dirs = HashSet::new();
         let mut max_debounce = 500;
 
@@ -415,5 +414,5 @@ pub fn create_watcher_test() -> crate::Result<(
     notify::RecommendedWatcher,
     std::sync::mpsc::Receiver<notify::Result<notify::Event>>,
 )> {
-    Self::create_watcher()
+    WatchPlugin::create_watcher()
 }
