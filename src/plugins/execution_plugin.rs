@@ -141,6 +141,7 @@ impl Plugin for ExecutionPlugin {
             pm: &mut ProcessManager,
             visited: &mut std::collections::HashSet<usize>,
             expand_env_vars_fn: &dyn Fn(&str, &HashMap<String, String>) -> String,
+
             get_prefix_settings_fn: &dyn Fn(
                 &crate::graph::Node,
             ) -> (bool, Option<String>, Option<String>),
