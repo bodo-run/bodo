@@ -1,99 +1,80 @@
 use bodo::plugins::watch_plugin::{WatchEntry, WatchPlugin};
-use globset::{Glob, GlobSetBuilder};
 use std::collections::HashSet;
 use std::env;
+use std::fs;
 use std::path::PathBuf;
 
 #[test]
-fn test_find_base_directory_starts_with_double_star() {
-    // When pattern starts with "**/", expect "."
-    let res = WatchPlugin::find_base_directory("**/foo/bar");
-    assert_eq!(res, Some(PathBuf::from(".")));
+fn test_find_base_directory() {
+    // When pattern starts with **/, expect "."
+    let base = WatchPlugin::find_base_directory("**/foo/bar").unwrap();
+    assert_eq!(base, PathBuf::from("."));
 }
 
 #[test]
-fn test_find_base_directory_no_wildcard() {
-    // When no wildcard is present, simply return the directory or the file parent.
-    let res = WatchPlugin::find_base_directory("src");
-    // Since we are not verifying file-system, we assume "src" is returned.
-    assert_eq!(res, Some(PathBuf::from("src")));
+fn test_find_base_directory_with_no_wildcard() {
+    let base = WatchPlugin::find_base_directory("src").unwrap();
+    assert_eq!(base, PathBuf::from("src"));
 }
 
 #[test]
-fn test_find_base_directory_wildcard_in_middle() {
-    let res = WatchPlugin::find_base_directory("src/*.rs");
-    assert_eq!(res, Some(PathBuf::from("src")));
+fn test_find_base_directory_with_wildcard_in_middle() {
+    let base = WatchPlugin::find_base_directory("src/*.rs").unwrap();
+    assert_eq!(base, PathBuf::from("src"));
 }
 
 #[test]
-fn test_filter_changed_paths_match() {
-    // Create a temporary directory structure.
+fn test_filter_changed_paths() {
+    // Create a temporary directory structure and file.
     let temp_dir = tempfile::tempdir().unwrap();
-    let temp_path = temp_dir.path();
-
-    // Create subdirectory "watch_dir" inside temp_dir.
-    let watch_dir = temp_path.join("watch_dir");
-    std::fs::create_dir_all(&watch_dir).unwrap();
-
-    // Create a file "watch_dir/test.txt".
-    let file_path = watch_dir.join("test.txt");
-    std::fs::write(&file_path, "dummy content").unwrap();
-
-    // Build a glob set that matches "test.txt".
-    let mut glob_builder = GlobSetBuilder::new();
-    let glob = Glob::new("test.txt").unwrap();
-    glob_builder.add(glob);
-    let glob_set = glob_builder.build().unwrap();
-
-    // No ignore set.
-    let ignore_set = None;
+    let watch_dir = temp_dir.path().join("watch_dir");
+    fs::create_dir_all(&watch_dir).unwrap();
+    let file_path = watch_dir.join("foo.txt");
+    fs::write(&file_path, "dummy").unwrap();
 
     let mut directories_to_watch = HashSet::new();
     directories_to_watch.insert(watch_dir.clone());
 
+    let mut glob_builder = globset::GlobSetBuilder::new();
+    let glob = globset::Glob::new("foo.txt").unwrap();
+    glob_builder.add(glob);
+    let glob_set = glob_builder.build().unwrap();
+
     let watch_entry = WatchEntry {
         task_name: "dummy".to_string(),
-        glob_set: glob_set.clone(),
-        ignore_set,
+        glob_set,
+        ignore_set: None,
         directories_to_watch,
         debounce_ms: 500,
     };
 
-    // Set current directory to the temporary directory.
-    let original_cwd = env::current_dir().unwrap();
-    env::set_current_dir(temp_path).unwrap();
+    // Set current directory to temp_dir
+    let original_dir = env::current_dir().unwrap();
+    env::set_current_dir(temp_dir.path()).unwrap();
 
-    // Provide relative changed path.
-    let changed_paths = vec![PathBuf::from("watch_dir/test.txt")];
+    let changed_paths = vec![PathBuf::from("watch_dir/foo.txt")];
     let matches = WatchPlugin::new(false, false).filter_changed_paths(&changed_paths, &watch_entry);
     assert_eq!(matches.len(), 1);
 
-    // Restore original current directory.
-    env::set_current_dir(&original_cwd).unwrap();
+    // Restore original directory
+    env::set_current_dir(&original_dir).unwrap();
 }
 
 #[test]
 fn test_filter_changed_paths_ignore() {
-    // Test that a file matching the ignore pattern is skipped.
+    // Create a temporary directory structure and file.
     let temp_dir = tempfile::tempdir().unwrap();
-    let temp_path = temp_dir.path();
-
-    // Create subdirectory "watch_dir"
-    let watch_dir = temp_path.join("watch_dir");
-    std::fs::create_dir_all(&watch_dir).unwrap();
-
-    // Create file "watch_dir/ignore.txt"
+    let watch_dir = temp_dir.path().join("watch_dir");
+    fs::create_dir_all(&watch_dir).unwrap();
     let file_path = watch_dir.join("ignore.txt");
-    std::fs::write(&file_path, "content").unwrap();
+    fs::write(&file_path, "content").unwrap();
 
-    // Build a glob set that matches "*.txt"
-    let mut glob_builder = GlobSetBuilder::new();
-    glob_builder.add(Glob::new("*.txt").unwrap());
+    let mut glob_builder = globset::GlobSetBuilder::new();
+    glob_builder.add(globset::Glob::new("*.txt").unwrap());
     let glob_set = glob_builder.build().unwrap();
 
-    // Build an ignore set that matches exactly "ignore.txt"
-    let mut ignore_builder = GlobSetBuilder::new();
-    ignore_builder.add(Glob::new("ignore.txt").unwrap());
+    let mut ignore_builder = globset::GlobSetBuilder::new();
+    ignore_builder.add(globset::Glob::new("ignore.txt").unwrap());
     let ignore_set = Some(ignore_builder.build().unwrap());
 
     let mut directories_to_watch = HashSet::new();
@@ -107,13 +88,23 @@ fn test_filter_changed_paths_ignore() {
         debounce_ms: 500,
     };
 
-    let original_cwd = env::current_dir().unwrap();
-    env::set_current_dir(temp_path).unwrap();
+    let original_dir = env::current_dir().unwrap();
+    env::set_current_dir(temp_dir.path()).unwrap();
 
     let changed_paths = vec![PathBuf::from("watch_dir/ignore.txt")];
     let matches = WatchPlugin::new(false, false).filter_changed_paths(&changed_paths, &watch_entry);
-    // Should be ignored.
     assert_eq!(matches.len(), 0);
 
-    env::set_current_dir(&original_cwd).unwrap();
+    env::set_current_dir(&original_dir).unwrap();
+}
+
+#[test]
+fn test_create_watcher_test() {
+    let (watcher, rx) = WatchPlugin::create_watcher_test().expect("Failed to create watcher");
+    // Expect timeout since no events occur.
+    match rx.recv_timeout(std::time::Duration::from_millis(100)) {
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => assert!(true),
+        _ => panic!("Expected timeout when no events occur"),
+    }
+    drop(watcher);
 }

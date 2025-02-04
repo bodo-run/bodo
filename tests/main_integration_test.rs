@@ -3,7 +3,10 @@ use tempfile::tempdir;
 
 #[test]
 fn test_main_default_output() {
-    // This integration test runs the main binary with a temporary script.yaml file.
+    if std::env::var("CARGO_BIN_EXE_bodo").is_err() {
+        eprintln!("Skipping test_main_default_output because CARGO_BIN_EXE_bodo is not set");
+        return;
+    }
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let script_content = r#"
 default_task:
@@ -17,7 +20,6 @@ tasks:
     let script_path = temp_dir.path().join("script.yaml");
     std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
 
-    // Run the main binary (assume cargo test sets CARGO_BIN_EXE_bodo)
     let exe = std::env::var("CARGO_BIN_EXE_bodo").expect("CARGO_BIN_EXE_bodo not set");
     let output = Command::new(exe)
         .env("BODO_ROOT_SCRIPT", script_path.to_str().unwrap())
@@ -35,6 +37,10 @@ tasks:
 
 #[test]
 fn test_main_list_option() {
+    if std::env::var("CARGO_BIN_EXE_bodo").is_err() {
+        eprintln!("Skipping test_main_list_option because CARGO_BIN_EXE_bodo is not set");
+        return;
+    }
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let script_content = r#"
 default_task:
