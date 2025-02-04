@@ -1,7 +1,7 @@
 use bodo::cli::{get_task_name, Args};
 use bodo::config::{BodoConfig, TaskArgument};
 use bodo::errors::BodoError;
-use bodo::graph::{Graph, Node, NodeKind, TaskData};
+use bodo::graph::{Node, NodeKind, TaskData};
 use bodo::manager::GraphManager;
 use bodo::plugins::prefix_plugin::PrefixPlugin;
 use bodo::process::{color_line, parse_color};
