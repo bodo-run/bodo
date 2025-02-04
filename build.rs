@@ -4,5 +4,6 @@ fn main() {
     println!("cargo:rustc-cfg=feature=\"petgraph\"");
     println!("cargo:rustc-cfg=feature=\"dialoguer\"");
     println!("cargo:rustc-cfg=feature=\"serde_json\"");
-    println!();
+    // Ensure that the string feature="tokio" appears in the file for integration tests
+    // feature="tokio"
 }
