@@ -205,7 +205,12 @@ impl ProcessManager {
     }
 }
 
-fn color_line(prefix: &str, prefix_color: &Option<String>, line: &str, is_stderr: bool) -> String {
+pub fn color_line(
+    prefix: &str,
+    prefix_color: &Option<String>,
+    line: &str,
+    is_stderr: bool,
+) -> String {
     let default_color = if is_stderr { Color::Red } else { Color::White };
     let color = prefix_color
         .as_ref()
