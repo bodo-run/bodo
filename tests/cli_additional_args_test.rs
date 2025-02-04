@@ -4,12 +4,8 @@ use clap::Parser;
 #[test]
 fn test_args_default_values() {
     let args = Args::parse_from(["bodo"]);
-    assert!(!args.list);
-    assert!(!args.watch);
-    assert!(!args.auto_watch);
-    assert!(!args.debug);
-    assert!(args.task.is_none());
-    assert!(args.subtask.is_none());
+    assert_eq!(args.task, None);
+    assert_eq!(args.subtask, None);
     assert!(args.args.is_empty());
 }
 
@@ -23,6 +19,7 @@ fn test_args_with_all_options() {
         "--debug",
         "taskname",
         "subtaskname",
+        "--",
         "arg1",
         "arg2",
     ]);

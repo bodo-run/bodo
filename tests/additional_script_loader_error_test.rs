@@ -16,9 +16,8 @@ fn test_load_script_with_duplicate_tasks() {
 "#;
     fs::write(&script_path, script_content).unwrap();
 
-    // Create a config YAML that embeds the file content.
     let config_yaml = format!("tasks: {}", fs::read_to_string(&script_path).unwrap());
-    // Instead of unwrapping, assert that deserializing returns an error.
+    // Expect error due to duplicate keys.
     let res = serde_yaml::from_str::<BodoConfig>(&config_yaml);
     assert!(res.is_err(), "Expected error due to duplicate task keys");
 }
@@ -61,7 +60,7 @@ fn test_load_script_with_invalid_task_name_chars() {
     let res = serde_yaml::from_str::<BodoConfig>(&config_yaml);
     assert!(
         res.is_err(),
-        "Expected ValidationError due to invalid characters in task name"
+        "Expected error due to invalid characters in task name"
     );
 }
 
