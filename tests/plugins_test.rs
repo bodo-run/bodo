@@ -3,7 +3,7 @@ use log::info;
 use std::{any::Any, cmp::Ordering, collections::HashMap};
 
 use bodo::{
-    graph::{Graph, NodeKind, TaskData},
+    graph::{Graph, NodeKind},
     plugin::Plugin,
     Result,
 };
@@ -140,7 +140,7 @@ impl Plugin for PrintListPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bodo::graph::{Graph, Node, NodeKind, TaskData};
+    use bodo::graph::{Graph, NodeKind, TaskData};
     use std::collections::HashMap;
 
     #[test]

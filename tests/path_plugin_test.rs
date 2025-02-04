@@ -1,151 +1,28 @@
-use colored::Color;
-use std::any::Any;
-
-use bodo::graph::{Graph, NodeKind, TaskData};
-use bodo::plugin::Plugin;
 use bodo::plugins::path_plugin::PathPlugin;
+use std::env;
 
-const DEFAULT_COLORS: &[Color] = &[
-    Color::Blue,
-    Color::Green,
-    Color::Magenta,
-    Color::Cyan,
-    Color::Yellow,
-    Color::BrightRed,
-];
-
-pub struct PrefixPlugin {
-    color_index: usize,
+#[test]
+fn test_build_path_with_working_dir_and_no_preserve() {
+    let mut plugin = PathPlugin::new();
+    plugin.set_default_paths(vec!["/default".to_string()]);
+    plugin.set_preserve_path(false);
+    let work_dir = "/work".to_string();
+    let working_dir = Some(&work_dir);
+    let exec_paths = vec!["/exec".to_string()];
+    let result = plugin.test_build_path(working_dir, &exec_paths);
+    assert_eq!(result, "/work:/default:/exec");
 }
 
-impl PrefixPlugin {
-    pub fn new() -> Self {
-        Self { color_index: 0 }
-    }
-
-    pub fn next_color(&mut self) -> String {
-        let c = DEFAULT_COLORS[self.color_index % DEFAULT_COLORS.len()];
-        self.color_index += 1;
-        format!("{:?}", c).to_lowercase()
-    }
-}
-
-impl Default for PathPlugin {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl PathPlugin {
-    pub fn new() -> Self {
-        Self {
-            default_paths: Vec::new(),
-            preserve_path: true,
-        }
-    }
-
-    pub fn get_default_paths(&self) -> &Vec<String> {
-        &self.default_paths
-    }
-
-    pub fn get_preserve_path(&self) -> bool {
-        self.preserve_path
-    }
-
-    pub fn set_default_paths(&mut self, paths: Vec<String>) {
-        self.default_paths = paths;
-    }
-
-    pub fn set_preserve_path(&mut self, preserve: bool) {
-        self.preserve_path = preserve;
-    }
-
-    // existing code...
-    pub fn build_path(&self, working_dir: Option<&String>, exec_paths: &[String]) -> String {
-        let mut paths = Vec::new();
-
-        // Add working directory first if present
-        if let Some(cwd) = working_dir {
-            paths.push(cwd.clone());
-        }
-
-        // Add default paths from plugin config
-        paths.extend(self.default_paths.iter().cloned());
-
-        // Add user-specified exec_paths
-        paths.extend(exec_paths.iter().cloned());
-
-        // Optionally preserve existing PATH
-        if self.preserve_path {
-            if let Ok(current_path) = std::env::var("PATH") {
-                paths.extend(current_path.split(':').map(String::from));
-            }
-        }
-
-        paths.join(":")
-    }
-
-    // This function is intended for testing purposes.
-    pub fn test_build_path(&self, working_dir: Option<&String>, exec_paths: &[String]) -> String {
-        self.build_path(working_dir, exec_paths)
-    }
-}
-
-impl Plugin for PathPlugin {
-    fn name(&self) -> &'static str {
-        "PathPlugin"
-    }
-
-    fn priority(&self) -> i32 {
-        85
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn on_init(&mut self, config: &bodo::plugin::PluginConfig) -> bodo::Result<()> {
-        if let Some(options) = &config.options {
-            if let Some(paths) = options.get("default_paths") {
-                if let Some(arr) = paths.as_array() {
-                    self.default_paths = arr
-                        .iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect();
-                }
-            }
-            if let Some(preserve) = options.get("preserve_path") {
-                if let Some(val) = preserve.as_bool() {
-                    self.preserve_path = val;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn on_graph_build(&mut self, graph: &mut Graph) -> bodo::Result<()> {
-        for node in &mut graph.nodes {
-            match &mut node.kind {
-                NodeKind::Task(task_data) => {
-                    let path_str =
-                        self.build_path(task_data.working_dir.as_ref(), &task_data.exec_paths);
-                    if !path_str.is_empty() {
-                        task_data.env.insert("PATH".to_string(), path_str);
-                    }
-                }
-                NodeKind::Command(cmd_data) => {
-                    let path_str = self.build_path(cmd_data.working_dir.as_ref(), &[]);
-                    if !path_str.is_empty() {
-                        cmd_data.env.insert("PATH".to_string(), path_str);
-                    }
-                }
-                _ => {}
-            }
-        }
-        Ok(())
-    }
-
-    fn on_after_run(&mut self, _graph: &mut Graph) -> bodo::Result<()> {
-        Ok(())
-    }
+#[test]
+fn test_build_path_with_no_working_dir_and_preserve() {
+    let mut plugin = PathPlugin::new();
+    plugin.set_default_paths(vec!["/default".to_string()]);
+    plugin.set_preserve_path(true);
+    let original = env::var("PATH").unwrap_or_default();
+    env::set_var("PATH", "/existing");
+    let working_dir = None;
+    let exec_paths = vec!["/exec".to_string()];
+    let result = plugin.test_build_path(working_dir, &exec_paths);
+    env::set_var("PATH", original);
+    assert_eq!(result, "/default:/exec:/existing");
 }
