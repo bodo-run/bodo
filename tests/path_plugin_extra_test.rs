@@ -6,7 +6,8 @@ fn test_build_path_with_working_dir_and_no_preserve() {
     let mut plugin = PathPlugin::new();
     plugin.set_default_paths(vec!["/default".to_string()]);
     plugin.set_preserve_path(false);
-    let working_dir = Some(&"/work".to_string());
+    let work_dir = "/work".to_string();
+    let working_dir = Some(&work_dir);
     let exec_paths = vec!["/exec".to_string()];
     let result = plugin.test_build_path(working_dir, &exec_paths);
     assert_eq!(result, "/work:/default:/exec");
