@@ -29,6 +29,10 @@ mod new_tests {
                 script_id: "".to_string(),
                 script_display_name: "".to_string(),
                 watch: None,
+                pre_deps: vec![],
+                post_deps: vec![],
+                concurrently: vec![],
+                concurrently_options: Default::default(),
             }),
             metadata: HashMap::new(),
         });
@@ -65,6 +69,10 @@ mod new_tests {
                 script_id: "".to_string(),
                 script_display_name: "".to_string(),
                 watch: None,
+                pre_deps: vec![],
+                post_deps: vec![],
+                concurrently: vec![],
+                concurrently_options: Default::default(),
             }),
             metadata: HashMap::new(),
         });
@@ -169,6 +177,10 @@ mod new_tests {
             script_id: "".to_string(),
             script_display_name: "".to_string(),
             watch: None,
+            pre_deps: vec![],
+            post_deps: vec![],
+            concurrently: vec![],
+            concurrently_options: Default::default(),
         };
 
         manager.graph.nodes.push(Node {
@@ -207,6 +219,10 @@ mod new_tests {
             script_id: "".to_string(),
             script_display_name: "".to_string(),
             watch: None,
+            pre_deps: vec![],
+            post_deps: vec![],
+            concurrently: vec![],
+            concurrently_options: Default::default(),
         };
 
         manager.graph.nodes.push(Node {
