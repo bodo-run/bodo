@@ -1,14 +1,16 @@
-use bodo::graph::{Graph, NodeKind, TaskData};
-use bodo::plugin::Plugin;
-use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
-use std::collections::HashMap; // ADDED IMPORT
+use bodo::{
+    graph::{Graph, NodeKind, TaskData},
+    plugin::Plugin,
+    plugins::concurrent_plugin::ConcurrentPlugin,
+};
+use std::collections::HashMap;
 
 #[test]
 fn test_concurrent_plugin_fallback() {
     let mut plugin = ConcurrentPlugin::new();
     let mut graph = Graph::new();
 
-    // Create a main task with no command so that concurrently runs are processed
+    // Create a main task
     let task_data_main = TaskData {
         name: "main_task".to_string(),
         description: None,
@@ -29,17 +31,10 @@ fn test_concurrent_plugin_fallback() {
 
     let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
 
-    let main_node = &mut graph.nodes[main_task_id as usize];
-    // Set up the main_task to have concurrent tasks
-    main_node.metadata.insert(
-        "concurrently".to_string(),
-        "[\"nonexistent_task\"]".to_string(),
-    );
-    // Add a fallback task in task_registry with a key that ends with " test_task"
-    let fallback_task = TaskData {
-        name: "fallback".to_string(),
+    let task_data_child1 = TaskData {
+        name: "child_task1".to_string(),
         description: None,
-        command: Some("echo fallback".to_string()),
+        command: Some("echo Child 1".to_string()),
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
@@ -53,11 +48,48 @@ fn test_concurrent_plugin_fallback() {
         pre_deps: vec![],
         post_deps: vec![],
     };
-    let fallback_id = graph.add_node(NodeKind::Task(fallback_task));
-    // Insert with key such that key.ends_with(" test_task") returns true.
+
+    let child1_id = graph.add_node(NodeKind::Task(task_data_child1));
+
+    let task_data_child2 = TaskData {
+        name: "child_task2".to_string(),
+        description: None,
+        command: Some("echo Child 2".to_string()),
+        working_dir: None,
+        env: HashMap::new(),
+        exec_paths: vec![],
+        arguments: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
+        is_default: false,
+        script_id: "script".to_string(),
+        script_display_name: "script".to_string(),
+        watch: None,
+        pre_deps: vec![],
+        post_deps: vec![],
+    };
+
+    let child2_id = graph.add_node(NodeKind::Task(task_data_child2));
+
+    // Register child tasks in task_registry
     graph
         .task_registry
-        .insert("prefix test_task".to_string(), fallback_id);
+        .insert("child_task1".to_string(), child1_id);
+    graph
+        .task_registry
+        .insert("child_task2".to_string(), child2_id);
+
+    // Set up the main_task to have a nonexistent concurrent task.
+    // This should trigger the fallback search.
+    let main_node = &mut graph.nodes[main_task_id as usize];
+    main_node.metadata.insert(
+        "concurrently".to_string(),
+        "[\"nonexistent_task\"]".to_string(),
+    );
+    // Insert fallback in task_registry with a key that ends with " nonexistent_task".
+    graph
+        .task_registry
+        .insert("prefix nonexistent_task".to_string(), child1_id);
 
     let result = plugin.on_graph_build(&mut graph);
     assert!(
@@ -66,7 +98,7 @@ fn test_concurrent_plugin_fallback() {
         result.err()
     );
 
-    // Check that a ConcurrentGroup node has been added and that it includes fallback_id.
+    // Check that a ConcurrentGroup node has been added
     let group_nodes: Vec<_> = graph
         .nodes
         .iter()
@@ -80,10 +112,6 @@ fn test_concurrent_plugin_fallback() {
         .collect();
 
     assert_eq!(group_nodes.len(), 1, "Expected one concurrent group node");
-
     let (_group_id, group_data) = &group_nodes[0];
-    assert!(
-        group_data.child_nodes.contains(&fallback_id),
-        "Fallback task was not added in the concurrent group"
-    );
+    assert!(group_data.child_nodes.contains(&child1_id));
 }
