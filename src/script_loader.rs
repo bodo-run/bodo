@@ -70,7 +70,7 @@ impl ScriptLoader {
             if root_path.exists() {
                 root_script_abs = Some(root_path.canonicalize()?);
                 // Use the root_path's display string as the script id instead of an empty string.
-                paths_to_load.insert(0, (root_path, root_path.display().to_string()));
+                paths_to_load.insert(0, (root_path.clone(), root_path.display().to_string()));
             }
         }
 

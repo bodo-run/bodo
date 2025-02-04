@@ -10,17 +10,41 @@ const FILE_TAG = "__FILENAME__";
 const START_TAG = "__FILE_CONTENT_START__";
 const END_TAG = "__FILE_CONTENT_END__";
 const ALL_GOOD_TAG = "DONE_ALL_TESTS_PASS_AND_COVERAGE_IS_GOOD";
-const DEFAULT_PROMPT = `
-You are given the full repository, results of the test run, build errors, clippy errors, and the coverage report.
-Your task is first to fix the tests that are failing and then fix any build or clippy errors if they exist.
+
+const BUILD_ERROR_PROMPT = `
+You are given the full repository and build errors.
+Your task is to fix the build errors.
+Pay attention to DESIGN.md and USAGE.md files to understand the overall design and usage of the project.
+Provide only and only code updates. Do not provide any other text. Your response can be multiple files.
+DO NOT DELETE EXISTING IMPLEMENTATIONS. DO NOT DELETE EXISTING TESTS.
+`.trim();
+
+const CLIPPY_ERROR_PROMPT = `
+You are given the full repository and clippy errors.
+Your task is to fix the clippy errors while maintaining the existing functionality.
+Pay attention to DESIGN.md and USAGE.md files to understand the overall design and usage of the project.
+Provide only and only code updates. Do not provide any other text. Your response can be multiple files.
+DO NOT DELETE EXISTING IMPLEMENTATIONS. DO NOT DELETE EXISTING TESTS.
+`.trim();
+
+const TEST_ERROR_PROMPT = `
+You are given the full repository and test results.
+Your task is to fix the failing tests.
 Pick one test and try to fix that one failing test if multiple tests are failing.
 DO NOT remove any existing implementations to make the tests pass.
-Pay attention to DESGIN.md and USAGE.md files to understand the overall design and usage of the project.
-If all tests are passing, pay attention to the coverage report and add new tests to add more 
-coverage as needed. Code coverage should be executed 100%;
+Pay attention to DESIGN.md and USAGE.md files to understand the overall design and usage of the project.
 Provide only and only code updates. Do not provide any other text. Your response can be multiple files.
-DO NOT DELETE EXISTING IMPLEMENTATIONS. DO NOT DELETE EXISTING TEST. ONLY ADD TESTS.
-Important: Add test files to the tests/ directory. Do not add tests in src/ files
+DO NOT DELETE EXISTING IMPLEMENTATIONS. DO NOT DELETE EXISTING TESTS.
+`.trim();
+
+const COVERAGE_PROMPT = `
+You are given the full repository and coverage report.
+Your task is to add new tests to improve code coverage.
+Code coverage should be 100%.
+Pay attention to DESIGN.md and USAGE.md files to understand the overall design and usage of the project.
+Provide only and only code updates. Do not provide any other text. Your response can be multiple files.
+DO NOT DELETE EXISTING IMPLEMENTATIONS. DO NOT DELETE EXISTING TESTS.
+Important: Add test files to the tests/ directory. Do not add tests in src/ files.
 `.trim();
 
 const RESPONSE_FORMAT = `
@@ -50,7 +74,20 @@ const summary = await getChangesSummary(repo);
 const buildResult = await runCommand("cargo build");
 const clippyResult = await runCommand("cargo clippy");
 
-const aiPrompt = Deno.env.get("AI_PROMPT") || DEFAULT_PROMPT;
+// Determine which prompt to use based on the condition
+let aiPrompt = Deno.env.get("AI_PROMPT");
+if (!aiPrompt) {
+  if (buildResult.code !== 0) {
+    aiPrompt = BUILD_ERROR_PROMPT;
+  } else if (clippyResult.code !== 0) {
+    aiPrompt = CLIPPY_ERROR_PROMPT;
+  } else if (code !== 0) {
+    // test failures
+    aiPrompt = TEST_ERROR_PROMPT;
+  } else {
+    aiPrompt = COVERAGE_PROMPT;
+  }
+}
 
 const textToAi = [
   `Repository:`,
@@ -125,15 +162,6 @@ function getOpenAiClient() {
         baseURL: "http://127.0.0.1:11434/v1",
       });
     }
-    case "fireworks": {
-      const apiKey = Deno.env.get("FIREWORKS_AI_API_KEY");
-      if (!apiKey) throw new Error("Missing FIREWORKS_AI_API_KEY env var.");
-
-      return new OpenAI({
-        apiKey,
-        baseURL: "https://api.fireworks.ai/inference/v1/",
-      });
-    }
     case "openai": {
       const apiKey = Deno.env.get("OPENAI_API_KEY");
       if (!apiKey) throw new Error("Missing OPENAI_API_KEY env var.");
@@ -143,11 +171,6 @@ function getOpenAiClient() {
       const apiKey = Deno.env.get("DEEPSEEK_API_KEY");
       if (!apiKey) throw new Error("Missing DEEPSEEK_API_KEY env var.");
       return new OpenAI({ apiKey, baseURL: "https://api.deepseek.com/v1" });
-    }
-    case "azure": {
-      const apiKey = Deno.env.get("AZURE_API_KEY");
-      if (!apiKey) throw new Error("Missing AZURE_API_KEY env var.");
-      return new OpenAI({ apiKey, baseURL: "https://api.azure.com/v1" });
     }
     default: {
       throw new Error(`Unknown AI provider: ${provider}`);
