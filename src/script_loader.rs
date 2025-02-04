@@ -130,134 +130,50 @@ impl ScriptLoader {
             )?;
         }
 
-        // Process default_task if present
-        if let Some(default_task_config) = config.default_task {
-            let script_id = "".to_string();
-            let script_display_name = "".to_string();
-            let script_env = HashMap::new();
-            let script_exec_paths = vec![];
+        // Process default_task and tasks from config only if root_script is not provided
+        if config.root_script.is_none() {
+            // Process default_task if present
+            if let Some(ref default_task_config) = config.default_task {
+                let script_id = "".to_string();
+                let script_display_name = "".to_string();
+                let script_env = HashMap::new();
+                let script_exec_paths = vec![];
 
-            // Merge environments and exec_paths for default_task
-            let env = Self::merge_envs(&global_env, &script_env, &default_task_config.env);
-            let exec_paths = Self::merge_exec_paths(
-                &global_exec_paths,
-                &script_exec_paths,
-                &default_task_config.exec_paths,
-            );
-
-            // Validate task config
-            self.validate_task_config(&default_task_config, "default", Path::new("config"))?;
-
-            let node_id = self.create_task_node(
-                &mut graph,
-                &script_id,
-                &script_display_name,
-                "default", // Using "default" as the task name
-                &default_task_config,
-            );
-
-            // Update the task data with merged env and exec_paths
-            if let NodeKind::Task(ref mut task_data) = graph.nodes[node_id as usize].kind {
-                task_data.env = env;
-                task_data.exec_paths = exec_paths;
-            }
-
-            self.register_task(&script_id, "default", node_id, &mut graph)?;
-
-            // Store the node_id for further processing
-            let mut task_node_ids = HashMap::new();
-            task_node_ids.insert("default".to_string(), node_id);
-
-            // Handle dependencies after all tasks are registered
-            let task_config = &default_task_config;
-            let node_id = *task_node_ids.get("default").unwrap();
-
-            for dep in &task_config.pre_deps {
-                match dep {
-                    Dependency::Task { task } => {
-                        let dep_id = self.resolve_dependency(task, &script_id, &graph)?;
-                        graph.add_edge(dep_id, node_id)?;
-                    }
-                    Dependency::Command { command } => {
-                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
-                            raw_command: command.clone(),
-                            description: None,
-                            working_dir: None,
-                            env: HashMap::new(),
-                            watch: None,
-                        }));
-                        graph.add_edge(cmd_node_id, node_id)?;
-                    }
-                }
-            }
-
-            for dep in &task_config.post_deps {
-                match dep {
-                    Dependency::Task { task } => {
-                        let dep_id = self.resolve_dependency(task, &script_id, &graph)?;
-                        graph.add_edge(node_id, dep_id)?;
-                    }
-                    Dependency::Command { command } => {
-                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
-                            raw_command: command.clone(),
-                            description: None,
-                            working_dir: None,
-                            env: HashMap::new(),
-                            watch: None,
-                        }));
-                        graph.add_edge(node_id, cmd_node_id)?;
-                    }
-                }
-            }
-        }
-
-        // Process tasks from config.tasks
-        if !config.tasks.is_empty() {
-            let script_id = "".to_string();
-            let script_display_name = "".to_string();
-            let script_env = HashMap::new();
-            let script_exec_paths = vec![];
-
-            let mut task_node_ids = HashMap::new();
-
-            // First, create and register all tasks
-            for (name, task_config) in config.tasks.iter() {
-                // Merge environments and exec_paths for each task
-                let env = Self::merge_envs(&global_env, &script_env, &task_config.env);
+                // Merge environments and exec_paths for default_task
+                let env = Self::merge_envs(&global_env, &script_env, &default_task_config.env);
                 let exec_paths = Self::merge_exec_paths(
                     &global_exec_paths,
                     &script_exec_paths,
-                    &task_config.exec_paths,
+                    &default_task_config.exec_paths,
                 );
 
                 // Validate task config
-                self.validate_task_config(task_config, name, Path::new("config"))?;
+                self.validate_task_config(default_task_config, "default", Path::new("config"))?;
 
-                // Create task node
-                let task_id = self.create_task_node(
+                let node_id = self.create_task_node(
                     &mut graph,
                     &script_id,
                     &script_display_name,
-                    name,
-                    task_config,
+                    "default", // Using "default" as the task name
+                    default_task_config,
                 );
 
                 // Update the task data with merged env and exec_paths
-                if let NodeKind::Task(ref mut task_data) = graph.nodes[task_id as usize].kind {
+                if let NodeKind::Task(ref mut task_data) = graph.nodes[node_id as usize].kind {
                     task_data.env = env;
                     task_data.exec_paths = exec_paths;
                 }
 
-                self.register_task(&script_id, name, task_id, &mut graph)?;
-                task_node_ids.insert(name.clone(), task_id);
-            }
+                self.register_task(&script_id, "default", node_id, &mut graph)?;
 
-            // Now, process dependencies
-            for (name, task_config) in config.tasks.iter() {
-                let node_id = *task_node_ids.get(name).unwrap();
+                // Store the node_id for further processing
+                let mut task_node_ids = HashMap::new();
+                task_node_ids.insert("default".to_string(), node_id);
 
-                // Handle dependencies
-                for dep in &task_config.pre_deps {
+                // Handle dependencies after all tasks are registered
+                let node_id = *task_node_ids.get("default").unwrap();
+
+                for dep in &default_task_config.pre_deps {
                     match dep {
                         Dependency::Task { task } => {
                             let dep_id = self.resolve_dependency(task, &script_id, &graph)?;
@@ -268,7 +184,7 @@ impl ScriptLoader {
                                 raw_command: command.clone(),
                                 description: None,
                                 working_dir: None,
-                                env: HashMap::new(),
+                                env: std::collections::HashMap::new(),
                                 watch: None,
                             }));
                             graph.add_edge(cmd_node_id, node_id)?;
@@ -276,7 +192,7 @@ impl ScriptLoader {
                     }
                 }
 
-                for dep in &task_config.post_deps {
+                for dep in &default_task_config.post_deps {
                     match dep {
                         Dependency::Task { task } => {
                             let dep_id = self.resolve_dependency(task, &script_id, &graph)?;
@@ -287,10 +203,96 @@ impl ScriptLoader {
                                 raw_command: command.clone(),
                                 description: None,
                                 working_dir: None,
-                                env: HashMap::new(),
+                                env: std::collections::HashMap::new(),
                                 watch: None,
                             }));
                             graph.add_edge(node_id, cmd_node_id)?;
+                        }
+                    }
+                }
+            }
+
+            // Process tasks from config.tasks
+            if !config.tasks.is_empty() {
+                let script_id = "".to_string();
+                let script_display_name = "".to_string();
+                let script_env = HashMap::new();
+                let script_exec_paths = vec![];
+
+                let mut task_node_ids = HashMap::new();
+
+                // First, create and register all tasks
+                for (name, task_config) in &config.tasks {
+                    // Merge environments and exec_paths for each task
+                    let env = Self::merge_envs(&global_env, &script_env, &task_config.env);
+                    let exec_paths = Self::merge_exec_paths(
+                        &global_exec_paths,
+                        &script_exec_paths,
+                        &task_config.exec_paths,
+                    );
+
+                    // Validate task config
+                    self.validate_task_config(task_config, name, Path::new("config"))?;
+
+                    // Create task node
+                    let task_id = self.create_task_node(
+                        &mut graph,
+                        &script_id,
+                        &script_display_name,
+                        name,
+                        task_config,
+                    );
+
+                    // Update the task data with merged env and exec_paths
+                    if let NodeKind::Task(ref mut task_data) = graph.nodes[task_id as usize].kind {
+                        task_data.env = env;
+                        task_data.exec_paths = exec_paths;
+                    }
+
+                    self.register_task(&script_id, name, task_id, &mut graph)?;
+                    task_node_ids.insert(name.clone(), task_id);
+                }
+
+                // Now, process dependencies
+                for (name, task_config) in &config.tasks {
+                    let node_id = *task_node_ids.get(name).unwrap();
+
+                    // Handle dependencies
+                    for dep in &task_config.pre_deps {
+                        match dep {
+                            Dependency::Task { task } => {
+                                let dep_id = self.resolve_dependency(task, &script_id, &graph)?;
+                                graph.add_edge(dep_id, node_id)?;
+                            }
+                            Dependency::Command { command } => {
+                                let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                                    raw_command: command.clone(),
+                                    description: None,
+                                    working_dir: None,
+                                    env: HashMap::new(),
+                                    watch: None,
+                                }));
+                                graph.add_edge(cmd_node_id, node_id)?;
+                            }
+                        }
+                    }
+
+                    for dep in &task_config.post_deps {
+                        match dep {
+                            Dependency::Task { task } => {
+                                let dep_id = self.resolve_dependency(task, &script_id, &graph)?;
+                                graph.add_edge(node_id, dep_id)?;
+                            }
+                            Dependency::Command { command } => {
+                                let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                                    raw_command: command.clone(),
+                                    description: None,
+                                    working_dir: None,
+                                    env: HashMap::new(),
+                                    watch: None,
+                                }));
+                                graph.add_edge(node_id, cmd_node_id)?;
+                            }
                         }
                     }
                 }
@@ -312,43 +314,25 @@ impl ScriptLoader {
         // Read the script file
         let content = fs::read_to_string(path)?;
 
-        // Parse YAML content line by line to detect duplicate task names
+        // Parse the content into a serde_yaml::Value to extract task names
+        let script_yaml: serde_yaml::Value = serde_yaml::from_str(&content)?;
+
+        // Now, collect task names and check for duplicates
         let mut task_names = HashSet::new();
-        let mut in_tasks = false;
-        let mut indent_level = 0;
 
-        for line in content.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-
-            let indent = line.chars().take_while(|c| c.is_whitespace()).count();
-
-            if trimmed == "tasks:" {
-                in_tasks = true;
-                indent_level = indent;
-                continue;
-            }
-
-            if in_tasks && indent > indent_level {
-                if let Some(task_name) = trimmed.split(':').next() {
-                    let task_name = task_name.trim();
-                    // Skip checking command and other task properties
-                    if !task_name.is_empty()
-                        && !task_name.contains(' ')
-                        && !task_name.starts_with('-')
-                        && !task_names.insert(task_name.to_string())
-                    {
-                        return Err(BodoError::PluginError(format!(
-                            "Duplicate task name '{}' found in '{}'",
-                            task_name,
-                            path.display()
-                        )));
+        if let Some(tasks) = script_yaml.get("tasks") {
+            if let Some(task_map) = tasks.as_mapping() {
+                for (key, _value) in task_map {
+                    if let Some(task_name) = key.as_str() {
+                        if !task_names.insert(task_name.to_string()) {
+                            return Err(BodoError::PluginError(format!(
+                                "Duplicate task name '{}' found in '{}'",
+                                task_name,
+                                path.display()
+                            )));
+                        }
                     }
                 }
-            } else if indent <= indent_level {
-                in_tasks = false;
             }
         }
 
@@ -359,9 +343,9 @@ impl ScriptLoader {
         let script_exec_paths = script_config.exec_paths.clone();
 
         // Process default_task if present
-        if let Some(default_task_config) = script_config.default_task {
+        if let Some(ref default_task_config) = script_config.default_task {
             let default_task_name = "default";
-            self.validate_task_config(&default_task_config, default_task_name, path)?;
+            self.validate_task_config(default_task_config, default_task_name, path)?;
 
             // Merge environments and exec_paths for default_task
             let env = Self::merge_envs(global_env, &script_env, &default_task_config.env);
@@ -377,7 +361,7 @@ impl ScriptLoader {
                 script_id,
                 script_display_name,
                 default_task_name,
-                &default_task_config,
+                default_task_config,
             );
 
             // Update the task data with merged env and exec_paths
@@ -391,8 +375,8 @@ impl ScriptLoader {
         }
 
         // Process tasks
-        for (task_name, task_config) in script_config.tasks {
-            self.validate_task_config(&task_config, &task_name, path)?;
+        for (task_name, task_config) in &script_config.tasks {
+            self.validate_task_config(task_config, task_name, path)?;
 
             // Merge environments and exec_paths for this task
             let env = Self::merge_envs(global_env, &script_env, &task_config.env);
@@ -407,8 +391,8 @@ impl ScriptLoader {
                 graph,
                 script_id,
                 script_display_name,
-                &task_name,
-                &task_config,
+                task_name,
+                task_config,
             );
 
             // Update the task data with merged env and exec_paths
@@ -417,7 +401,108 @@ impl ScriptLoader {
                 task_data.exec_paths = exec_paths;
             }
 
-            self.register_task(script_id, &task_name, node_id, graph)?;
+            self.register_task(script_id, task_name, node_id, graph)?;
+        }
+
+        // Now, process dependencies for the default_task
+        if let Some(ref default_task_config) = script_config.default_task {
+            let default_task_name = "default";
+            let full_task_name = if script_id.is_empty() {
+                default_task_name.to_string()
+            } else {
+                format!("{} {}", script_id, default_task_name)
+            };
+
+            let node_id = *graph.task_registry.get(&full_task_name).unwrap();
+
+            // Handle dependencies
+            for dep in &default_task_config.pre_deps {
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(task, script_id, graph)?;
+                        graph.add_edge(dep_id, node_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command.clone(),
+                            description: None,
+                            working_dir: None,
+                            env: HashMap::new(),
+                            watch: None,
+                        }));
+                        graph.add_edge(cmd_node_id, node_id)?;
+                    }
+                }
+            }
+
+            for dep in &default_task_config.post_deps {
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(task, script_id, graph)?;
+                        graph.add_edge(node_id, dep_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command.clone(),
+                            description: None,
+                            working_dir: None,
+                            env: HashMap::new(),
+                            watch: None,
+                        }));
+                        graph.add_edge(node_id, cmd_node_id)?;
+                    }
+                }
+            }
+        }
+
+        // Now, process dependencies for the tasks
+        for (task_name, task_config) in &script_config.tasks {
+            let full_task_name = if script_id.is_empty() {
+                task_name.clone()
+            } else {
+                format!("{} {}", script_id, task_name)
+            };
+
+            let node_id = *graph.task_registry.get(&full_task_name).unwrap();
+
+            // Handle dependencies
+            for dep in &task_config.pre_deps {
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(task, script_id, graph)?;
+                        graph.add_edge(dep_id, node_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command.clone(),
+                            description: None,
+                            working_dir: None,
+                            env: HashMap::new(),
+                            watch: None,
+                        }));
+                        graph.add_edge(cmd_node_id, node_id)?;
+                    }
+                }
+            }
+
+            for dep in &task_config.post_deps {
+                match dep {
+                    Dependency::Task { task } => {
+                        let dep_id = self.resolve_dependency(task, script_id, graph)?;
+                        graph.add_edge(node_id, dep_id)?;
+                    }
+                    Dependency::Command { command } => {
+                        let cmd_node_id = graph.add_node(NodeKind::Command(CommandData {
+                            raw_command: command.clone(),
+                            description: None,
+                            working_dir: None,
+                            env: HashMap::new(),
+                            watch: None,
+                        }));
+                        graph.add_edge(node_id, cmd_node_id)?;
+                    }
+                }
+            }
         }
 
         Ok(())

@@ -1,3 +1,5 @@
+// tests/script_loader_error_test.rs
+
 use bodo::config::BodoConfig;
 use bodo::errors::BodoError;
 use bodo::script_loader::ScriptLoader;
@@ -25,9 +27,24 @@ tasks:
 
     let result = loader.build_graph(config);
     assert!(
-        matches!(result, Err(BodoError::PluginError(_))),
-        "Expected PluginError due to duplicate task names"
+        result.is_err(),
+        "Expected build_graph to fail due to duplicate task names, but it succeeded: {:?}",
+        result
     );
+
+    if let Err(BodoError::YamlError(e)) = result {
+        let error_message = e.to_string();
+        assert!(
+            error_message.contains("duplicate entry with key \"duplicate_task\""),
+            "Expected error message to mention duplicate key, but got: {}",
+            error_message
+        );
+    } else {
+        panic!(
+            "Expected YamlError due to duplicate keys, but got a different error: {:?}",
+            result
+        );
+    }
 }
 
 #[test]
