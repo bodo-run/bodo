@@ -20,6 +20,13 @@ impl TimeoutPlugin {
     pub fn new() -> Self {
         Self
     }
+
+    pub fn parse_timeout(s: &str) -> Result<u64> {
+        let duration = parse_duration(s).map_err(|e| {
+            BodoError::PluginError(format!("Invalid timeout duration '{}': {}", s, e))
+        })?;
+        Ok(duration.as_secs())
+    }
 }
 
 impl Plugin for TimeoutPlugin {
@@ -35,7 +42,7 @@ impl Plugin for TimeoutPlugin {
         for node in &mut graph.nodes {
             if let NodeKind::Task(_) = &node.kind {
                 if let Some(timeout_str) = node.metadata.get("timeout") {
-                    let seconds = parse_timeout(timeout_str)?;
+                    let seconds = Self::parse_timeout(timeout_str)?;
                     node.metadata
                         .insert("timeout_seconds".to_string(), seconds.to_string());
                     debug!(
@@ -51,10 +58,4 @@ impl Plugin for TimeoutPlugin {
     fn as_any(&self) -> &dyn Any {
         self
     }
-}
-
-fn parse_timeout(s: &str) -> Result<u64> {
-    let duration = parse_duration(s)
-        .map_err(|e| BodoError::PluginError(format!("Invalid timeout duration '{}': {}", s, e)))?;
-    Ok(duration.as_secs())
 }

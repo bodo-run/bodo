@@ -1,27 +1,9 @@
-#[derive(Debug, Clone)]
-pub enum ColorSpec {
-    Black,
-    Red,
-    Green,
-    Yellow,
-    Blue,
-    Magenta,
-    Cyan,
-    White,
-    BrightBlack,
-    BrightRed,
-    BrightGreen,
-    BrightYellow,
-    BrightBlue,
-    BrightMagenta,
-    BrightCyan,
-    BrightWhite,
-}
-
 use log::{debug, error, info, warn};
 use std::{
     io::{BufRead, BufReader},
     process::{Child, Command, Stdio},
+    sync::atomic::{AtomicBool, Ordering},
+    sync::Arc,
     thread::{self, JoinHandle},
 };
 
@@ -56,18 +38,30 @@ impl ProcessManager {
         prefix_enabled: bool,
         prefix_label: Option<String>,
         prefix_color: Option<String>,
+        working_dir: Option<&str>,
     ) -> std::io::Result<()> {
         debug!(
-            "Spawning command '{}' (prefix={}, label={:?}, color={:?})",
-            cmd, prefix_enabled, prefix_label, prefix_color
+            "Spawning command '{}' (prefix={}, label={:?}, color={:?}, working_dir={:?})",
+            cmd, prefix_enabled, prefix_label, prefix_color, working_dir
         );
 
-        let mut child = Command::new("sh")
-            .arg("-c")
-            .arg(cmd)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
+        let mut command = if cfg!(target_os = "windows") {
+            let mut cmd_command = Command::new("cmd");
+            cmd_command.arg("/C").arg(cmd);
+            cmd_command
+        } else {
+            let mut sh_command = Command::new("sh");
+            sh_command.arg("-c").arg(cmd);
+            sh_command
+        };
+
+        if let Some(dir) = working_dir {
+            command.current_dir(dir);
+        }
+
+        command.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+        let mut child = command.spawn()?;
 
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
@@ -120,44 +114,81 @@ impl ProcessManager {
 
     pub fn run_concurrently(&mut self) -> std::io::Result<()> {
         debug!("Running {} processes concurrently", self.children.len());
-        let mut any_failed = false;
 
-        let mut children = std::mem::take(&mut self.children);
+        let children = std::mem::take(&mut self.children);
         let len = children.len();
 
-        for i in 0..len {
-            let status = children[i].child.wait()?;
-            if !status.success() {
-                let code = status.code().unwrap_or(-1);
-                warn!(
-                    "Process '{}' failed with exit code {}",
-                    children[i].name, code
-                );
-                any_failed = true;
-                if self.fail_fast {
-                    debug!("Fail-fast enabled, killing remaining processes");
-                    for child in children.iter_mut().skip(i + 1) {
-                        let _ = child.child.kill();
-                    }
-                    break;
-                }
-            } else {
-                debug!("Process '{}' completed successfully", children[i].name);
-            }
-        }
+        // Create a shared flag for fail-fast coordination
+        let should_terminate = Arc::new(AtomicBool::new(false));
 
+        // Create a vector to store the wait futures
+        let mut wait_handles = Vec::with_capacity(len);
+        let mut io_handles = Vec::with_capacity(len);
+
+        // Move each child into its own thread
         for mut child_info in children {
-            if let Some(handle) = child_info.stdout_handle.take() {
-                let _ = handle.join();
+            let name = child_info.name.clone();
+            let stdout_handle = child_info.stdout_handle.take();
+            let stderr_handle = child_info.stderr_handle.take();
+            let fail_fast = self.fail_fast;
+            let should_terminate = should_terminate.clone();
+
+            let handle = thread::spawn(move || {
+                // Try to wait with a timeout to allow checking the termination flag
+                loop {
+                    if should_terminate.load(Ordering::SeqCst) {
+                        debug!("Process '{}' received termination signal", name);
+                        let _ = child_info.child.kill();
+                        break Ok::<(String, i32, bool), std::io::Error>((name, -1, fail_fast));
+                    }
+
+                    match child_info.child.try_wait()? {
+                        Some(status) => {
+                            let code = status.code().unwrap_or(-1);
+                            if code != 0 && fail_fast {
+                                should_terminate.store(true, Ordering::SeqCst);
+                            }
+                            break Ok((name, code, fail_fast));
+                        }
+                        None => {
+                            // Process still running, sleep briefly then check again
+                            thread::sleep(std::time::Duration::from_millis(10));
+                        }
+                    }
+                }
+            });
+
+            wait_handles.push(handle);
+
+            // Store IO handles if they exist
+            if let Some(h) = stdout_handle {
+                io_handles.push(h);
             }
-            if let Some(handle) = child_info.stderr_handle.take() {
-                let _ = handle.join();
+            if let Some(h) = stderr_handle {
+                io_handles.push(h);
             }
         }
 
-        if any_failed {
-            debug!("One or more processes failed");
-            std::process::exit(1);
+        // Wait for all processes to complete
+        for handle in wait_handles {
+            match handle.join().unwrap() {
+                Ok((name, code, _)) => {
+                    if code != 0 {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!("Process '{}' failed with exit code {}", name, code),
+                        ));
+                    }
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+
+        // Wait for all IO threads to complete
+        for handle in io_handles {
+            let _ = handle.join();
         }
 
         Ok(())
@@ -174,7 +205,12 @@ impl ProcessManager {
     }
 }
 
-fn color_line(prefix: &str, prefix_color: &Option<String>, line: &str, is_stderr: bool) -> String {
+pub fn color_line(
+    prefix: &str,
+    prefix_color: &Option<String>,
+    line: &str,
+    is_stderr: bool,
+) -> String {
     let default_color = if is_stderr { Color::Red } else { Color::White };
     let color = prefix_color
         .as_ref()
@@ -184,7 +220,7 @@ fn color_line(prefix: &str, prefix_color: &Option<String>, line: &str, is_stderr
     format!("{} {}", colored_prefix, line)
 }
 
-fn parse_color(c: &str) -> Option<Color> {
+pub fn parse_color(c: &str) -> Option<Color> {
     debug!("Parsing color: {}", c);
     match c.to_lowercase().as_str() {
         "black" => Some(Color::Black),

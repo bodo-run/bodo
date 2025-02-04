@@ -41,10 +41,12 @@ pub fn get_task_name(args: &Args, graph_manager: &GraphManager) -> Result<String
             task
         }
     } else {
-        if !graph_manager.task_exists("default") {
+        // Check for default task in the task registry
+        if graph_manager.task_exists("default") {
+            "default".to_string()
+        } else {
             return Err(BodoError::NoTaskSpecified);
         }
-        "default".to_string()
     };
 
     if !graph_manager.task_exists(&task_name) {
