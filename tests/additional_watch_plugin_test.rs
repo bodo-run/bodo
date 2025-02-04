@@ -1,5 +1,5 @@
 use bodo::plugins::watch_plugin::WatchPlugin;
-use globset::Glob;
+use globset::{Glob, GlobSetBuilder};
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 
@@ -16,7 +16,7 @@ fn test_create_watcher_test() {
 
 #[test]
 fn test_find_base_directory() {
-    // Pattern starts with **/, should return "."
+    // Pattern starts with **/ should return "."
     let base = WatchPlugin::find_base_directory("**/foo/bar").unwrap();
     assert_eq!(base, std::path::PathBuf::from("."));
 }
@@ -36,7 +36,7 @@ fn test_find_base_directory_with_wildcard_in_middle() {
 #[test]
 fn test_filter_changed_paths() {
     // Build a glob set that matches "test_dir/foo.txt"
-    let mut builder = globset::GlobSetBuilder::new();
+    let mut builder = GlobSetBuilder::new();
     builder.add(Glob::new("test_dir/foo.txt").unwrap());
     let glob_set = builder.build().unwrap();
 
@@ -63,6 +63,5 @@ fn test_filter_changed_paths() {
     let changed_paths = vec![changed_path.clone()];
     let plugin = WatchPlugin::new(false, false);
     let matched = plugin.filter_changed_paths(&changed_paths, &watch_entry);
-    // Should match since "test_dir/foo.txt" matches and is under test_dir.
     assert_eq!(matched.len(), 1);
 }
