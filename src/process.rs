@@ -261,3 +261,8 @@ fn parse_color(c: &str) -> Option<Color> {
         }
     }
 }
+
+#[cfg(test)]
+pub use parse_color;
+
+// End of src/process.rs
