@@ -1,8 +1,5 @@
-use bodo::config::WatchConfig;
 use bodo::graph::{Graph, NodeKind, TaskData};
-use bodo::plugin::Plugin;
 use bodo::plugins::watch_plugin::{WatchEntry, WatchPlugin};
-use bodo::Graph;
 use std::collections::HashMap;
 
 #[test]
@@ -46,7 +43,7 @@ fn test_watch_plugin_on_graph_build_with_auto_watch_and_env_var_set() {
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
-        watch: Some(WatchConfig {
+        watch: Some(bodo::config::WatchConfig {
             patterns: vec!["src/**/*.rs".to_string()],
             debounce_ms: 500,
             ignore_patterns: vec![],
@@ -86,7 +83,7 @@ fn test_watch_plugin_on_graph_build_with_auto_watch() {
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
-        watch: Some(WatchConfig {
+        watch: Some(bodo::config::WatchConfig {
             patterns: vec!["src/**/*.rs".to_string()],
             debounce_ms: 500,
             ignore_patterns: vec![],
@@ -123,7 +120,7 @@ fn test_watch_plugin_no_auto_watch_no_watch_mode() {
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
-        watch: Some(WatchConfig {
+        watch: Some(bodo::config::WatchConfig {
             patterns: vec!["src/**/*.rs".to_string()],
             debounce_ms: 500,
             ignore_patterns: vec![],
@@ -158,7 +155,7 @@ fn test_watch_plugin_on_graph_build_with_tasks() {
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
-        watch: Some(WatchConfig {
+        watch: Some(bodo::config::WatchConfig {
             patterns: vec!["dummy.txt".to_string()],
             debounce_ms: 500,
             ignore_patterns: vec![],
