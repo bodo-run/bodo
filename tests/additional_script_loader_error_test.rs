@@ -7,7 +7,7 @@ fn test_load_script_with_duplicate_tasks() {
     let temp_dir = tempdir().unwrap();
     let script_path = temp_dir.path().join("script.yaml");
 
-    // YAML duplicate keys: the second definition will override the first.
+    // YAML duplicate keys: duplicate_task appears twice.
     let script_content = r#"tasks:
   duplicate_task:
     command: echo "First definition"
@@ -16,7 +16,9 @@ fn test_load_script_with_duplicate_tasks() {
 "#;
     fs::write(&script_path, script_content).unwrap();
 
-    let config_yaml = fs::read_to_string(&script_path).unwrap();
+    // Create a config YAML that embeds the file content.
+    let config_yaml = format!("tasks: {}", fs::read_to_string(&script_path).unwrap());
+    // Instead of unwrapping, assert that deserializing returns an error.
     let res = serde_yaml::from_str::<BodoConfig>(&config_yaml);
     assert!(res.is_err(), "Expected error due to duplicate task keys");
 }
@@ -26,7 +28,7 @@ fn test_load_script_with_invalid_dependency() {
     let temp_dir = tempdir().unwrap();
     let script_path = temp_dir.path().join("script.yaml");
 
-    // Invalid dependency format
+    // Invalid dependency format: using a number instead of a map.
     let script_content = r#"tasks:
   task1:
     command: echo "Task 1"
@@ -35,7 +37,7 @@ fn test_load_script_with_invalid_dependency() {
 "#;
     fs::write(&script_path, script_content).unwrap();
 
-    let config_yaml = fs::read_to_string(&script_path).unwrap();
+    let config_yaml = format!("tasks: {}", fs::read_to_string(&script_path).unwrap());
     let res = serde_yaml::from_str::<BodoConfig>(&config_yaml);
     assert!(
         res.is_err(),
@@ -48,13 +50,14 @@ fn test_load_script_with_invalid_task_name_chars() {
     let temp_dir = tempdir().unwrap();
     let script_path = temp_dir.path().join("script.yaml");
 
+    // Task name contains invalid characters.
     let script_content = r#"tasks:
   "invalid/task.name":
     command: echo "Invalid task name"
 "#;
     fs::write(&script_path, script_content).unwrap();
 
-    let config_yaml = fs::read_to_string(&script_path).unwrap();
+    let config_yaml = format!("tasks: {}", fs::read_to_string(&script_path).unwrap());
     let res = serde_yaml::from_str::<BodoConfig>(&config_yaml);
     assert!(
         res.is_err(),
@@ -74,7 +77,7 @@ fn test_load_script_with_reserved_task_name() {
 "#;
     fs::write(&script_path, script_content).unwrap();
 
-    let config_yaml = fs::read_to_string(&script_path).unwrap();
+    let config_yaml = format!("tasks: {}", fs::read_to_string(&script_path).unwrap());
     let res = serde_yaml::from_str::<BodoConfig>(&config_yaml);
     assert!(res.is_err(), "Expected error due to reserved task name");
 }
