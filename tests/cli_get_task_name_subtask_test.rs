@@ -41,7 +41,7 @@ mod new_tests {
         let args = Args {
             list: false,
             watch: false,
-            no_watch: false,
+            auto_watch: false,
             debug: false,
             task: Some("build".to_string()),
             subtask: Some("unit".to_string()),
@@ -77,17 +77,15 @@ mod new_tests {
             metadata: HashMap::new(),
         });
         manager.graph.task_registry.insert("build".to_string(), 0);
-
         let args = Args {
             list: false,
             watch: false,
-            no_watch: false,
+            auto_watch: false,
             debug: false,
             task: Some("build".to_string()),
             subtask: Some("unit".to_string()),
             args: vec![],
         };
-
         let result = get_task_name(&args, &manager);
         assert!(matches!(result, Err(BodoError::TaskNotFound(_))));
     }
