@@ -1,5 +1,9 @@
 use bodo::plugins::watch_plugin::WatchPlugin;
 use globset::{Glob, GlobSetBuilder};
+use std::env;
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::PathBuf;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 
@@ -18,23 +22,40 @@ fn test_create_watcher_test() {
 fn test_find_base_directory() {
     // Pattern starts with **/ should return "."
     let base = WatchPlugin::find_base_directory("**/foo/bar").unwrap();
-    assert_eq!(base, std::path::PathBuf::from("."));
+    assert_eq!(base, PathBuf::from("."));
 }
 
 #[test]
 fn test_find_base_directory_with_no_wildcard() {
     let base = WatchPlugin::find_base_directory("src").unwrap();
-    assert_eq!(base, std::path::PathBuf::from("src"));
+    assert_eq!(base, PathBuf::from("src"));
 }
 
 #[test]
 fn test_find_base_directory_with_wildcard_in_middle() {
     let base = WatchPlugin::find_base_directory("src/*.rs").unwrap();
-    assert_eq!(base, std::path::PathBuf::from("src"));
+    assert_eq!(base, PathBuf::from("src"));
 }
 
 #[test]
 fn test_filter_changed_paths() {
+    // To ensure canonicalization works, create a temporary directory structure.
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let temp_path = temp_dir.path();
+
+    // Change current directory to temp_dir.
+    let original_dir = env::current_dir().expect("Failed to get current dir");
+    env::set_current_dir(temp_path).expect("Failed to set current dir");
+
+    // Create "test_dir" and file "foo.txt" inside it.
+    let test_dir = temp_path.join("test_dir");
+    fs::create_dir_all(&test_dir).expect("Failed to create test_dir");
+    let file_path = test_dir.join("foo.txt");
+    {
+        let mut file = File::create(&file_path).expect("Failed to create foo.txt");
+        writeln!(file, "Test content").expect("Failed to write to foo.txt");
+    }
+
     // Build a glob set that matches "test_dir/foo.txt"
     let mut builder = GlobSetBuilder::new();
     builder.add(Glob::new("test_dir/foo.txt").unwrap());
@@ -47,21 +68,18 @@ fn test_filter_changed_paths() {
         ignore_set: None,
         directories_to_watch: {
             let mut set = std::collections::HashSet::new();
-            set.insert(std::path::PathBuf::from("test_dir"));
+            set.insert(PathBuf::from("test_dir"));
             set
         },
         debounce_ms: 500,
     };
 
-    // Get the current working directory.
-    let cwd = match std::env::current_dir() {
-        Ok(path) => path,
-        Err(_) => return,
-    };
-    // Create a changed path that is within "test_dir"
-    let changed_path = cwd.join("test_dir").join("foo.txt");
-    let changed_paths = vec![changed_path];
+    // Prepare changed_paths using the absolute path of the file.
+    let changed_paths = vec![file_path.clone()];
     let plugin = WatchPlugin::new(false, false);
     let matched = plugin.filter_changed_paths(&changed_paths, &watch_entry);
     assert_eq!(matched.len(), 1);
+
+    // Restore original current directory.
+    env::set_current_dir(original_dir).expect("Failed to restore current dir");
 }
