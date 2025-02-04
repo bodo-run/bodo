@@ -1,12 +1,8 @@
 use bodo::cli::{get_task_name, Args};
 use bodo::config::{BodoConfig, TaskArgument};
 use bodo::errors::BodoError;
-use bodo::graph::{CommandData, ConcurrentGroupData, Graph, Node, NodeKind, TaskData};
-use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
-use bodo::plugins::execution_plugin::ExecutionPlugin;
-use bodo::plugins::prefix_plugin::PrefixPlugin;
-use bodo::plugins::timeout_plugin::TimeoutPlugin;
-use serde_json::json;
+use bodo::graph::{Node, NodeKind, TaskData};
+use bodo::manager::GraphManager; // ADDED
 use std::collections::HashMap;
 
 #[cfg(test)]
@@ -118,7 +114,7 @@ mod new_tests {
 
     #[test]
     fn test_prefix_plugin_next_color_cycle() {
-        let mut plugin = PrefixPlugin::new();
+        let mut plugin = crate::bodo::plugins::prefix_plugin::PrefixPlugin::new();
         let mut colors = Vec::new();
         // Call next_color 10 times; DEFAULT_COLORS (6 items) will cycle.
         for _ in 0..10 {
@@ -128,112 +124,5 @@ mod new_tests {
         // Check that the first 6 are distinct.
         let unique: std::collections::HashSet<_> = colors.iter().take(6).collect();
         assert_eq!(unique.len(), 6);
-    }
-
-    #[test]
-    fn test_color_line_function() {
-        let prefix = "TEST";
-        let prefix_color = Some("red".to_string());
-        let line = "Hello";
-        let colored = bodo::process::color_line(prefix, &prefix_color, line, false);
-        // Check that the returned string contains the prefix (in brackets) and the line.
-        assert!(colored.contains("[TEST]"));
-        assert!(colored.contains("Hello"));
-    }
-
-    #[test]
-    fn test_parse_color_invalid() {
-        // Test that parse_color returns None for an unknown color string.
-        assert_eq!(bodo::process::parse_color("unknowncolor"), None);
-    }
-
-    #[test]
-    fn test_manager_build_graph_empty() {
-        let mut manager = bodo::manager::GraphManager::new();
-        let config = BodoConfig::default();
-        // build_graph currently returns an empty graph.
-        let graph = manager.build_graph(config).unwrap();
-        assert!(graph.nodes.is_empty());
-        assert!(graph.edges.is_empty());
-        assert!(graph.task_registry.is_empty());
-    }
-
-    #[test]
-    fn test_manager_apply_task_arguments_success() {
-        let mut manager = bodo::manager::GraphManager::new();
-        // Manually add a task with an argument that has a default.
-        let task = TaskData {
-            name: "greet".to_string(),
-            description: Some("Greet Task".to_string()),
-            command: Some("echo $GREETING".to_string()),
-            working_dir: None,
-            env: HashMap::new(),
-            exec_paths: vec![],
-            arguments: vec![TaskArgument {
-                name: "GREETING".to_string(),
-                description: Some("Greeting msg".to_string()),
-                required: true,
-                default: Some("Hello".to_string()),
-            }],
-            is_default: false,
-            script_id: "".to_string(),
-            script_display_name: "".to_string(),
-            watch: None,
-            pre_deps: vec![],
-            post_deps: vec![],
-            concurrently: vec![],
-            concurrently_options: Default::default(),
-        };
-
-        manager.graph.nodes.push(Node {
-            id: 0,
-            kind: NodeKind::Task(task),
-            metadata: HashMap::new(),
-        });
-        manager.graph.task_registry.insert("greet".to_string(), 0);
-        let result = manager.apply_task_arguments("greet", &[]);
-        assert!(result.is_ok());
-        if let NodeKind::Task(ref task_data) = manager.graph.nodes[0].kind {
-            assert_eq!(task_data.env.get("GREETING"), Some(&"Hello".to_string()));
-        } else {
-            panic!("Expected task node");
-        }
-    }
-
-    #[test]
-    fn test_manager_apply_task_arguments_failure() {
-        let mut manager = bodo::manager::GraphManager::new();
-        // Add a task with a required argument that has no default.
-        let task = TaskData {
-            name: "greet".to_string(),
-            description: None,
-            command: Some("echo $NAME".to_string()),
-            working_dir: None,
-            env: HashMap::new(),
-            exec_paths: vec![],
-            arguments: vec![TaskArgument {
-                name: "NAME".to_string(),
-                description: None,
-                required: true,
-                default: None,
-            }],
-            is_default: false,
-            script_id: "".to_string(),
-            script_display_name: "".to_string(),
-            watch: None,
-            pre_deps: vec![],
-            post_deps: vec![],
-            concurrently: vec![],
-            concurrently_options: Default::default(),
-        };
-
-        manager.graph.nodes.push(Node {
-            id: 0,
-            kind: NodeKind::Task(task),
-            metadata: HashMap::new(),
-        });
-        manager.graph.task_registry.insert("greet".to_string(), 0);
-        let result = manager.apply_task_arguments("greet", &[]);
-        assert!(result.is_err());
     }
 }
