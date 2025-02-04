@@ -1,3 +1,4 @@
+
 pub type NodeId = u64;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -7,7 +8,7 @@ pub enum NodeKind {
     ConcurrentGroup(ConcurrentGroupData),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct TaskData {
     pub name: String,
     pub description: Option<String>,

@@ -32,7 +32,7 @@ fn test_graph_add_nodes_and_edges() {
     let task_data1 = TaskData {
         name: "task1".to_string(),
         description: None,
-        command: Some("echo task1".to_string()),
+        command: Some("echo Task1".to_string()),
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
@@ -51,7 +51,7 @@ fn test_graph_add_nodes_and_edges() {
     let task_data2 = TaskData {
         name: "task2".to_string(),
         description: None,
-        command: Some("echo task2".to_string()),
+        command: Some("echo Task2".to_string()),
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
