@@ -1,7 +1,10 @@
 use bodo::plugins::watch_plugin::WatchPlugin;
-use globset::{Glob, GlobSetBuilder};
+use std::env;
+use std::fs;
+use std::path::Path;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
+use tempfile::tempdir;
 
 #[test]
 fn test_create_watcher_test() {
@@ -36,8 +39,8 @@ fn test_find_base_directory_with_wildcard_in_middle() {
 #[test]
 fn test_filter_changed_paths() {
     // Build a glob set that matches "test_dir/foo.txt"
-    let mut builder = GlobSetBuilder::new();
-    builder.add(Glob::new("test_dir/foo.txt").unwrap());
+    let mut builder = globset::GlobSetBuilder::new();
+    builder.add(globset::Glob::new("test_dir/foo.txt").unwrap());
     let glob_set = builder.build().unwrap();
 
     // Create a dummy WatchEntry with a directory to watch: "test_dir"
@@ -47,20 +50,24 @@ fn test_filter_changed_paths() {
         ignore_set: None,
         directories_to_watch: {
             let mut set = std::collections::HashSet::new();
-            set.insert(std::path::PathBuf::from("test_dir"));
+            set.insert(Path::new("test_dir").to_path_buf());
             set
         },
         debounce_ms: 500,
     };
 
-    // Get the current working directory.
-    let cwd = match std::env::current_dir() {
-        Ok(path) => path,
-        Err(_) => return,
-    };
-    // Create a changed path that is within "test_dir"
-    let changed_path = cwd.join("test_dir").join("foo.txt");
-    let changed_paths = vec![changed_path.clone()];
+    // Use a temporary directory
+    let temp_dir = tempdir().unwrap();
+    env::set_current_dir(&temp_dir).unwrap();
+    // Create "test_dir" and a file "foo.txt" inside it
+    fs::create_dir_all("test_dir").unwrap();
+    let file_path = Path::new("test_dir").join("foo.txt");
+    fs::write(&file_path, "content").unwrap();
+
+    // Build changed_paths using the absolute path of the file
+    let current = env::current_dir().unwrap();
+    let changed_path = current.join("test_dir").join("foo.txt");
+    let changed_paths = vec![changed_path];
     let plugin = WatchPlugin::new(false, false);
     let matched = plugin.filter_changed_paths(&changed_paths, &watch_entry);
     assert_eq!(matched.len(), 1);
