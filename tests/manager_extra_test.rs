@@ -1,4 +1,4 @@
-use bodo::graph::{Graph, NodeKind, TaskData};
+use bodo::graph::{NodeKind, TaskData};
 use bodo::manager::GraphManager;
 use std::collections::HashMap;
 
