@@ -28,7 +28,11 @@ Another file content.";
 
     // Execute the write_files.sh script with the input file and set the current directory to the temp dir.
     let status = Command::new(&script_path)
-        .arg(input_path.to_str().expect("Input path contains invalid UTF-8"))
+        .arg(
+            input_path
+                .to_str()
+                .expect("Input path contains invalid UTF-8"),
+        )
         .current_dir(temp_dir.path())
         .status()
         .expect("Failed to execute write_files.sh");

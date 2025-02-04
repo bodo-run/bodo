@@ -148,7 +148,11 @@ fn test_apply_task_arguments_with_defaults() {
         .get("hello")
         .cloned()
         .expect("Task 'hello' not found");
-    let node = manager.graph.nodes.get(node_id as usize).expect("Invalid node_id");
+    let node = manager
+        .graph
+        .nodes
+        .get(node_id as usize)
+        .expect("Invalid node_id");
 
     if let bodo::graph::NodeKind::Task(task_data) = &node.kind {
         assert_eq!(task_data.env.get("greeting"), Some(&"Hello".to_string()));

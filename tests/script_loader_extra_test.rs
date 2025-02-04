@@ -3,9 +3,18 @@ use std::collections::HashMap;
 
 #[test]
 fn test_merge_envs() {
-    let global = HashMap::from([("A".to_string(), "1".to_string()), ("SHARED".to_string(), "global".to_string())]);
-    let script = HashMap::from([("B".to_string(), "2".to_string()), ("SHARED".to_string(), "script".to_string())]);
-    let task = HashMap::from([("C".to_string(), "3".to_string()), ("SHARED".to_string(), "task".to_string())]);
+    let global = HashMap::from([
+        ("A".to_string(), "1".to_string()),
+        ("SHARED".to_string(), "global".to_string()),
+    ]);
+    let script = HashMap::from([
+        ("B".to_string(), "2".to_string()),
+        ("SHARED".to_string(), "script".to_string()),
+    ]);
+    let task = HashMap::from([
+        ("C".to_string(), "3".to_string()),
+        ("SHARED".to_string(), "task".to_string()),
+    ]);
     let merged = ScriptLoader::merge_envs(&global, &script, &task);
     assert_eq!(merged.get("A"), Some(&"1".to_string()));
     assert_eq!(merged.get("B"), Some(&"2".to_string()));
