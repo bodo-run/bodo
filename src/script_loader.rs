@@ -31,7 +31,7 @@ impl ScriptLoader {
     }
 
     // Helper function for merging environment variables
-    fn merge_envs(
+    pub fn merge_envs(
         global_env: &HashMap<String, String>,
         script_env: &HashMap<String, String>,
         task_env: &HashMap<String, String>,
@@ -42,7 +42,7 @@ impl ScriptLoader {
         result
     }
 
-    fn merge_exec_paths(
+    pub fn merge_exec_paths(
         global_paths: &[String],
         script_paths: &[String],
         task_paths: &[String],
@@ -269,7 +269,7 @@ impl ScriptLoader {
         script_id: &str,
         script_display_name: &str,
         global_env: &HashMap<String, String>,
-        global_exec_paths: &[String],
+        global_exec_paths: &Vec<String>,
     ) -> Result<()> {
         // Read the script file
         let content = fs::read_to_string(path)?;
@@ -557,5 +557,3 @@ impl ScriptLoader {
 pub use merge_envs;
 #[cfg(test)]
 pub use merge_exec_paths;
-
-// End of src/script_loader.rs
