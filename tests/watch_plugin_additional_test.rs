@@ -1,5 +1,7 @@
 use bodo::plugins::watch_plugin::WatchPlugin;
-use std::path::PathBuf;
+use globset::{Glob, GlobSetBuilder};
+use std::{collections::HashSet, env, fs, io::Write};
+use tempfile::tempdir;
 
 #[test]
 fn test_create_watcher_test() {
@@ -16,40 +18,39 @@ fn test_create_watcher_test() {
 fn test_find_base_directory() {
     // For a pattern starting with **/ we always return "."
     let base = WatchPlugin::find_base_directory("**/foo/bar").unwrap();
-    assert_eq!(base, PathBuf::from("."));
+    assert_eq!(base, std::path::PathBuf::from("."));
 }
 
 #[test]
 fn test_find_base_directory_with_no_wildcard() {
     // If no wildcard is present and the given pattern does not resolve to an existing directory,
-    // the implementation returns the parent (which for a single component yields ".").
+    // the implementation returns the parent (which for a single component yields "." in a non-project directory)
     let base = WatchPlugin::find_base_directory("src").unwrap();
-    assert_eq!(base, PathBuf::from("src"));
+    if std::path::Path::new("src").exists() {
+        assert_eq!(base, std::path::PathBuf::from("src"));
+    } else {
+        assert_eq!(base, std::path::PathBuf::from("."));
+    }
 }
 
 #[test]
 fn test_find_base_directory_with_wildcard_in_middle() {
     // With a wildcard in the middle, the base is the portion before the wildcard.
     let base = WatchPlugin::find_base_directory("src/*.rs").unwrap();
-    assert_eq!(base, PathBuf::from("src"));
+    assert_eq!(base, std::path::PathBuf::from("src"));
 }
 
 #[test]
 fn test_find_base_directory_empty() {
     // If an empty string is provided, expect the result to be "."
     let base = WatchPlugin::find_base_directory("").unwrap();
-    assert_eq!(base, PathBuf::from("."));
+    assert_eq!(base, std::path::PathBuf::from("."));
 }
 
 #[test]
 fn test_filter_changed_paths() {
-    use std::collections::HashSet;
-    use std::env;
-    use std::fs;
-    use std::io::Write;
-
-    // Create a temporary directory for testing.
-    let temp_dir = tempfile::tempdir().unwrap();
+    // Use a temporary directory to simulate file system changes.
+    let temp_dir = tempdir().unwrap();
     let temp_path = temp_dir.path();
 
     // Change current directory to temp_dir.
@@ -66,10 +67,10 @@ fn test_filter_changed_paths() {
     }
 
     // Build a glob set that matches "test_dir/foo.txt"
-    let mut builder = globset::GlobSetBuilder::new();
-    let glob = globset::Glob::new("test_dir/foo.txt").unwrap();
+    let mut builder = GlobSetBuilder::new();
+    let glob = Glob::new("test_dir/foo.txt").expect("Failed to create glob");
     builder.add(glob);
-    let glob_set = builder.build().unwrap();
+    let glob_set = builder.build().expect("Could not build glob set");
 
     // Create a dummy WatchEntry with directory to watch: "test_dir"
     let watch_entry = bodo::plugins::watch_plugin::WatchEntry {
@@ -77,9 +78,9 @@ fn test_filter_changed_paths() {
         glob_set,
         ignore_set: None,
         directories_to_watch: {
-            let mut set = HashSet::new();
-            set.insert(std::path::PathBuf::from("test_dir"));
-            set
+            let mut s = HashSet::new();
+            s.insert(std::path::PathBuf::from("test_dir"));
+            s
         },
         debounce_ms: 500,
     };
