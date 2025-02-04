@@ -26,9 +26,7 @@ on:
         type: choice
         options:
           - openai
-          - fireworks
           - deepseek
-          - azure
       model:
         description: "AI model"
         default: "o3-mini"
@@ -37,12 +35,8 @@ on:
         options:
           - o3-mini # OpenAI
           - o1 # OpenAI
-          - accounts/fireworks/models/deepseek-r1 # Fireworks AI
-          - accounts/fireworks/models/deepseek-coder # Fireworks AI
           - deepseek-reasoner # DeepSeek AI
           - deepseek-coder # DeepSeek AI
-          - DeepSeek-R1 # Azure AI
-          - DeepSeek-Coder # Azure AI
 
 permissions:
   contents: write
