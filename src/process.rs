@@ -1,24 +1,3 @@
-// src/process.rs
-#[derive(Debug, Clone)]
-pub enum ColorSpec {
-    Black,
-    Red,
-    Green,
-    Yellow,
-    Blue,
-    Magenta,
-    Cyan,
-    White,
-    BrightBlack,
-    BrightRed,
-    BrightGreen,
-    BrightYellow,
-    BrightBlue,
-    BrightMagenta,
-    BrightCyan,
-    BrightWhite,
-}
-
 use log::{debug, error, info, warn};
 use std::{
     io::{BufRead, BufReader},
@@ -226,7 +205,12 @@ impl ProcessManager {
     }
 }
 
-fn color_line(prefix: &str, prefix_color: &Option<String>, line: &str, is_stderr: bool) -> String {
+pub fn color_line(
+    prefix: &str,
+    prefix_color: &Option<String>,
+    line: &str,
+    is_stderr: bool,
+) -> String {
     let default_color = if is_stderr { Color::Red } else { Color::White };
     let color = prefix_color
         .as_ref()
@@ -236,7 +220,7 @@ fn color_line(prefix: &str, prefix_color: &Option<String>, line: &str, is_stderr
     format!("{} {}", colored_prefix, line)
 }
 
-fn parse_color(c: &str) -> Option<Color> {
+pub fn parse_color(c: &str) -> Option<Color> {
     debug!("Parsing color: {}", c);
     match c.to_lowercase().as_str() {
         "black" => Some(Color::Black),
