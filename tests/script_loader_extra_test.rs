@@ -15,6 +15,7 @@ fn test_merge_envs() {
 
 #[test]
 fn test_merge_exec_paths() {
+    // Test basic merging
     let global = vec!["/global".to_string()];
     let script = vec!["/script".to_string()];
     let task = vec!["/task".to_string()];
@@ -27,4 +28,16 @@ fn test_merge_exec_paths() {
             "/task".to_string()
         ]
     );
+
+    // Test empty vectors
+    let empty: Vec<String> = vec![];
+    let merged_empty = ScriptLoader::merge_exec_paths(&empty, &empty, &empty);
+    assert!(merged_empty.is_empty());
+
+    // Test duplicate paths
+    let global_dup = vec!["/shared".to_string()];
+    let script_dup = vec!["/shared".to_string()];
+    let task_dup = vec!["/shared".to_string()];
+    let merged_dup = ScriptLoader::merge_exec_paths(&global_dup, &script_dup, &task_dup);
+    assert_eq!(merged_dup, vec!["/shared".to_string()]);
 }
