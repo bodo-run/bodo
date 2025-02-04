@@ -67,7 +67,7 @@ impl Plugin for ConcurrentPlugin {
                             // fallback search: check for keys that equal task_name or end with " {task_name}"
                             let mut found = None;
                             for (key, &id) in &graph.task_registry {
-                                if key == &task_name || key.ends_with(&format!(" {}", task_name)) {
+                                if key == task_name || key.ends_with(&format!(" {}", task_name)) {
                                     found = Some(id);
                                     break;
                                 }
@@ -90,7 +90,7 @@ impl Plugin for ConcurrentPlugin {
                                 // fallback search for task dependency in object format
                                 let mut found = None;
                                 for (key, &id) in &graph.task_registry {
-                                    if key == &task_name
+                                    if key == *task_name
                                         || key.ends_with(&format!(" {}", task_name))
                                     {
                                         found = Some(id);
