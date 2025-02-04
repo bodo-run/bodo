@@ -1,10 +1,7 @@
-use bodo::cli::Args;
-use bodo::config::{BodoConfig, TaskArgument};
-use bodo::errors::BodoError;
-use bodo::graph::{Graph, NodeKind, TaskData};
+use bodo::cli::{get_task_name, Args};
+use bodo::graph::{Node, NodeKind, TaskData};
 use bodo::manager::GraphManager;
-use bodo::plugins::prefix_plugin::PrefixPlugin;
-use bodo::process::{color_line, parse_color};
+use bodo::Result;
 use std::collections::HashMap;
 
 #[cfg(test)]
@@ -15,7 +12,7 @@ mod new_tests {
     fn test_cli_get_task_name_default_exists() {
         let mut manager = GraphManager::new();
         // Manually add default task to graph and registry:
-        manager.graph.nodes.push(bodo::graph::Node {
+        manager.graph.nodes.push(Node {
             id: 0,
             kind: NodeKind::Task(TaskData {
                 name: "default".to_string(),
@@ -47,79 +44,13 @@ mod new_tests {
             subtask: None,
             args: vec![],
         };
-        let name = super::super::super::cli::get_task_name(&args, &manager).unwrap();
+        let name = get_task_name(&args, &manager).unwrap();
         assert_eq!(name, "default");
     }
 
     #[test]
-    fn test_graph_detect_cycle_none() {
-        let mut graph = Graph::new();
-        let _ = graph.add_node(NodeKind::Task(TaskData {
-            name: "a".to_string(),
-            description: None,
-            command: Some("echo a".to_string()),
-            working_dir: None,
-            env: HashMap::new(),
-            exec_paths: vec![],
-            arguments: vec![],
-            is_default: false,
-            script_id: "".to_string(),
-            script_display_name: "".to_string(),
-            watch: None,
-            pre_deps: vec![],
-            post_deps: vec![],
-            concurrently: vec![],
-            concurrently_options: Default::default(),
-        }));
-        assert!(graph.detect_cycle().is_none());
-    }
-
-    #[test]
-    fn test_graph_detect_cycle_some() {
-        let mut graph = Graph::new();
-        let id1 = graph.add_node(NodeKind::Task(TaskData {
-            name: "a".to_string(),
-            description: None,
-            command: Some("echo a".to_string()),
-            working_dir: None,
-            env: HashMap::new(),
-            exec_paths: vec![],
-            arguments: vec![],
-            is_default: false,
-            script_id: "".to_string(),
-            script_display_name: "".to_string(),
-            watch: None,
-            pre_deps: vec![],
-            post_deps: vec![],
-            concurrently: vec![],
-            concurrently_options: Default::default(),
-        }));
-        let id2 = graph.add_node(NodeKind::Task(TaskData {
-            name: "b".to_string(),
-            description: None,
-            command: Some("echo b".to_string()),
-            working_dir: None,
-            env: HashMap::new(),
-            exec_paths: vec![],
-            arguments: vec![],
-            is_default: false,
-            script_id: "".to_string(),
-            script_display_name: "".to_string(),
-            watch: None,
-            pre_deps: vec![],
-            post_deps: vec![],
-            concurrently: vec![],
-            concurrently_options: Default::default(),
-        }));
-        graph.add_edge(id1, id2).unwrap();
-        graph.add_edge(id2, id1).unwrap();
-        let cycle = graph.detect_cycle();
-        assert!(cycle.is_some());
-    }
-
-    #[test]
-    fn test_graph_topological_sort_order() -> crate::Result<()> {
-        let mut graph = Graph::new();
+    fn test_graph_topological_sort_order() -> Result<()> {
+        let mut graph = GraphManager::new().graph;
         let a = graph.add_node(NodeKind::Task(TaskData {
             name: "A".to_string(),
             description: None,

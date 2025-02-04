@@ -1,4 +1,4 @@
-use bodo::plugins::watch_plugin::{WatchEntry, WatchPlugin};
+use bodo::plugins::watch_plugin::WatchPlugin;
 use bodo::Plugin;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
