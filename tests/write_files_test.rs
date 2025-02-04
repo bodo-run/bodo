@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -17,11 +18,16 @@ Another file content.";
     fs::write(&input_path, input_content).unwrap();
 
     // Ensure that the write_files.sh script exists in the repository root.
-    let script_path = Path::new("./write_files.sh");
-    assert!(script_path.exists(), "write_files.sh does not exist");
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let script_path = Path::new(manifest_dir).join("write_files.sh");
+    assert!(
+        script_path.exists(),
+        "write_files.sh does not exist at {}",
+        script_path.display()
+    );
 
     // Execute the write_files.sh script with the input file and set the current directory to the temp dir.
-    let status = Command::new(script_path)
+    let status = Command::new(&script_path)
         .arg(input_path.to_str().unwrap())
         .current_dir(temp_dir.path())
         .status()
