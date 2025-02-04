@@ -1,9 +1,8 @@
 use crate::config::validate_task_name;
 use crate::errors::BodoError;
-use crate::graph::Graph;
-use crate::graph::{NodeKind, TaskData};
+use crate::graph::{Graph, NodeKind, TaskData};
 use crate::{BodoConfig, Result};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 
 pub struct ScriptLoader;
@@ -48,6 +47,10 @@ impl ScriptLoader {
                     script_id: root_script.clone(),
                     script_display_name: root_script.clone(),
                     watch: task_config.watch,
+                    pre_deps: task_config.pre_deps,
+                    post_deps: task_config.post_deps,
+                    concurrently: task_config.concurrently,
+                    concurrently_options: task_config.concurrently_options,
                 };
                 let node_id = graph.add_node(NodeKind::Task(task_data));
                 graph.task_registry.insert(full_key, node_id);
@@ -65,6 +68,10 @@ impl ScriptLoader {
                     script_id: root_script.clone(),
                     script_display_name: root_script.clone(),
                     watch: default_task.watch,
+                    pre_deps: default_task.pre_deps,
+                    post_deps: default_task.post_deps,
+                    concurrently: default_task.concurrently,
+                    concurrently_options: default_task.concurrently_options,
                 };
                 let node_id = graph.add_node(NodeKind::Task(task_data));
                 graph.task_registry.insert("default".to_string(), node_id);
@@ -92,6 +99,10 @@ impl ScriptLoader {
                     script_id: "".to_string(),
                     script_display_name: "".to_string(),
                     watch: task_config.watch,
+                    pre_deps: task_config.pre_deps,
+                    post_deps: task_config.post_deps,
+                    concurrently: task_config.concurrently,
+                    concurrently_options: task_config.concurrently_options,
                 };
                 let node_id = graph.add_node(NodeKind::Task(task_data));
                 graph.task_registry.insert(task_name, node_id);
@@ -109,6 +120,10 @@ impl ScriptLoader {
                     script_id: "".to_string(),
                     script_display_name: "".to_string(),
                     watch: default_task.watch,
+                    pre_deps: default_task.pre_deps,
+                    post_deps: default_task.post_deps,
+                    concurrently: default_task.concurrently,
+                    concurrently_options: default_task.concurrently_options,
                 };
                 let node_id = graph.add_node(NodeKind::Task(task_data));
                 graph.task_registry.insert("default".to_string(), node_id);
@@ -138,7 +153,7 @@ impl ScriptLoader {
         script: &Vec<String>,
         task: &Vec<String>,
     ) -> Vec<String> {
-        let mut seen = HashSet::new();
+        let mut seen = std::collections::HashSet::new();
         let mut result = Vec::new();
         for path in global.iter().chain(script).chain(task) {
             if seen.insert(path.clone()) {
