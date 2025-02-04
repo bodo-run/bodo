@@ -1,24 +1,3 @@
-// src/process.rs
-#[derive(Debug, Clone)]
-pub enum ColorSpec {
-    Black,
-    Red,
-    Green,
-    Yellow,
-    Blue,
-    Magenta,
-    Cyan,
-    White,
-    BrightBlack,
-    BrightRed,
-    BrightGreen,
-    BrightYellow,
-    BrightBlue,
-    BrightMagenta,
-    BrightCyan,
-    BrightWhite,
-}
-
 use log::{debug, error, info, warn};
 use std::{
     io::{BufRead, BufReader},
@@ -236,7 +215,7 @@ fn color_line(prefix: &str, prefix_color: &Option<String>, line: &str, is_stderr
     format!("{} {}", colored_prefix, line)
 }
 
-fn parse_color(c: &str) -> Option<Color> {
+pub fn parse_color(c: &str) -> Option<Color> {
     debug!("Parsing color: {}", c);
     match c.to_lowercase().as_str() {
         "black" => Some(Color::Black),
@@ -261,8 +240,3 @@ fn parse_color(c: &str) -> Option<Color> {
         }
     }
 }
-
-#[cfg(test)]
-pub use parse_color;
-
-// End of src/process.rs
