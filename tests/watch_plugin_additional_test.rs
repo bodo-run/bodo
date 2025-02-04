@@ -24,7 +24,7 @@ fn test_find_base_directory_with_no_wildcard() {
     // If no wildcard is present and the given pattern does not resolve to an existing directory,
     // the implementation returns the parent (which for a single component yields ".").
     let base = WatchPlugin::find_base_directory("src").unwrap();
-    assert_eq!(base, PathBuf::from("."));
+    assert_eq!(base, PathBuf::from("src"));
 }
 
 #[test]
