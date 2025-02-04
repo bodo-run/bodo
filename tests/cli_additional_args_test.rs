@@ -19,7 +19,7 @@ fn test_args_with_all_options() {
         "bodo",
         "--list",
         "--watch",
-        "--auto_watch",
+        "--auto-watch",
         "--debug",
         "taskname",
         "subtaskname",
