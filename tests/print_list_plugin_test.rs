@@ -17,11 +17,15 @@ fn test_print_list_plugin() {
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
-        is_default: false,
         arguments: vec![],
+        is_default: false,
         script_id: "script1".to_string(),
         script_display_name: "Script 1".to_string(),
         watch: None,
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     };
 
     let task_data2 = TaskData {
@@ -31,11 +35,15 @@ fn test_print_list_plugin() {
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
-        is_default: false,
         arguments: vec![],
+        is_default: false,
         script_id: "script2".to_string(),
         script_display_name: "Script 2".to_string(),
         watch: None,
+        pre_deps: vec![],
+        post_deps: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
     };
 
     // Add nodes to graph
