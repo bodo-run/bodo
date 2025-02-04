@@ -10,6 +10,8 @@ const FILE_TAG = "__FILENAME__";
 const START_TAG = "__FILE_CONTENT_START__";
 const END_TAG = "__FILE_CONTENT_END__";
 const ALL_GOOD_TAG = "DONE_ALL_TESTS_PASS_AND_COVERAGE_IS_GOOD";
+const DEEPSEEK_REASONER_MAX_TOKENS = 65536;
+const OPENAI_MAX_TOKENS = 120000;
 
 const BUILD_ERROR_PROMPT = `
 You are given the full repository and build errors.
@@ -57,97 +59,160 @@ ${START_TAG}
 ${END_TAG}
 `;
 
-// make sure coverage dir exists
-Deno.mkdirSync("coverage", { recursive: true });
+(async function main() {
+  const maxTokens = getMaxTokens();
+  const { stdout: repo } = await runCommand(`yek --tokens ${maxTokens * 0.8}`);
 
-// Run cargo-llvm-cov in one shot
-const { code, stdout, stderr } = await runCommand(
-  "cargo llvm-cov test --ignore-run-fail"
-);
-// Serialize repo
-const { stdout: repo } = await runCommand("yek --tokens 120k");
+  // make sure coverage dir exists
+  Deno.mkdirSync("coverage", { recursive: true });
 
-// Get a summary of changes made so far
-const summary = await getChangesSummary(repo);
-
-// Run build and clippy to capture errors (errors only)
-const buildResult = await runCommand("cargo build");
-const clippyResult = await runCommand("cargo clippy");
-
-// Determine which prompt to use based on the condition
-let aiPrompt = Deno.env.get("AI_PROMPT");
-if (!aiPrompt) {
+  const buildResult = await runCommand("cargo build");
   if (buildResult.code !== 0) {
-    aiPrompt = BUILD_ERROR_PROMPT;
-  } else if (clippyResult.code !== 0) {
-    aiPrompt = CLIPPY_ERROR_PROMPT;
-  } else if (code !== 0) {
-    // test failures
-    aiPrompt = TEST_ERROR_PROMPT;
-  } else {
-    aiPrompt = COVERAGE_PROMPT;
+    console.log("Fixing build errors...");
+    await fixBuildErrors(repo, buildResult);
+    return;
+  }
+
+  const clippyResult = await runCommand("cargo clippy");
+  if (clippyResult.code !== 0) {
+    console.log("Fixing clippy errors...");
+    await fixClippyErrors(repo, clippyResult);
+    return;
+  }
+
+  const testResult = await runCommand("cargo nextest run");
+  if (testResult.code !== 0) {
+    console.log("Fixing test errors...");
+    await fixTestErrors(repo, testResult);
+    return;
+  }
+
+  // if custom prompt is provided, run it
+  const customPrompt = Deno.env.get("AI_PROMPT");
+  if (customPrompt) {
+    console.log("Running custom prompt...");
+    await runCustomPrompt(repo, customPrompt);
+    return;
+  }
+
+  const coverageResult = await runCommand(
+    "cargo llvm-cov test --ignore-run-fail"
+  );
+  const summary = await getChangesSummary(repo);
+  console.log("Improving coverage...");
+
+  await fixCoverage(repo, coverageResult, summary);
+})();
+
+// ------------------ Utils -------------------
+
+function getMaxTokens() {
+  const provider = Deno.env.get("AI_PROVIDER") || "ollama";
+  switch (provider) {
+    case "openai":
+      return OPENAI_MAX_TOKENS;
+    case "deepseek":
+      return DEEPSEEK_REASONER_MAX_TOKENS;
+    default:
+      return OPENAI_MAX_TOKENS;
   }
 }
 
-const textToAi = [
-  `Repository:`,
-  repo,
-  "",
-  "",
-  `Summary of changes we made so far:`,
-  summary,
-  "",
-  "",
-  `cargo llvm-cov exit code: ${code}`,
-  `Test STDOUT:`,
-  stdout,
-  `Test STDERR:`,
-  stderr,
-  "",
-  "",
-];
+/**
+ * Generate a prompt from a list of inputs. Trims from the top to fit the max tokens.
+ * @param inputs Sorted from least to most important
+ * @param maxTokens
+ * @returns
+ */
+function generatePrompt(
+  repo: string,
+  inputs: [title: string, prompt: string][],
+  maxTokens: number = getMaxTokens()
+) {
+  const lines = [
+    ["Repository", repo],
+    ...inputs,
+    ["Response format", RESPONSE_FORMAT],
+  ]
+    .flatMap(([title, prompt]) => [`# ${title}:`, prompt, "", "", ""])
+    .map((line) => stripAnsi(line));
 
-if (buildResult.code !== 0) {
-  textToAi.push(`BUILD ERRORS:`, buildResult.stderr, "", "");
-}
-textToAi.push(`CLIPPY:`, clippyResult.stdout, clippyResult.stderr, "", "");
-textToAi.push(`Instructions:`, aiPrompt, "", "");
-textToAi.push(RESPONSE_FORMAT, "", "");
+  while (tokenizer.encode(lines.join("\n")).length > maxTokens) {
+    lines.shift();
+  }
 
-const request = textToAi
-  .map((line) => stripAnsi(line))
-  .join("\n")
-  .trim();
-
-const tokenCount = tokenizer.encode(request).length;
-console.log("AI prompt token count:", tokenCount.toLocaleString());
-
-const aiContent = await callAi(request);
-
-// Otherwise, parse out any updated code
-const updatedFiles = parseUpdatedFiles(aiContent);
-if (!updatedFiles.length) {
-  console.log("No updated files from AI");
-  Deno.exit(1);
+  return lines.join("\n");
 }
 
-// Write new content
-for (const f of updatedFiles) {
-  await writeFileContent(f.filename, f.content);
+async function runCustomPrompt(repo: string, prompt: string) {
+  const request = generatePrompt(repo, [["Instructions", prompt]]);
+
+  const aiContent = await callAi(request);
+  await applyChanges(aiContent);
 }
 
-// Format & fix code
-await runCommand("cargo fmt");
-await runCommand("cargo clippy --fix --allow-dirty");
+async function fixBuildErrors(
+  repo: string,
+  buildResult: { code: number; stderr: string }
+) {
+  const request = generatePrompt(repo, [
+    ["Build errors", buildResult.stderr],
+    ["Instructions", BUILD_ERROR_PROMPT],
+  ]);
 
-// Review changes again
-const allGood = await reviewChanges();
-if (!allGood) {
-  await runCommand("git add reset --hard");
-  console.log("Changes are not good. Reverted to previous state.");
+  const aiContent = await callAi(request);
+  await applyChanges(aiContent);
 }
 
-// ------------------ Utils -------------------
+async function fixClippyErrors(
+  repo: string,
+  clippyResult: { code: number; stderr: string }
+) {
+  const request = generatePrompt(repo, [
+    ["Clippy errors", clippyResult.stderr],
+    ["Instructions", CLIPPY_ERROR_PROMPT],
+  ]);
+
+  const aiContent = await callAi(request);
+  await applyChanges(aiContent);
+}
+
+async function fixTestErrors(
+  repo: string,
+  testResult: { code: number; stderr: string }
+) {
+  const request = generatePrompt(repo, [
+    ["Test errors", testResult.stderr],
+    ["Instructions", TEST_ERROR_PROMPT],
+  ]);
+
+  const aiContent = await callAi(request);
+  await applyChanges(aiContent);
+}
+
+async function fixCoverage(
+  repo: string,
+  coverageResult: { code: number; stderr: string },
+  summary: string
+) {
+  const request = generatePrompt(repo, [
+    ["Coverage report", coverageResult.stderr],
+    ["Changes summary", summary],
+    ["Instructions", COVERAGE_PROMPT],
+  ]);
+
+  const aiContent = await callAi(request);
+  await applyChanges(aiContent);
+}
+
+async function applyChanges(aiContent: string) {
+  const updatedFiles = parseUpdatedFiles(aiContent);
+  for (const f of updatedFiles) {
+    await writeFileContent(f.filename, f.content);
+  }
+  await runCommand("cargo fmt");
+  await runCommand("cargo clippy --fix --allow-dirty");
+}
 
 function getOpenAiClient() {
   const provider = Deno.env.get("AI_PROVIDER") || "ollama";
@@ -237,22 +302,6 @@ async function callAi(
   }
 
   return contents.join("");
-}
-
-async function reviewChanges() {
-  const { stdout: changes } = await runCommand("git diff");
-  if (!changes) return "No changes";
-  console.log("Asking AI to review changes...");
-  const review = await callAi(
-    [
-      `Changes:`,
-      changes,
-      `Instructions: Review the changes made so far. In bullet points. Short and concise.`,
-      `If changes are removing implementations, or change source in a way to only pass the tests, reject them.`,
-      `Important: If the changes are good, return "${ALL_GOOD_TAG}".`,
-    ].join("\n")
-  );
-  return review.includes(ALL_GOOD_TAG);
 }
 
 async function getChangesSummary(repo: string) {
