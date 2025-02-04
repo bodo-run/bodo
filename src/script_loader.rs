@@ -559,6 +559,12 @@ impl ScriptLoader {
         if let Some(&node_id) = graph.task_registry.get(&full_task_name) {
             Ok(node_id)
         } else {
+            // Fallback: search for any task whose key ends with space + task or equals task
+            for (key, &id) in &graph.task_registry {
+                if key == task || key.ends_with(&format!(" {}", task)) {
+                    return Ok(id);
+                }
+            }
             Err(BodoError::PluginError(format!(
                 "Task '{}' not found when resolving dependency",
                 task
