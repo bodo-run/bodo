@@ -1,6 +1,7 @@
 use bodo::graph::{Graph, NodeKind, TaskData};
 use bodo::plugin::Plugin;
 use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
+use bodo::BodoError;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -14,7 +15,7 @@ fn test_concurrent_plugin() {
     let task_data_main = TaskData {
         name: "main_task".to_string(),
         description: None,
-        command: None, // No command, will have concurrent tasks
+        command: None,
         working_dir: None,
         env: HashMap::new(),
         exec_paths: vec![],
@@ -138,11 +139,11 @@ fn test_concurrent_plugin() {
         .any(|edge| edge.from == main_task_id && edge.to == *group_id));
 
     // Edges from group to child tasks
-    for child_id in group_data.child_nodes {
+    for child_id in &group_data.child_nodes {
         assert!(graph
             .edges
             .iter()
-            .any(|edge| edge.from == *group_id && edge.to == child_id));
+            .any(|edge| edge.from == *group_id && edge.to == *child_id));
     }
 }
 
@@ -211,8 +212,8 @@ fn test_concurrent_plugin_with_commands() {
     assert_eq!(group_data.child_nodes.len(), 2);
 
     // The child nodes should be Command nodes
-    for &child_id in &group_data.child_nodes {
-        let child_node = &graph.nodes[child_id as usize];
+    for child_id in &group_data.child_nodes {
+        let child_node = &graph.nodes[*child_id as usize];
         if let NodeKind::Command(cmd_data) = &child_node.kind {
             assert!(
                 cmd_data.raw_command == "echo Command 1"
