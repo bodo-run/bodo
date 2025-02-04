@@ -1,7 +1,6 @@
 use bodo::cli::{get_task_name, Args};
 use bodo::graph::{Node, NodeKind, TaskData};
 use bodo::manager::GraphManager;
-use bodo::Result;
 use std::collections::HashMap;
 
 #[cfg(test)]
