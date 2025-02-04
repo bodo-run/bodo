@@ -19,28 +19,28 @@ fn test_print_debug_and_get_node_name() {
         script_display_name: "scriptDir".to_string(),
         watch: None,
     }));
-    let task_name = graph.get_node_name(task_id as usize);
+    let task_name = graph.node_name(task_id as usize);
     assert!(task_name.contains("TaskA") || task_name.contains("scriptDir/TaskA"));
 
     // Add a Command node
     let cmd_id = graph.add_node(NodeKind::Command(CommandData {
-        raw_command: "echo Command".to_string(),
+        raw_command: "ls -la".to_string(),
         description: Some("Command Description".to_string()),
         working_dir: None,
         env: HashMap::new(),
         watch: None,
     }));
-    let cmd_name = graph.get_node_name(cmd_id as usize);
+    let cmd_name = graph.node_name(cmd_id as usize);
     assert!(cmd_name.contains("command"));
 
     // Add a ConcurrentGroup node
     let group_id = graph.add_node(NodeKind::ConcurrentGroup(ConcurrentGroupData {
         child_nodes: vec![task_id, cmd_id],
-        fail_fast: false,
+        fail_fast: true,
         max_concurrent: Some(2),
         timeout_secs: Some(10),
     }));
-    let group_name = graph.get_node_name(group_id as usize);
+    let group_name = graph.node_name(group_id as usize);
     assert!(group_name.contains("concurrent_group"));
 
     // Call print_debug to boost coverage. (The output goes to log, so we just call the function.)
@@ -65,18 +65,18 @@ fn test_get_node_name_for_various_types() {
         script_display_name: "".to_string(),
         watch: None,
     }));
-    let name1 = graph.get_node_name(task_id as usize);
+    let name1 = graph.node_name(task_id as usize);
     assert_eq!(name1, "task_only");
 
     // Command node
     let cmd_id = graph.add_node(NodeKind::Command(CommandData {
-        raw_command: "ls -la".to_string(),
+        raw_command: "echo command".to_string(),
         description: None,
         working_dir: None,
         env: HashMap::new(),
         watch: None,
     }));
-    let name2 = graph.get_node_name(cmd_id as usize);
+    let name2 = graph.node_name(cmd_id as usize);
     assert!(name2.contains("command"));
 
     // ConcurrentGroup node
@@ -86,6 +86,6 @@ fn test_get_node_name_for_various_types() {
         max_concurrent: None,
         timeout_secs: None,
     }));
-    let name3 = graph.get_node_name(group_id as usize);
+    let name3 = graph.node_name(group_id as usize);
     assert!(name3.contains("concurrent_group"));
 }

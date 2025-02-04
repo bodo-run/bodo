@@ -52,17 +52,17 @@ pub struct Node {
     pub metadata: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Edge {
-    pub from: NodeId,
-    pub to: NodeId,
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct Graph {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
     pub task_registry: HashMap<String, NodeId>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Edge {
+    pub from: NodeId,
+    pub to: NodeId,
 }
 
 impl Graph {
@@ -230,6 +230,10 @@ impl Graph {
             NodeKind::Command(cmd) => format!("command[{}]", cmd.raw_command),
             NodeKind::ConcurrentGroup(_) => format!("concurrent_group[{}]", node_id),
         }
+    }
+
+    pub fn node_name(&self, node_id: usize) -> String {
+        self.get_node_name(node_id)
     }
 
     pub fn topological_sort(&self) -> Result<Vec<NodeId>> {
