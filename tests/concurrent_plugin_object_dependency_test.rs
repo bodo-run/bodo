@@ -1,6 +1,6 @@
-use bodo::graph::{CommandData, Graph, NodeKind, TaskData};
+use bodo::graph::{Graph, NodeKind, TaskData};
+use bodo::plugin::Plugin;
 use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
-use bodo::BodoError;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -19,14 +19,14 @@ fn test_concurrent_plugin() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
         watch: None,
         pre_deps: vec![],
         post_deps: vec![],
-        concurrently: vec![],
-        concurrently_options: Default::default(),
     };
 
     let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
@@ -39,14 +39,14 @@ fn test_concurrent_plugin() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
         watch: None,
         pre_deps: vec![],
         post_deps: vec![],
-        concurrently: vec![],
-        concurrently_options: Default::default(),
     };
 
     let child1_id = graph.add_node(NodeKind::Task(task_data_child1));
@@ -59,14 +59,14 @@ fn test_concurrent_plugin() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: false,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
         watch: None,
         pre_deps: vec![],
         post_deps: vec![],
-        concurrently: vec![],
-        concurrently_options: Default::default(),
     };
 
     let child2_id = graph.add_node(NodeKind::Task(task_data_child2));
@@ -117,7 +117,7 @@ fn test_concurrent_plugin() {
 
     assert_eq!(group_nodes.len(), 1, "Expected one concurrent group node");
 
-    let (_group_id, group_data) = &group_nodes[0];
+    let (group_id, group_data) = &group_nodes[0];
     assert_eq!(group_data.child_nodes.len(), 2);
     assert!(group_data.child_nodes.contains(&child1_id));
     assert!(group_data.child_nodes.contains(&child2_id));
@@ -132,17 +132,17 @@ fn test_concurrent_plugin() {
 
     // Check that edges have been added appropriately
     // Edge from main_task to group
-    assert!(graph.edges.iter().any(|edge| edge.from == main_task_id
-        && edge.to == group_data.child_nodes[0]
-        || edge.to == group_data.child_nodes[1]));
+    assert!(graph
+        .edges
+        .iter()
+        .any(|edge| edge.from == main_task_id && edge.to == *group_id));
 
     // Edges from group to child tasks
-    for child_id in &group_data.child_nodes {
+    for child_id in group_data.child_nodes {
         assert!(graph
             .edges
             .iter()
-            .any(|edge| edge.from == group_data.child_nodes[0]
-                || edge.from == group_data.child_nodes[1] && edge.to == *child_id));
+            .any(|edge| edge.from == *group_id && edge.to == child_id));
     }
 }
 
@@ -161,20 +161,21 @@ fn test_concurrent_plugin_with_commands() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
         watch: None,
         pre_deps: vec![],
         post_deps: vec![],
-        concurrently: vec![],
-        concurrently_options: Default::default(),
     };
 
     let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
 
     // Set up the main_task to have concurrent commands
     let main_node = &mut graph.nodes[main_task_id as usize];
+    // Set the metadata 'concurrently' directly
     main_node.metadata.insert(
         "concurrently".to_string(),
         serde_json::to_string(
@@ -238,14 +239,14 @@ fn test_concurrent_plugin_nonexistent_task() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
         watch: None,
         pre_deps: vec![],
         post_deps: vec![],
-        concurrently: vec![],
-        concurrently_options: Default::default(),
     };
 
     let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
@@ -286,24 +287,31 @@ fn test_concurrent_plugin_invalid_dependency_format() {
         env: HashMap::new(),
         exec_paths: vec![],
         arguments: vec![],
+        concurrently: vec![],
+        concurrently_options: Default::default(),
         is_default: true,
         script_id: "script".to_string(),
         script_display_name: "script".to_string(),
         watch: None,
         pre_deps: vec![],
         post_deps: vec![],
-        concurrently: vec![],
-        concurrently_options: Default::default(),
     };
 
     let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
     let main_node = &mut graph.nodes[main_task_id as usize];
     main_node
         .metadata
-        .insert("concurrently".to_string(), "[123, true]".to_string());
+        .insert("concurrently".to_string(), "[123, true]".to_string()); // Invalid format
+
     let result = plugin.on_graph_build(&mut graph);
     assert!(
         result.is_err(),
-        "Expected error due to invalid dependency format"
+        "Expected error due to invalid dependency format, but got success"
+    );
+    let error = result.unwrap_err();
+    assert!(
+        matches!(error, BodoError::PluginError(_)),
+        "Expected PluginError, got {:?}",
+        error
     );
 }
