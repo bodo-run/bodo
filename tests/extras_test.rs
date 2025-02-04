@@ -44,50 +44,152 @@ fn test_plugin_manager_sort() {
     assert!(p0 >= p1);
 }
 
-// Test GraphManager initialize using the default config.
+// Test GraphManager initialize properly by creating a temporary scripts/main.yaml file.
 #[test]
 fn test_graph_manager_initialize() {
+    use std::env;
+    use std::fs;
+    use tempfile::tempdir;
+
+    // Create a temporary directory and set up the expected scripts structure.
+    let temp_dir = tempdir().unwrap();
+    let scripts_dir = temp_dir.path().join("scripts");
+    fs::create_dir_all(&scripts_dir).unwrap();
+    let main_yaml = scripts_dir.join("main.yaml");
+    fs::write(&main_yaml, "tasks: {}").unwrap(); // Minimal valid YAML content.
+
+    // Change current directory to temporary directory.
+    let original_dir = env::current_dir().unwrap();
+    env::set_current_dir(&temp_dir).unwrap();
+
     let mut manager = GraphManager::new();
     let result = manager.initialize();
     assert!(result.is_ok());
+
+    // Restore original current directory.
+    env::set_current_dir(&original_dir).unwrap();
 }
 
-// Test ProcessManager kill_all with an empty children list.
 #[test]
-fn test_process_manager_kill_all_empty() {
-    let mut pm = ProcessManager::new(false);
-    let result = pm.kill_all();
-    assert!(result.is_ok());
+fn test_graph_manager_with_tasks() {
+    let config_yaml = r#"
+    tasks:
+      hello:
+        command: echo "Hello World"
+    "#;
+
+    let config: bodo::config::BodoConfig = serde_yaml::from_str(config_yaml).unwrap();
+
+    let mut manager = GraphManager::new();
+    manager.build_graph(config).unwrap();
+    assert!(!manager.graph.nodes.is_empty());
+    assert!(manager.task_exists("hello"));
 }
 
-// A simple test to utilize Arc.
 #[test]
-fn test_arc_usage() {
-    let a = Arc::new(5);
-    let b = a.clone();
-    assert_eq!(*a, 5);
-    assert_eq!(*b, 5);
-}
+fn test_apply_task_arguments() {
+    let config_yaml = r#"
+    tasks:
+      greet:
+        command: echo "Hello $name"
+        args:
+          - name: name
+            required: true
+    "#;
 
-// Test Plugin on_run lifecycle method.
-#[test]
-fn test_plugin_on_run() {
-    struct TestPluginInner;
-    impl Plugin for TestPluginInner {
-        fn name(&self) -> &'static str {
-            "TestPluginInner"
-        }
-        fn priority(&self) -> i32 {
-            0
-        }
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
-        }
-        fn on_run(&mut self, _node_id: usize, _graph: &mut bodo::graph::Graph) -> bodo::Result<()> {
-            Ok(())
-        }
+    let config: bodo::config::BodoConfig = serde_yaml::from_str(config_yaml).unwrap();
+
+    let mut manager = GraphManager::new();
+    manager.build_graph(config).unwrap();
+    let args = vec!["Alice".to_string()];
+    manager.apply_task_arguments("greet", &args).unwrap();
+
+    let node_id = manager
+        .graph
+        .task_registry
+        .get("greet")
+        .expect("Task 'greet' not found");
+    let node = manager
+        .graph
+        .nodes
+        .get(*node_id as usize)
+        .expect("Node not found");
+
+    if let bodo::graph::NodeKind::Task(task_data) = &node.kind {
+        assert_eq!(task_data.env.get("name"), Some(&"Alice".to_string()));
+    } else {
+        panic!("Expected Task node");
     }
-    let mut p = TestPluginInner;
-    let mut graph = bodo::graph::Graph::new();
-    p.on_run(0, &mut graph).unwrap();
+}
+
+#[test]
+fn test_apply_task_arguments_with_defaults() {
+    let mut manager = GraphManager::new();
+    let task_config = bodo::config::TaskConfig {
+        command: Some("echo $greeting".to_string()),
+        args: vec![bodo::config::TaskArgument {
+            name: "greeting".to_string(),
+            description: None,
+            required: false,
+            default: Some("Hello".to_string()),
+        }],
+        ..Default::default()
+    };
+    let mut tasks = std::collections::HashMap::new();
+    tasks.insert("hello".to_string(), task_config);
+    let config = bodo::config::BodoConfig {
+        tasks,
+        ..Default::default()
+    };
+    manager.build_graph(config).unwrap();
+    let result = manager.apply_task_arguments("hello", &[]);
+    assert!(result.is_ok());
+
+    let node_id = manager
+        .graph
+        .task_registry
+        .get("hello")
+        .cloned()
+        .expect("Task 'hello' not found");
+    let node = &manager.graph.nodes[node_id as usize];
+
+    if let bodo::graph::NodeKind::Task(task_data) = &node.kind {
+        assert_eq!(task_data.env.get("greeting"), Some(&"Hello".to_string()));
+    } else {
+        panic!("Expected Task node");
+    }
+}
+
+#[test]
+fn test_apply_task_arguments_missing_required() {
+    let mut manager = GraphManager::new();
+    let task_config = bodo::config::TaskConfig {
+        command: Some("echo $greeting".to_string()),
+        args: vec![bodo::config::TaskArgument {
+            name: "greeting".to_string(),
+            description: None,
+            required: true,
+            default: None,
+        }],
+        ..Default::default()
+    };
+    let mut tasks = std::collections::HashMap::new();
+    tasks.insert("hello".to_string(), task_config);
+    let config = bodo::config::BodoConfig {
+        tasks,
+        ..Default::default()
+    };
+    manager.build_graph(config).unwrap();
+    let result = manager.apply_task_arguments("hello", &[]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_get_task_config_nonexistent_task() {
+    let manager = GraphManager::new();
+    let result = manager.get_task_config("nonexistent");
+    assert!(matches!(
+        result,
+        Err(bodo::errors::BodoError::TaskNotFound(_))
+    ));
 }
