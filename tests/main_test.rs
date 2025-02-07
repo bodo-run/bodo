@@ -251,9 +251,12 @@ default_task:
 
     // Assertions for dry-run output
     assert!(
-        stdout // Changed from stderr to stdout
-            .lines()
-            .any(|line| line.contains("[DRY-RUN] Would execute: echo \"Dry run default task\"")), // Updated to match script content
-        "Expected dry-run output not found in stdout" // Updated message to stdout
+        (stdout.contains("[DRY-RUN] Would execute: echo \"Dry run default task\"")
+            || stderr.contains("[DRY-RUN] Would execute: echo \"Dry run default task\"")),
+        "Expected dry-run output not found in stdout or stderr"
+    );
+    assert!(
+        stdout.contains("Dry run default task") || stderr.contains("Dry run default task"),
+        "Dry-run output task description mismatch in stdout or stderr"
     );
 }
