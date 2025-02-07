@@ -68,3 +68,37 @@ tasks:
         "List output missing sample task"
     );
 }
+
+#[test]
+fn test_bodo_integration_dry_run() {
+    if std::env::var("CARGO_BIN_EXE_bodo").is_err() {
+        eprintln!("Skipping integration dry run test because Bodo binary not found");
+        return;
+    }
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let script_content = r#"
+default_task:
+  command: echo "Dry run default task"
+  description: "Default task for dry run integration"
+"#;
+    let script_path = temp_dir.path().join("script.yaml");
+    std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
+
+    let exe = std::env::var("CARGO_BIN_EXE_bodo").expect("Bodo binary not found");
+    let output = Command::new(exe)
+        .arg("--dry-run")
+        .env("BODO_ROOT_SCRIPT", script_path.to_str().unwrap())
+        .env("BODO_NO_WATCH", "1")
+        .current_dir(temp_dir.path())
+        .output()
+        .expect("Failed to run Bodo with --dry-run");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("[DRY-RUN] Would execute:"),
+        "Dry-run output not found"
+    );
+    assert!(
+        stdout.contains("Dry run default task"),
+        "Dry-run output task description mismatch"
+    );
+}

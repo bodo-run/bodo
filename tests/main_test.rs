@@ -154,7 +154,7 @@ tasks:
     let mut child = Command::new(exe_path)
         .arg("--list")
         .env("RUST_LOG", "info")
-        .env("BODO_NO_WATCH", "1")
+        .env("BODO_NO_watch", "1")
         .env("BODO_ROOT_SCRIPT", &root_script_env)
         .env("BODO_SCRIPTS_DIRS", &scripts_dirs_env)
         .current_dir(temp_dir.path())
@@ -205,4 +205,55 @@ tasks:
     // If we get here, the process timed out
     child.kill().expect("Failed to kill process");
     panic!("Process timed out after {} seconds", timeout.as_secs());
+}
+
+#[test]
+fn test_bodo_dry_run() {
+    // Build the path to the built 'bodo' executable
+    let current_exe = std::env::current_exe().expect("Failed to get current exe path");
+    let target_dir = current_exe
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
+        .expect("Failed to get target directory");
+    let exe_path = target_dir.join("debug").join("bodo");
+    #[cfg(windows)]
+    let exe_path = exe_path.with_extension("exe");
+    assert!(
+        exe_path.exists(),
+        "bodo executable not found at {:?}",
+        exe_path
+    );
+
+    // Create a temp directory
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let script_content = r#"
+default_task:
+  command: echo "Dry run test"
+  description: "Default task for dry run test"
+"#;
+    let script_path = temp_dir.path().join("script.yaml");
+    std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
+
+    // Execute bodo with --dry-run
+    let output = Command::new(exe_path)
+        .arg("--dry-run")
+        .env("BODO_ROOT_SCRIPT", script_path.to_str().unwrap())
+        .env("BODO_NO_WATCH", "1")
+        .current_dir(temp_dir.path())
+        .output()
+        .expect("Failed to execute bodo in dry-run mode");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    println!("STDOUT:\n{}", stdout);
+    println!("STDERR:\n{}", stderr);
+
+    // Assertions for dry-run output
+    assert!(
+        stdout
+            .lines()
+            .any(|line| line.contains("[DRY-RUN] Would execute: echo \"Dry run test\"")),
+        "Expected dry-run output not found in stdout"
+    );
 }
