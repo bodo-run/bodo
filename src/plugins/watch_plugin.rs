@@ -398,6 +398,7 @@ impl Plugin for WatchPlugin {
                         fail_fast: true,
                         watch: true,
                         list: false,
+                        dry_run: self.stop_on_fail, // Added dry_run here
                         options: Some(options),
                     };
                     if let Err(e) = new_manager.run_plugins(Some(plugin_config)) {
