@@ -43,6 +43,7 @@ mod extra_get_task_name_success {
             task: None,
             subtask: None,
             args: vec![],
+            dry_run: false,
         };
         let res = get_task_name(&args, &gm);
         assert_eq!(res.unwrap(), "default");
@@ -82,6 +83,7 @@ mod extra_get_task_name_success {
             task: Some("build".to_string()),
             subtask: None,
             args: vec![],
+            dry_run: false,
         };
         let res = get_task_name(&args, &gm);
         assert_eq!(res.unwrap(), "build");
@@ -121,6 +123,7 @@ mod extra_get_task_name_success {
             task: Some("deploy".to_string()),
             subtask: Some("prod".to_string()),
             args: vec![],
+            dry_run: false,
         };
         let res = get_task_name(&args, &gm);
         assert_eq!(res.unwrap(), "deploy prod");
@@ -137,6 +140,7 @@ mod extra_get_task_name_success {
             task: None,
             subtask: None,
             args: vec![],
+            dry_run: false,
         };
         let res = get_task_name(&args, &gm);
         assert!(matches!(res, Err(BodoError::NoTaskSpecified)));
@@ -176,6 +180,7 @@ mod extra_get_task_name_success {
             task: Some("nonexistent".to_string()),
             subtask: None,
             args: vec![],
+            dry_run: false,
         };
         let res = get_task_name(&args, &gm);
         assert!(matches!(res, Err(BodoError::TaskNotFound(_))));
