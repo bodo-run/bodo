@@ -1,3 +1,4 @@
+extern crate bodo;
 use bodo::errors::BodoError;
 use bodo::graph::Graph;
 use bodo::plugin::Plugin;

@@ -1,3 +1,4 @@
+extern crate bodo;
 // tests/process_test.rs
 
 use bodo::process::ProcessManager;
