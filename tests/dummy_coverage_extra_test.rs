@@ -1,3 +1,4 @@
+extern crate bodo;
 use bodo::manager::GraphManager;
 
 #[test]
