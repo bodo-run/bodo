@@ -1,3 +1,4 @@
+extern crate bodo;
 use bodo::plugins::path_plugin::PathPlugin;
 
 #[test]
