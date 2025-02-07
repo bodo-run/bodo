@@ -27,6 +27,7 @@ on:
         options:
           - openai
           - deepseek
+          - gemini
       model:
         description: "AI model"
         default: "o3-mini"
@@ -37,6 +38,7 @@ on:
           - o1 # OpenAI
           - deepseek-reasoner # DeepSeek AI
           - deepseek-coder # DeepSeek AI
+          - gemini-2.0-flash-thinking-exp # Google AI
 
 permissions:
   contents: write

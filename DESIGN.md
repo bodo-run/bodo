@@ -155,6 +155,33 @@ bodo <task_name> -- <args>    # Pass args to task
 | `--graph`       | Show ASCII dependency graph        |
 | `--debug`       | Show verbose internal logs         |
 
+#### `--list` output
+
+With only root script:
+
+```
+.           greeting when running `bodo` with no arguments.
+env-test
+watch-tests A test task that watches for file changes
+kargo       Kargo is a dummy executable that is added to the PATH environment variable
+commit      Commit everything
+```
+
+With subscripts:
+
+```
+env-test
+watch-tests       A test task that watches for file changes
+kargo             Kargo is a dummy executable that is added to the PATH environment variable
+commit            Commit everything
+
+  build
+  build release   Build the project in release mode
+  build check     Check the project
+  build clippy    Run clippy
+  build fmt       Format the project
+```
+
 ## 7. Concurrency Model
 
 ### 7.1 Example
