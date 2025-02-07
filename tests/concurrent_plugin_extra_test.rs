@@ -1,6 +1,6 @@
-use bodo::graph::{Graph, NodeKind, TaskData};
-use bodo::plugin::Plugin;
-use bodo::plugins::concurrent_plugin::ConcurrentPlugin;
+use crate::graph::{Graph, NodeKind, TaskData};
+use crate::plugin::Plugin;
+use crate::plugins::concurrent_plugin::ConcurrentPlugin;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -44,7 +44,7 @@ fn test_concurrent_plugin_invalid_object_dependency() {
     );
     let error = result.unwrap_err();
     assert!(
-        matches!(error, bodo::errors::BodoError::PluginError(_)),
+        matches!(error, crate::errors::BodoError::PluginError(_)),
         "Expected PluginError, got {:?}",
         error
     );
@@ -185,7 +185,7 @@ fn test_concurrent_plugin_invalid_dependency_format() {
     );
     let error = result.unwrap_err();
     assert!(
-        matches!(error, bodo::errors::BodoError::PluginError(_)),
+        matches!(error, crate::errors::BodoError::PluginError(_)),
         "Expected PluginError, got {:?}",
         error
     );

@@ -1,5 +1,5 @@
-use bodo::config::BodoConfig;
-use bodo::script_loader::ScriptLoader;
+use crate::config::BodoConfig;
+use crate::script_loader::ScriptLoader;
 
 #[test]
 fn test_build_graph_nonexistent_root_script() {

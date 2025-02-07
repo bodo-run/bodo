@@ -1,7 +1,7 @@
-use bodo::errors::BodoError;
-use bodo::graph::{Graph, NodeKind, TaskData};
-use bodo::plugin::Plugin;
-use bodo::plugins::timeout_plugin::TimeoutPlugin;
+use crate::errors::BodoError;
+use crate::graph::{Graph, NodeKind, TaskData};
+use crate::plugin::Plugin;
+use crate::plugins::timeout_plugin::TimeoutPlugin;
 use std::collections::HashMap;
 
 #[test]

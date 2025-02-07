@@ -1,3 +1,4 @@
+extern crate bodo;
 use bodo::graph::Graph;
 use bodo::plugin::{Plugin, PluginConfig};
 use bodo::Result;

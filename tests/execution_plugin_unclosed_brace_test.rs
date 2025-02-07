@@ -1,3 +1,4 @@
+extern crate bodo;
 use bodo::plugins::execution_plugin::ExecutionPlugin;
 use std::collections::HashMap;
 

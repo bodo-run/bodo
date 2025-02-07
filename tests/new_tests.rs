@@ -1,10 +1,10 @@
-use bodo::cli::{get_task_name, Args};
-use bodo::config::{BodoConfig, TaskArgument};
-use bodo::errors::BodoError;
-use bodo::graph::{Node, NodeKind, TaskData};
-use bodo::manager::GraphManager;
-use bodo::plugins::prefix_plugin::PrefixPlugin;
-use bodo::process::{color_line, parse_color};
+use crate::cli::{get_task_name, Args};
+use crate::config::{BodoConfig, TaskArgument};
+use crate::errors::BodoError;
+use crate::graph::{Node, NodeKind, TaskData};
+use crate::manager::GraphManager;
+use crate::plugins::prefix_plugin::PrefixPlugin;
+use crate::process::{color_line, parse_color};
 use std::collections::HashMap;
 
 #[cfg(test)]
