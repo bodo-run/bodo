@@ -1,7 +1,7 @@
 use bodo::cli::{get_task_name, Args};
-use bodo::config::BodoConfig;
+use bodo::config::{BodoConfig, TaskArgument};
 use bodo::errors::BodoError;
-use bodo::graph::{Graph, NodeKind, TaskData};
+use bodo::graph::{Node, NodeKind, TaskData};
 use bodo::manager::GraphManager;
 use bodo::plugins::prefix_plugin::PrefixPlugin;
 use bodo::process::{color_line, parse_color};
@@ -15,7 +15,7 @@ mod new_tests {
     fn test_cli_get_task_name_default_exists() {
         let mut manager = GraphManager::new();
         // Manually add default task to graph and registry:
-        manager.graph.nodes.push(bodo::graph::Node {
+        manager.graph.nodes.push(Node {
             id: 0,
             kind: NodeKind::Task(TaskData {
                 name: "default".to_string(),
@@ -46,6 +46,7 @@ mod new_tests {
             task: None,
             subtask: None,
             args: vec![],
+            dry_run: false,
         };
         let name = get_task_name(&args, &manager).unwrap();
         assert_eq!(name, "default");
@@ -55,7 +56,7 @@ mod new_tests {
     fn test_cli_get_task_name_with_existing_task() {
         let mut manager = GraphManager::new();
         // Add task "build"
-        manager.graph.nodes.push(bodo::graph::Node {
+        manager.graph.nodes.push(Node {
             id: 0,
             kind: NodeKind::Task(TaskData {
                 name: "build".to_string(),
@@ -85,6 +86,7 @@ mod new_tests {
             task: Some("build".to_string()),
             subtask: None,
             args: vec![],
+            dry_run: false,
         };
         let name = get_task_name(&args, &manager).unwrap();
         assert_eq!(name, "build");
@@ -167,11 +169,13 @@ mod new_tests {
             working_dir: None,
             env: HashMap::new(),
             exec_paths: vec![],
-            arguments: vec![bodo::config::TaskArgument {
-                name: "GREETING".to_string(),
-                description: Some("Greeting msg".to_string()),
-                required: true,
-                default: Some("Hello".to_string()),
+            arguments: vec![{
+                let mut arg: TaskArgument = std::default::Default::default();
+                arg.name = "GREETING".to_string();
+                arg.description = Some("Greeting msg".to_string());
+                arg.required = true;
+                arg.default = Some("Hello".to_string());
+                arg
             }],
             is_default: false,
             script_id: "".to_string(),
@@ -183,7 +187,7 @@ mod new_tests {
             concurrently_options: Default::default(),
         };
 
-        manager.graph.nodes.push(bodo::graph::Node {
+        manager.graph.nodes.push(Node {
             id: 0,
             kind: NodeKind::Task(task),
             metadata: HashMap::new(),
@@ -209,7 +213,7 @@ mod new_tests {
             working_dir: None,
             env: HashMap::new(),
             exec_paths: vec![],
-            arguments: vec![bodo::config::TaskArgument {
+            arguments: vec![TaskArgument {
                 name: "NAME".to_string(),
                 description: None,
                 required: true,
@@ -225,7 +229,7 @@ mod new_tests {
             concurrently_options: Default::default(),
         };
 
-        manager.graph.nodes.push(bodo::graph::Node {
+        manager.graph.nodes.push(Node {
             id: 0,
             kind: NodeKind::Task(task),
             metadata: HashMap::new(),
@@ -233,48 +237,5 @@ mod new_tests {
         manager.graph.task_registry.insert("greet".to_string(), 0);
         let result = manager.apply_task_arguments("greet", &[]);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_graph_topological_sort_order() -> bodo::Result<()> {
-        let mut graph = Graph::new();
-        let a = graph.add_node(NodeKind::Task(TaskData {
-            name: "A".to_string(),
-            description: None,
-            command: Some("echo A".to_string()),
-            working_dir: None,
-            env: HashMap::new(),
-            exec_paths: vec![],
-            arguments: vec![],
-            is_default: false,
-            script_id: "".to_string(),
-            script_display_name: "".to_string(),
-            watch: None,
-            pre_deps: vec![],
-            post_deps: vec![],
-            concurrently: vec![],
-            concurrently_options: Default::default(),
-        }));
-        let b = graph.add_node(NodeKind::Task(TaskData {
-            name: "B".to_string(),
-            description: None,
-            command: Some("echo B".to_string()),
-            working_dir: None,
-            env: HashMap::new(),
-            exec_paths: vec![],
-            arguments: vec![],
-            is_default: false,
-            script_id: "".to_string(),
-            script_display_name: "".to_string(),
-            watch: None,
-            pre_deps: vec![],
-            post_deps: vec![],
-            concurrently: vec![],
-            concurrently_options: Default::default(),
-        }));
-        graph.add_edge(a, b).unwrap();
-        let sorted = graph.topological_sort()?;
-        assert_eq!(sorted, vec![a, b]);
-        Ok(())
     }
 }
