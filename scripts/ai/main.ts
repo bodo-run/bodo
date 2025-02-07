@@ -96,7 +96,7 @@ ${END_TAG}
   }
 
   const coverageResult = await runCommand(
-    "cargo llvm-cov test --ignore-run-fail"
+    "cargo llvm-cov test --ignore-run-fail",
   );
   const summary = await getChangesSummary(repo);
   console.log("Improving coverage...");
@@ -127,7 +127,7 @@ function getMaxTokens() {
 function generatePrompt(
   repo: string,
   inputs: [title: string, prompt: string][],
-  maxTokens: number = getMaxTokens()
+  maxTokens: number = getMaxTokens(),
 ) {
   const lines = [
     ["Repository", repo],
@@ -153,7 +153,7 @@ async function runCustomPrompt(repo: string, prompt: string) {
 
 async function fixBuildErrors(
   repo: string,
-  buildResult: { code: number; stderr: string }
+  buildResult: { code: number; stderr: string },
 ) {
   const request = generatePrompt(repo, [
     ["Build errors", buildResult.stderr],
@@ -166,7 +166,7 @@ async function fixBuildErrors(
 
 async function fixClippyErrors(
   repo: string,
-  clippyResult: { code: number; stderr: string }
+  clippyResult: { code: number; stderr: string },
 ) {
   const request = generatePrompt(repo, [
     ["Clippy errors", clippyResult.stderr],
@@ -179,7 +179,7 @@ async function fixClippyErrors(
 
 async function fixTestErrors(
   repo: string,
-  testResult: { code: number; stderr: string }
+  testResult: { code: number; stderr: string },
 ) {
   const request = generatePrompt(repo, [
     ["Test errors", testResult.stderr],
@@ -193,7 +193,7 @@ async function fixTestErrors(
 async function fixCoverage(
   repo: string,
   coverageResult: { code: number; stderr: string },
-  summary: string
+  summary: string,
 ) {
   const request = generatePrompt(repo, [
     ["Coverage report", coverageResult.stderr],
@@ -227,6 +227,14 @@ function getOpenAiClient() {
         baseURL: "http://127.0.0.1:11434/v1",
       });
     }
+    case "gemini": {
+      const apiKey = Deno.env.get("GEMINI_API_KEY");
+      if (!apiKey) throw new Error("Missing GEMINI_API_KEY env var.");
+      return new OpenAI({
+        apiKey,
+        baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      });
+    }
     case "openai": {
       const apiKey = Deno.env.get("OPENAI_API_KEY");
       if (!apiKey) throw new Error("Missing OPENAI_API_KEY env var.");
@@ -252,7 +260,7 @@ async function writeFileContent(filePath: string, content: string) {
 }
 
 async function runCommand(
-  command: string
+  command: string,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   const [cmd, ...args] = command.split(/\s+/);
   console.log(`$ ${command}`);
@@ -280,7 +288,7 @@ async function runCommand(
 
 async function callAi(
   text: string,
-  { printOutput = true }: { printOutput?: boolean } = {}
+  { printOutput = true }: { printOutput?: boolean } = {},
 ) {
   const openai = getOpenAiClient();
   const modelName = Deno.env.get("AI_MODEL") || "mistral-small";
@@ -316,7 +324,7 @@ async function getChangesSummary(repo: string) {
       `Changes:`,
       changes,
       `Instructions: Summerize the changes made so far in the repo. In bullet points. Short and concise.`,
-    ].join("\n")
+    ].join("\n"),
   );
 
   // remove the thinking part
@@ -325,7 +333,7 @@ async function getChangesSummary(repo: string) {
 }
 
 function parseUpdatedFiles(
-  content: string
+  content: string,
 ): Array<{ filename: string; content: string }> {
   // Quick and simple parse for multiple updates in one message
 
