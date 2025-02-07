@@ -1,3 +1,4 @@
+extern crate bodo;
 use bodo::config::{BodoConfig, TaskArgument, TaskConfig};
 use bodo::errors::BodoError;
 use bodo::graph::NodeKind;
