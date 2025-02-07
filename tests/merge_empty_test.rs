@@ -1,3 +1,4 @@
+extern crate bodo;
 use bodo::script_loader::ScriptLoader;
 
 #[test]
