@@ -54,6 +54,7 @@ impl ProcessManager {
 
         if self.dry_run {
             info!("[DRY-RUN] Would execute: '{}'", cmd.bold()); // Indicate dry-run in output
+            println!("[DRY-RUN] Would execute: '{}'", cmd.bold()); // Also print to stdout for test
             return Ok(());
         }
 
@@ -129,6 +130,7 @@ impl ProcessManager {
 
         if self.dry_run {
             info!("[DRY-RUN] Skipping concurrent execution.");
+            println!("[DRY-RUN] Skipping concurrent execution."); // Also print to stdout for test
             return Ok(());
         }
 
