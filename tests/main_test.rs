@@ -229,8 +229,8 @@ fn test_bodo_dry_run() {
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let script_content = r#"
 default_task:
-  command: echo "Dry run test"
-  description: "Default task for dry run test"
+  command: echo "Dry run default task"
+  description: "Default task for dry run integration"
 "#;
     let script_path = temp_dir.path().join("script.yaml");
     std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
@@ -251,9 +251,9 @@ default_task:
 
     // Assertions for dry-run output
     assert!(
-        stderr // Changed from stdout to stderr
+        stdout // Changed from stderr to stdout
             .lines()
-            .any(|line| line.contains("[DRY-RUN] Would execute: echo \"Dry run test\"")),
-        "Expected dry-run output not found in stderr" // Updated message to stderr
+            .any(|line| line.contains("[DRY-RUN] Would execute: echo \"Dry run default task\"")), // Updated to match script content
+        "Expected dry-run output not found in stdout" // Updated message to stdout
     );
 }
