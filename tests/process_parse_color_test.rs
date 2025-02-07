@@ -1,3 +1,4 @@
+extern crate bodo;
 use bodo::process::parse_color;
 use colored::Color;
 
