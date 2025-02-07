@@ -126,18 +126,14 @@ fn test_bodo_list() {
     // Write the script.yaml file directly under temp_dir
     let script_content = r#"
 default_task:
-  command: echo "Hello from Bodo root!"
-  description: "Default greeting when running `bodo` with no arguments."
+  command: echo "Default"
+  description: "Default task"
 
 tasks:
-  test:
-    command: echo "Running tests"
-    description: "Run all tests"
-  build:
-    command: echo "Building project"
-    description: "Build the project"
+  sample:
+    command: echo "Sample task"
+    description: "A sample task for listing"
 "#;
-
     let script_path = temp_dir.path().join("script.yaml");
     std::fs::write(&script_path, script_content).expect("Failed to write script.yaml");
 
@@ -179,16 +175,11 @@ tasks:
                 assert!(status.success(), "Process exited with status {}", status);
                 let output_combined = format!("{}{}", stdout, stderr);
                 assert!(
-                    output_combined
-                        .contains("Default greeting when running `bodo` with no arguments."),
+                    output_combined.contains("Default task"),
                     "Output does not contain expected task descriptions"
                 );
                 assert!(
-                    output_combined.contains("Run all tests"),
-                    "Output does not contain expected task descriptions"
-                );
-                assert!(
-                    output_combined.contains("Build the project"),
+                    output_combined.contains("A sample task for listing"),
                     "Output does not contain expected task descriptions"
                 );
                 return;
@@ -240,6 +231,7 @@ default_task:
         .arg("--dry-run")
         .env("BODO_ROOT_SCRIPT", script_path.to_str().unwrap())
         .env("BODO_NO_WATCH", "1")
+        .env("RUST_LOG", "info") // Ensure info logs are enabled
         .current_dir(temp_dir.path())
         .output()
         .expect("Failed to execute bodo in dry-run mode");
@@ -251,12 +243,11 @@ default_task:
 
     // Assertions for dry-run output
     assert!(
-        (stdout.contains("[DRY-RUN] Would execute: echo \"Dry run default task\"")
-            || stderr.contains("[DRY-RUN] Would execute: echo \"Dry run default task\"")),
-        "Expected dry-run output not found in stdout or stderr"
+        stdout.contains("[DRY-RUN] Would execute: echo \"Dry run default task\""),
+        "Expected dry-run output not found in stdout"
     );
     assert!(
-        stdout.contains("Dry run default task") || stderr.contains("Dry run default task"),
-        "Dry-run output task description mismatch in stdout or stderr"
+        stdout.contains("Dry run default task"),
+        "Dry-run output task description mismatch in stdout"
     );
 }
