@@ -19,6 +19,7 @@ fn test_execution_plugin_on_init() -> Result<()> {
         fail_fast: true,
         watch: false,
         list: false,
+        dry_run: false, // ADDED: Initialize dry_run field
         options: Some(options),
     };
     plugin.on_init(&config)?;
