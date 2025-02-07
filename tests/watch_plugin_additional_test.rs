@@ -1,4 +1,5 @@
 use bodo::plugins::watch_plugin::WatchPlugin;
+use std::fs;
 use std::path::PathBuf;
 
 #[test]
@@ -23,8 +24,11 @@ fn test_find_base_directory() {
 fn test_find_base_directory_with_no_wildcard() {
     // If no wildcard is present and the given pattern does not resolve to an existing directory,
     // the implementation returns the parent (which for a single component yields ".").
+    // Create src dir for test
+    fs::create_dir_all("src").unwrap();
     let base = WatchPlugin::find_base_directory("src").unwrap();
     assert_eq!(base, PathBuf::from("src"));
+    fs::remove_dir_all("src").unwrap();
 }
 
 #[test]
