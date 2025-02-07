@@ -20,7 +20,7 @@ pub struct ChildProcess {
 pub struct ProcessManager {
     pub children: Vec<ChildProcess>,
     pub fail_fast: bool,
-    pub dry_run: bool, // Added dry_run field
+    pub dry_run: bool,
 }
 
 impl ProcessManager {
@@ -29,7 +29,7 @@ impl ProcessManager {
         Self {
             children: Vec::new(),
             fail_fast,
-            dry_run: false, // Initialize dry_run to false by default
+            dry_run: false,
         }
     }
 
@@ -53,7 +53,7 @@ impl ProcessManager {
         );
 
         if self.dry_run {
-            info!("[DRY-RUN] Would execute: '{}'", cmd);
+            info!("[DRY-RUN] Would execute: '{}'", cmd.bold()); // Indicate dry-run in output
             return Ok(());
         }
 

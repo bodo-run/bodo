@@ -28,6 +28,19 @@ pub struct Args {
     /// Subtask to run
     pub subtask: Option<String>,
 
+    /// Dry run mode - do not execute commands, just print them
+    #[arg(long)]
+    pub dry_run: bool, // Added dry_run flag
+
+    /// Subtask to run
+    // pub sandbox: bool, // Removed sandbox flag - not implemented
+
+    /// Subtask to run
+    // pub interactive: bool, // Removed interactive flag - not implemented
+
+    /// Subtask to run
+    // pub graph: bool, // Removed graph flag - not implemented
+
     /// Additional arguments passed to the task
     #[arg(last = true)]
     pub args: Vec<String>,

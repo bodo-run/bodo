@@ -10,7 +10,7 @@ use crate::{
 
 pub struct ExecutionPlugin {
     pub task_name: Option<String>,
-    pub dry_run: bool, // Added dry_run field
+    pub dry_run: bool,
 }
 
 impl Default for ExecutionPlugin {
@@ -24,7 +24,7 @@ impl ExecutionPlugin {
         Self {
             task_name: None,
             dry_run: false,
-        } // Initialize dry_run to false
+        }
     }
 
     /// Changed the visibility of the method to `pub`
@@ -141,7 +141,7 @@ impl Plugin for ExecutionPlugin {
         let mut visited = std::collections::HashSet::new();
 
         let mut pm = ProcessManager::new(true);
-        pm.set_dry_run(self.dry_run); // Set dry_run mode to ProcessManager
+        pm.set_dry_run(self.dry_run);
 
         fn run_node(
             node_id: usize,
@@ -204,7 +204,7 @@ impl Plugin for ExecutionPlugin {
                 NodeKind::ConcurrentGroup(group_data) => {
                     // Handle concurrent group execution
                     let mut group_pm = ProcessManager::new(group_data.fail_fast);
-                    group_pm.set_dry_run(pm.dry_run); // Inherit dry_run mode
+                    group_pm.set_dry_run(pm.dry_run);
                     for &child_id in &group_data.child_nodes {
                         let child_node = &graph.nodes[child_id as usize];
                         match &child_node.kind {

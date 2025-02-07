@@ -102,15 +102,16 @@ fn run(args: Args) -> Result<(), BodoError> {
 
     let mut options = serde_json::Map::new();
     options.insert("task".into(), serde_json::Value::String(task_name.clone()));
-    if args.debug {
-        options.insert("dry_run".into(), serde_json::Value::Bool(true)); // Pass dry_run option
+    if args.dry_run {
+        // Use dry_run flag from args
+        options.insert("dry_run".into(), serde_json::Value::Bool(true));
     }
 
     let plugin_config = PluginConfig {
         fail_fast: true,
         watch: watch_mode,
         list: false,
-        dry_run: args.debug, // Pass dry_run to PluginConfig
+        dry_run: args.dry_run, // Pass dry_run to PluginConfig
         options: Some(options),
     };
 
