@@ -92,7 +92,7 @@ fn run(args: Args) -> Result<(), BodoError> {
     graph_manager.register_plugin(Box::new(ConcurrentPlugin::new()));
     graph_manager.register_plugin(Box::new(PrefixPlugin::new()));
     graph_manager.register_plugin(Box::new(WatchPlugin::new(watch_mode, true)));
-    graph_manager.register_plugin(Box::new(ExecutionPlugin::new()));
+    graph_manager.register_plugin(Box::new(ExecutionPlugin::new())); // Dry run is handled in ExecutionPlugin
     graph_manager.register_plugin(Box::new(TimeoutPlugin::new()));
 
     let task_name = get_task_name(&args, &graph_manager)?;
@@ -102,11 +102,15 @@ fn run(args: Args) -> Result<(), BodoError> {
 
     let mut options = serde_json::Map::new();
     options.insert("task".into(), serde_json::Value::String(task_name.clone()));
+    if args.debug {
+        options.insert("dry_run".into(), serde_json::Value::Bool(true)); // Pass dry_run option
+    }
 
     let plugin_config = PluginConfig {
         fail_fast: true,
         watch: watch_mode,
         list: false,
+        dry_run: args.debug, // Pass dry_run to PluginConfig
         options: Some(options),
     };
 

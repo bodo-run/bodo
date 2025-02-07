@@ -34,6 +34,7 @@ pub struct PluginConfig {
     pub fail_fast: bool,
     pub watch: bool,
     pub list: bool,
+    pub dry_run: bool, // Added dry_run to PluginConfig
     pub options: Option<serde_json::Map<String, serde_json::Value>>,
 }
 

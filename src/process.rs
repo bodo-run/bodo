@@ -20,6 +20,7 @@ pub struct ChildProcess {
 pub struct ProcessManager {
     pub children: Vec<ChildProcess>,
     pub fail_fast: bool,
+    pub dry_run: bool, // Added dry_run field
 }
 
 impl ProcessManager {
@@ -28,7 +29,13 @@ impl ProcessManager {
         Self {
             children: Vec::new(),
             fail_fast,
+            dry_run: false, // Initialize dry_run to false by default
         }
+    }
+
+    pub fn set_dry_run(&mut self, dry_run: bool) {
+        self.dry_run = dry_run;
+        debug!("Set ProcessManager dry_run={}", dry_run);
     }
 
     pub fn spawn_command(
@@ -44,6 +51,11 @@ impl ProcessManager {
             "Spawning command '{}' (prefix={}, label={:?}, color={:?}, working_dir={:?})",
             cmd, prefix_enabled, prefix_label, prefix_color, working_dir
         );
+
+        if self.dry_run {
+            info!("[DRY-RUN] Would execute: '{}'", cmd);
+            return Ok(());
+        }
 
         let mut command = if cfg!(target_os = "windows") {
             let mut cmd_command = Command::new("cmd");
@@ -114,6 +126,11 @@ impl ProcessManager {
 
     pub fn run_concurrently(&mut self) -> std::io::Result<()> {
         debug!("Running {} processes concurrently", self.children.len());
+
+        if self.dry_run {
+            info!("[DRY-RUN] Skipping concurrent execution.");
+            return Ok(());
+        }
 
         let children = std::mem::take(&mut self.children);
         let len = children.len();

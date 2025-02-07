@@ -10,6 +10,7 @@ use crate::{
 
 pub struct ExecutionPlugin {
     pub task_name: Option<String>,
+    pub dry_run: bool, // Added dry_run field
 }
 
 impl Default for ExecutionPlugin {
@@ -20,7 +21,10 @@ impl Default for ExecutionPlugin {
 
 impl ExecutionPlugin {
     pub fn new() -> Self {
-        Self { task_name: None }
+        Self {
+            task_name: None,
+            dry_run: false,
+        } // Initialize dry_run to false
     }
 
     /// Changed the visibility of the method to `pub`
@@ -115,6 +119,9 @@ impl Plugin for ExecutionPlugin {
             if let Some(task) = options.get("task").and_then(|v| v.as_str()) {
                 self.task_name = Some(task.to_string());
             }
+            if let Some(dry_run) = options.get("dry_run").and_then(|v| v.as_bool()) {
+                self.dry_run = dry_run;
+            }
         }
         Ok(())
     }
@@ -134,6 +141,7 @@ impl Plugin for ExecutionPlugin {
         let mut visited = std::collections::HashSet::new();
 
         let mut pm = ProcessManager::new(true);
+        pm.set_dry_run(self.dry_run); // Set dry_run mode to ProcessManager
 
         fn run_node(
             node_id: usize,
@@ -141,7 +149,6 @@ impl Plugin for ExecutionPlugin {
             pm: &mut ProcessManager,
             visited: &mut std::collections::HashSet<usize>,
             expand_env_vars_fn: &dyn Fn(&str, &HashMap<String, String>) -> String,
-
             get_prefix_settings_fn: &dyn Fn(
                 &crate::graph::Node,
             ) -> (bool, Option<String>, Option<String>),
@@ -197,6 +204,7 @@ impl Plugin for ExecutionPlugin {
                 NodeKind::ConcurrentGroup(group_data) => {
                     // Handle concurrent group execution
                     let mut group_pm = ProcessManager::new(group_data.fail_fast);
+                    group_pm.set_dry_run(pm.dry_run); // Inherit dry_run mode
                     for &child_id in &group_data.child_nodes {
                         let child_node = &graph.nodes[child_id as usize];
                         match &child_node.kind {
