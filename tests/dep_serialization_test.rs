@@ -1,4 +1,4 @@
-use bodo::config::Dependency;
+use crate::config::Dependency;
 
 #[test]
 fn test_dependency_task_serialization() {
