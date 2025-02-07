@@ -45,6 +45,7 @@ mod new_tests {
             task: None,
             subtask: None,
             args: vec![],
+            dry_run: false,
         };
         let name = get_task_name(&args, &manager).unwrap();
         assert_eq!(name, "default");
@@ -84,6 +85,7 @@ mod new_tests {
             task: Some("build".to_string()),
             subtask: None,
             args: vec![],
+            dry_run: false,
         };
         let name = get_task_name(&args, &manager).unwrap();
         assert_eq!(name, "build");
@@ -100,6 +102,7 @@ mod new_tests {
             task: None,
             subtask: None,
             args: vec![],
+            dry_run: false,
         };
         let res = get_task_name(&args, &gm);
         assert!(matches!(res, Err(BodoError::NoTaskSpecified)));
@@ -139,6 +142,7 @@ mod new_tests {
             task: Some("nonexistent".to_string()),
             subtask: None,
             args: vec![],
+            dry_run: false,
         };
         let res = get_task_name(&args, &gm);
         assert!(matches!(res, Err(BodoError::TaskNotFound(_))));
