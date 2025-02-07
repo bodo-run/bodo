@@ -251,9 +251,9 @@ default_task:
 
     // Assertions for dry-run output
     assert!(
-        stdout
+        stderr // Changed from stdout to stderr
             .lines()
             .any(|line| line.contains("[DRY-RUN] Would execute: echo \"Dry run test\"")),
-        "Expected dry-run output not found in stdout"
+        "Expected dry-run output not found in stderr" // Updated message to stderr
     );
 }
