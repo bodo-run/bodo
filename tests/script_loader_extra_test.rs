@@ -1,4 +1,4 @@
-use bodo::script_loader::ScriptLoader;
+use crate::script_loader::ScriptLoader;
 use std::collections::HashMap;
 
 #[test]

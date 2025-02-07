@@ -1,5 +1,5 @@
-extern crate bodo;
-use bodo::plugins::watch_plugin::WatchPlugin;
+extern crate globset;
+use crate::plugins::watch_plugin::WatchPlugin;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -45,7 +45,7 @@ fn test_filter_changed_paths() {
     let glob_set = builder.build().unwrap();
 
     // Create a dummy WatchEntry with a directory to watch: "test_dir"
-    let watch_entry = bodo::plugins::watch_plugin::WatchEntry {
+    let watch_entry = crate::plugins::watch_plugin::WatchEntry {
         task_name: "dummy".to_string(),
         glob_set,
         ignore_set: None,
