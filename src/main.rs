@@ -86,14 +86,14 @@ fn run(args: Args) -> Result<(), BodoError> {
         return Ok(());
     }
 
-    // Register all normal plugins
-    graph_manager.register_plugin(Box::new(EnvPlugin::new()));
-    graph_manager.register_plugin(Box::new(PathPlugin::new()));
-    graph_manager.register_plugin(Box::new(ConcurrentPlugin::new()));
-    graph_manager.register_plugin(Box::new(PrefixPlugin::new()));
-    graph_manager.register_plugin(Box::new(WatchPlugin::new(watch_mode, true)));
-    graph_manager.register_plugin(Box::new(ExecutionPlugin::new())); // Dry run is handled in ExecutionPlugin
-    graph_manager.register_plugin(Box::new(TimeoutPlugin::new()));
+    // Register all normal plugins in the correct order
+    graph_manager.register_plugin(Box::new(EnvPlugin::new())); // Priority 90
+    graph_manager.register_plugin(Box::new(PathPlugin::new())); // Priority 85
+    graph_manager.register_plugin(Box::new(ConcurrentPlugin::new())); // Priority 100
+    graph_manager.register_plugin(Box::new(WatchPlugin::new(watch_mode, true))); // Priority 90
+    graph_manager.register_plugin(Box::new(PrefixPlugin::new())); // Priority 90
+    graph_manager.register_plugin(Box::new(TimeoutPlugin::new())); // Priority 75
+    graph_manager.register_plugin(Box::new(ExecutionPlugin::new())); // Priority 100
 
     let task_name = get_task_name(&args, &graph_manager)?;
 
