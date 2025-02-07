@@ -7,6 +7,7 @@ fn test_plugin_config_defaults() {
     assert!(!config.fail_fast);
     assert!(!config.watch);
     assert!(!config.list);
+    assert!(!config.dry_run);
     assert!(config.options.is_none());
 }
 
@@ -19,6 +20,7 @@ fn test_plugin_config_custom() {
         fail_fast: true,
         watch: true,
         list: true,
+        dry_run: false,
         options: Some(options.as_object().unwrap().clone()),
     };
     assert!(config.fail_fast);
