@@ -31,7 +31,7 @@ coverage/
 
 # AI -- any text file in the root is an AI request or response
 *.txt
-*.md
+./*.md
 !README.md
 !CONTRIBUTING.md
 !CHANGELOG.md

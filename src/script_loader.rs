@@ -52,7 +52,7 @@ impl ScriptLoader {
                     concurrently: task_config.concurrently,
                     concurrently_options: task_config.concurrently_options,
                 };
-                let node_id = graph.add_node(NodeKind::Task(task_data));
+                let node_id = graph.add_node(NodeKind::Task(Box::new(task_data)));
                 graph.task_registry.insert(full_key, node_id);
             }
             if let Some(default_task) = parsed.default_task {
@@ -73,7 +73,7 @@ impl ScriptLoader {
                     concurrently: default_task.concurrently,
                     concurrently_options: default_task.concurrently_options,
                 };
-                let node_id = graph.add_node(NodeKind::Task(task_data));
+                let node_id = graph.add_node(NodeKind::Task(Box::new(task_data)));
                 graph.task_registry.insert("default".to_string(), node_id);
             }
         } else {
@@ -104,7 +104,7 @@ impl ScriptLoader {
                     concurrently: task_config.concurrently,
                     concurrently_options: task_config.concurrently_options,
                 };
-                let node_id = graph.add_node(NodeKind::Task(task_data));
+                let node_id = graph.add_node(NodeKind::Task(Box::new(task_data)));
                 graph.task_registry.insert(task_name, node_id);
             }
             if let Some(default_task) = config.default_task {
@@ -125,7 +125,7 @@ impl ScriptLoader {
                     concurrently: default_task.concurrently,
                     concurrently_options: default_task.concurrently_options,
                 };
-                let node_id = graph.add_node(NodeKind::Task(task_data));
+                let node_id = graph.add_node(NodeKind::Task(Box::new(task_data)));
                 graph.task_registry.insert("default".to_string(), node_id);
             }
         }
@@ -149,9 +149,9 @@ impl ScriptLoader {
     }
 
     pub fn merge_exec_paths(
-        global: &Vec<String>,
-        script: &Vec<String>,
-        task: &Vec<String>,
+        global: &[String],
+        script: &[String],
+        task: &[String],
     ) -> Vec<String> {
         let mut seen = std::collections::HashSet::new();
         let mut result = Vec::new();

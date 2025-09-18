@@ -135,16 +135,15 @@ impl Plugin for ExecutionPlugin {
 
         let mut pm = ProcessManager::new(true);
 
+        type PrefixSettings = (bool, Option<String>, Option<String>);
+        
         fn run_node(
             node_id: usize,
             graph: &Graph,
             pm: &mut ProcessManager,
             visited: &mut std::collections::HashSet<usize>,
             expand_env_vars_fn: &dyn Fn(&str, &HashMap<String, String>) -> String,
-
-            get_prefix_settings_fn: &dyn Fn(
-                &crate::graph::Node,
-            ) -> (bool, Option<String>, Option<String>),
+            get_prefix_settings_fn: &dyn Fn(&crate::graph::Node) -> PrefixSettings,
         ) -> Result<()> {
             if visited.contains(&node_id) {
                 return Ok(());
