@@ -38,11 +38,14 @@ fn test_watch_plugin_on_init_with_watch() {
 
 #[test]
 fn test_watch_plugin_on_graph_build_with_auto_watch_and_env_var_set() {
+    // Use a unique environment variable name to avoid conflicts with other tests
+    let env_var_name = "BODO_NO_WATCH_TEST_ISOLATION";
+
     // Store the original value to restore later
-    let original_value = std::env::var("BODO_NO_WATCH").ok();
-    
-    // Set BODO_NO_WATCH before creating the plugin to ensure it's available
-    std::env::set_var("BODO_NO_WATCH", "1");
+    let original_value = std::env::var(env_var_name).ok();
+
+    // Set the environment variable before creating the plugin
+    std::env::set_var(env_var_name, "1");
 
     let mut plugin = WatchPlugin::new(false, false);
     let mut graph = bodo::graph::Graph::new();
@@ -72,14 +75,17 @@ fn test_watch_plugin_on_graph_build_with_auto_watch_and_env_var_set() {
 
     let _node_id = graph.add_node(bodo::graph::NodeKind::Task(task_data));
 
+    // Temporarily set BODO_NO_WATCH for this test
+    std::env::set_var("BODO_NO_WATCH", "1");
     plugin.on_graph_build(&mut graph).unwrap();
+    std::env::remove_var("BODO_NO_WATCH");
 
     assert!(!plugin.is_watch_mode());
 
     // Restore the original environment
     match original_value {
-        Some(val) => std::env::set_var("BODO_NO_WATCH", val),
-        None => std::env::remove_var("BODO_NO_WATCH"),
+        Some(val) => std::env::set_var(env_var_name, val),
+        None => std::env::remove_var(env_var_name),
     }
 }
 

@@ -136,13 +136,18 @@ impl PluginManager {
     pub fn dry_run(&self, graph: &Graph, config: &PluginConfig) -> Result<AggregatedDryRunReport> {
         let mut reports = Vec::new();
         for plugin in &self.plugins {
-            // Try to downcast to ExecutionPlugin specifically since it's the only one implementing DryRun for now
-            if let Some(dry_run_plugin) = plugin
+            // Use a more generic approach - check if plugin supports dry run
+            // by attempting to cast to each known plugin type that implements DryRun
+            if let Some(execution_plugin) = plugin
                 .as_any()
                 .downcast_ref::<crate::plugins::execution_plugin::ExecutionPlugin>(
             ) {
-                reports.push(dry_run_plugin.dry_run_simulate(graph, config)?);
+                reports.push(execution_plugin.dry_run_simulate(graph, config)?);
             }
+            // Future plugins implementing DryRun can be added here
+            // if let Some(other_plugin) = plugin.as_any().downcast_ref::<OtherPlugin>() {
+            //     reports.push(other_plugin.dry_run_simulate(graph, config)?);
+            // }
         }
         Ok(AggregatedDryRunReport { reports })
     }
