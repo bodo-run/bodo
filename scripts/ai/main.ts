@@ -10,8 +10,9 @@ const FILE_TAG = "__FILENAME__";
 const START_TAG = "__FILE_CONTENT_START__";
 const END_TAG = "__FILE_CONTENT_END__";
 const ALL_GOOD_TAG = "DONE_ALL_TESTS_PASS_AND_COVERAGE_IS_GOOD";
-const DEEPSEEK_REASONER_MAX_TOKENS = 65536;
-const OPENAI_MAX_TOKENS = 120000;
+const DEEPSEEK_REASONER_MAX_TOKENS = 65_536;
+const OPENAI_MAX_TOKENS = 120_000;
+const GEMINI_MAX_TOKENS = 1_000_000;
 
 const BUILD_ERROR_PROMPT = `
 You are given the full repository and build errors.
@@ -111,6 +112,8 @@ function getMaxTokens() {
   switch (provider) {
     case "openai":
       return OPENAI_MAX_TOKENS;
+    case "gemini":
+      return GEMINI_MAX_TOKENS;
     case "deepseek":
       return DEEPSEEK_REASONER_MAX_TOKENS;
     default:
