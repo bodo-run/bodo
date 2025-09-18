@@ -149,18 +149,31 @@ impl WatchPlugin {
         let first_wildcard = components
             .iter()
             .position(|c| c.as_os_str().to_string_lossy().contains('*'));
+
+        // Get project root from exe path
+        let exe_path = std::env::current_exe().ok()?;
+        let project_root = exe_path.parent()?.parent()?.parent()?.parent()?;
+
         let base = if let Some(idx) = first_wildcard {
             if idx == 0 {
                 PathBuf::from(".")
             } else {
-                PathBuf::from_iter(&components[..idx])
+                let base_path = PathBuf::from_iter(&components[..idx]);
+                if project_root.join(&base_path).is_dir() {
+                    base_path
+                } else {
+                    PathBuf::from(".")
+                }
             }
-        } else if path.is_dir() {
-            path.to_path_buf()
         } else {
-            path.parent()
-                .unwrap_or_else(|| Path::new("."))
-                .to_path_buf()
+            let full_path = project_root.join(path);
+            if full_path.is_dir() {
+                path.to_path_buf()
+            } else {
+                path.parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .to_path_buf()
+            }
         };
         if base.as_os_str().is_empty() {
             Some(PathBuf::from("."))
