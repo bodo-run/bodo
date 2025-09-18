@@ -21,7 +21,7 @@ impl Default for ExecutionPlugin {
 
 impl ExecutionPlugin {
     pub fn new() -> Self {
-        Self { 
+        Self {
             task_name: None,
             dry_run: false,
         }
@@ -100,7 +100,12 @@ impl ExecutionPlugin {
         result
     }
 
-    fn print_dry_run_commands(&self, graph: &Graph, node_id: usize, visited: &mut std::collections::HashSet<usize>) -> Result<()> {
+    fn print_dry_run_commands(
+        &self,
+        graph: &Graph,
+        node_id: usize,
+        visited: &mut std::collections::HashSet<usize>,
+    ) -> Result<()> {
         if visited.contains(&node_id) {
             return Ok(());
         }
@@ -196,7 +201,11 @@ impl Plugin for ExecutionPlugin {
             println!("🔍 Dry Run Mode - Task: {}", task_name);
             println!("================");
             println!("Commands that would be executed:");
-            self.print_dry_run_commands(graph, task_id as usize, &mut std::collections::HashSet::new())?;
+            self.print_dry_run_commands(
+                graph,
+                task_id as usize,
+                &mut std::collections::HashSet::new(),
+            )?;
             println!("✅ No commands were actually executed (dry-run mode)");
             return Ok(());
         }
