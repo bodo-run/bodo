@@ -173,7 +173,7 @@ mod new_tests {
                 name: "GREETING".to_string(),
                 description: Some("Greeting msg".to_string()),
                 required: true,
-                default: Some("Hello".to_string())
+                default: Some("Hello".to_string()),
             }],
             is_default: false,
             script_id: "".to_string(),
@@ -215,7 +215,7 @@ mod new_tests {
                 name: "NAME".to_string(),
                 description: None,
                 required: true,
-                default: None
+                default: None,
             }],
             is_default: false,
             script_id: "".to_string(),

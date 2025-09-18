@@ -142,7 +142,9 @@ impl Plugin for ExecutionPlugin {
             pm: &mut ProcessManager,
             visited: &mut std::collections::HashSet<usize>,
             expand_env_vars_fn: &dyn Fn(&str, &HashMap<String, String>) -> String,
-            get_prefix_settings_fn: &dyn Fn(&crate::graph::Node) -> (bool, Option<String>, Option<String>),
+            get_prefix_settings_fn: &dyn Fn(
+                &crate::graph::Node,
+            ) -> (bool, Option<String>, Option<String>),
         ) -> Result<()> {
             if visited.contains(&node_id) {
                 return Ok(());
@@ -280,7 +282,14 @@ impl DryRun for ExecutionPlugin {
             dependencies: &mut Vec<String>,
             warnings: &mut Vec<String>,
             expand_env_vars_fn: &dyn Fn(&str, &std::collections::HashMap<String, String>) -> String,
-            #[allow(clippy::only_used_in_recursion)] _get_prefix_settings_fn: &dyn Fn(&crate::graph::Node) -> (bool, Option<String>, Option<String>),
+            #[allow(clippy::only_used_in_recursion)] _get_prefix_settings_fn: &dyn Fn(
+                &crate::graph::Node,
+            )
+                -> (
+                bool,
+                Option<String>,
+                Option<String>,
+            ),
         ) -> Result<()> {
             if visited.contains(&node_id) {
                 return Ok(());

@@ -38,13 +38,13 @@ fn test_watch_plugin_on_init_with_watch() {
 
 #[test]
 fn test_watch_plugin_on_graph_build_with_auto_watch_and_env_var_set() {
-    let mut plugin = WatchPlugin::new(false, false);
-
     // Store the original value to restore later
     let original_value = std::env::var("BODO_NO_WATCH").ok();
     
+    // Set BODO_NO_WATCH before creating the plugin to ensure it's available
     std::env::set_var("BODO_NO_WATCH", "1");
 
+    let mut plugin = WatchPlugin::new(false, false);
     let mut graph = bodo::graph::Graph::new();
 
     let task_data = bodo::graph::TaskData {
@@ -89,7 +89,7 @@ fn test_watch_plugin_on_graph_build_with_auto_watch() {
 
     // Store the original value to restore later
     let original_value = std::env::var("BODO_NO_WATCH").ok();
-    
+
     // Ensure BODO_NO_WATCH is not set
     std::env::remove_var("BODO_NO_WATCH");
 

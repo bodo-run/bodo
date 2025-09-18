@@ -1,4 +1,3 @@
-
 #[test]
 fn test_designer_module() {
     // The designer module is reserved for future use.
