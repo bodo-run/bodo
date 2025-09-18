@@ -31,3 +31,18 @@ coverage/
 
 # AI -- any text file in the root is an AI request or response
 *.txt
+
+
+# RUst
+*.rmeta
+*.rs.bk
+*.profraw
+
+# .md
+./*.md
+!./AGENTS.md
+!./CONTRIBUTING.md
+!./CODE_OF_CONDUCT.md
+!./CHANGELOG.md
+!./README.md
+!./ROADMAP.md
