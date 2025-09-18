@@ -31,3 +31,5 @@ coverage/
 
 # AI -- any text file in the root is an AI request or response
 *.txt
+CRITIQUE.md
+EXECUTION_PLAN.md
