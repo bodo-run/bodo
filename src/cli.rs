@@ -22,6 +22,10 @@ pub struct Args {
     #[arg(long)]
     pub debug: bool,
 
+    /// Dry-run mode - show what would be executed without running commands
+    #[arg(long)]
+    pub dry_run: bool,
+
     /// Task to run (defaults to default_task)
     pub task: Option<String>,
 

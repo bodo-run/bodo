@@ -10,6 +10,7 @@ use crate::{
 
 pub struct ExecutionPlugin {
     pub task_name: Option<String>,
+    pub dry_run: bool,
 }
 
 impl Default for ExecutionPlugin {
@@ -20,7 +21,10 @@ impl Default for ExecutionPlugin {
 
 impl ExecutionPlugin {
     pub fn new() -> Self {
-        Self { task_name: None }
+        Self { 
+            task_name: None,
+            dry_run: false,
+        }
     }
 
     /// Changed the visibility of the method to `pub`
@@ -95,6 +99,62 @@ impl ExecutionPlugin {
         }
         result
     }
+
+    fn print_dry_run_commands(&self, graph: &Graph, node_id: usize, visited: &mut std::collections::HashSet<usize>) -> Result<()> {
+        if visited.contains(&node_id) {
+            return Ok(());
+        }
+        visited.insert(node_id);
+
+        let node = &graph.nodes[node_id];
+        match &node.kind {
+            NodeKind::Task(task_data) => {
+                // Process pre dependencies
+                for edge in &graph.edges {
+                    if edge.to == node_id as u64 {
+                        self.print_dry_run_commands(graph, edge.from as usize, visited)?;
+                    }
+                }
+
+                // Print the command that would be executed
+                if let Some(cmd) = &task_data.command {
+                    let expanded_cmd = self.expand_env_vars(cmd, &task_data.env);
+                    println!("📋 Task '{}': {}", task_data.name, expanded_cmd);
+                    if let Some(working_dir) = &task_data.working_dir {
+                        println!("   Working Directory: {}", working_dir);
+                    }
+                    if !task_data.env.is_empty() {
+                        println!("   Environment Variables:");
+                        for (key, value) in &task_data.env {
+                            println!("     {}={}", key, value);
+                        }
+                    }
+                    println!();
+                }
+            }
+            NodeKind::Command(cmd_data) => {
+                let expanded_cmd = self.expand_env_vars(&cmd_data.raw_command, &cmd_data.env);
+                println!("📋 Command: {}", expanded_cmd);
+                if let Some(working_dir) = &cmd_data.working_dir {
+                    println!("   Working Directory: {}", working_dir);
+                }
+                if !cmd_data.env.is_empty() {
+                    println!("   Environment Variables:");
+                    for (key, value) in &cmd_data.env {
+                        println!("     {}={}", key, value);
+                    }
+                }
+                println!();
+            }
+            NodeKind::ConcurrentGroup(group_data) => {
+                println!("📋 Concurrent Group (fail_fast: {})", group_data.fail_fast);
+                for &child_id in &group_data.child_nodes {
+                    self.print_dry_run_commands(graph, child_id as usize, visited)?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Plugin for ExecutionPlugin {
@@ -111,6 +171,7 @@ impl Plugin for ExecutionPlugin {
     }
 
     fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
+        self.dry_run = config.dry_run;
         if let Some(options) = &config.options {
             if let Some(task) = options.get("task").and_then(|v| v.as_str()) {
                 self.task_name = Some(task.to_string());
@@ -130,6 +191,15 @@ impl Plugin for ExecutionPlugin {
             .task_registry
             .get(&task_name)
             .ok_or_else(|| BodoError::TaskNotFound(task_name.clone()))?;
+
+        if self.dry_run {
+            println!("🔍 Dry Run Mode - Task: {}", task_name);
+            println!("================");
+            println!("Commands that would be executed:");
+            self.print_dry_run_commands(graph, task_id as usize, &mut std::collections::HashSet::new())?;
+            println!("✅ No commands were actually executed (dry-run mode)");
+            return Ok(());
+        }
 
         let mut visited = std::collections::HashSet::new();
 
