@@ -6,5 +6,4 @@ fn test_lib_reexports() {
     let mut manager = GraphManager::new();
     manager.build_graph(config).unwrap();
     let _graph: Graph = manager.graph;
-    assert!(true);
 }

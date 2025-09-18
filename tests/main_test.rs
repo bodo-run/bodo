@@ -5,6 +5,7 @@ use std::thread;
 use std::time::Duration;
 use tempfile::tempdir;
 
+#[allow(clippy::zombie_processes)]
 #[test]
 fn test_bodo_default() {
     // Build the path to the built 'bodo' executable
@@ -98,6 +99,7 @@ default_task:
     panic!("Process did not finish within timeout");
 }
 
+#[allow(clippy::zombie_processes)]
 #[test]
 fn test_bodo_list() {
     // Build the path to the built 'bodo' executable

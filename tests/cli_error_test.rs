@@ -14,6 +14,7 @@ fn test_get_task_name_no_default_and_no_argument() {
         task: None,
         subtask: None,
         args: vec![],
+        dry_run: false,
     };
     let res = get_task_name(&args, &manager);
     match res {
@@ -58,6 +59,7 @@ fn test_get_task_name_task_not_found() {
         task: Some("nonexistent".to_string()),
         subtask: None,
         args: vec![],
+        dry_run: false,
     };
     let res = get_task_name(&args, &manager);
     match res {

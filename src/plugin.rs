@@ -1,6 +1,8 @@
 use crate::graph::Graph;
 use crate::Result;
+use serde::{Deserialize, Serialize};
 use std::any::Any;
+use std::collections::HashMap;
 
 /// Synchronous plugin trait (no `async` anymore).
 pub trait Plugin: Send {
@@ -37,6 +39,49 @@ pub struct PluginConfig {
     pub options: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
+/// Represents a single simulated action (e.g., a command execution).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimulatedAction {
+    /// Type of action (e.g., "command", "file_write").
+    pub action_type: String,
+    /// Description of the action.
+    pub description: String,
+    /// Details specific to the action (e.g., expanded command string).
+    pub details: HashMap<String, String>,
+    /// Node ID in the graph this action relates to.
+    pub node_id: Option<usize>,
+}
+
+/// Report structure for dry-run simulations.
+/// Contains details of what would be executed without side effects.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DryRunReport {
+    /// Plugin that generated this report.
+    pub plugin_name: String,
+    /// List of simulated commands or actions.
+    pub simulated_actions: Vec<SimulatedAction>,
+    /// Dependencies that would be resolved (e.g., task names, file paths).
+    pub dependencies: Vec<String>,
+    /// Warnings or notes about the simulation (e.g., missing env vars).
+    pub warnings: Vec<String>,
+    /// Estimated execution time or other metadata (optional).
+    pub metadata: HashMap<String, String>,
+}
+
+/// Aggregated report from all plugins.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AggregatedDryRunReport {
+    pub reports: Vec<DryRunReport>,
+}
+
+/// Trait for plugins that support dry-run simulation.
+/// Implementations should simulate their behavior without side effects.
+pub trait DryRun: Send {
+    /// Simulate the plugin's behavior for dry-run mode.
+    /// Returns a report of what would be executed or modified.
+    fn dry_run_simulate(&self, graph: &Graph, config: &PluginConfig) -> Result<DryRunReport>;
+}
+
 pub struct PluginManager {
     plugins: Vec<Box<dyn Plugin>>,
 }
@@ -62,6 +107,11 @@ impl PluginManager {
         &self.plugins
     }
 
+    /// Provide mutable access to the plugins for internal operations
+    pub fn get_plugins_mut(&mut self) -> &mut [Box<dyn Plugin>] {
+        &mut self.plugins
+    }
+
     /// Runs the "lifecycle" in a blocking (synchronous) manner.
     pub fn run_lifecycle(&mut self, graph: &mut Graph, config: Option<PluginConfig>) -> Result<()> {
         let config = config.unwrap_or_default();
@@ -80,6 +130,21 @@ impl PluginManager {
             plugin.on_after_run(graph)?;
         }
         Ok(())
+    }
+
+    /// Run dry-run simulation for all supporting plugins.
+    pub fn dry_run(&self, graph: &Graph, config: &PluginConfig) -> Result<AggregatedDryRunReport> {
+        let mut reports = Vec::new();
+        for plugin in &self.plugins {
+            // Try to downcast to ExecutionPlugin specifically since it's the only one implementing DryRun for now
+            if let Some(dry_run_plugin) = plugin
+                .as_any()
+                .downcast_ref::<crate::plugins::execution_plugin::ExecutionPlugin>(
+            ) {
+                reports.push(dry_run_plugin.dry_run_simulate(graph, config)?);
+            }
+        }
+        Ok(AggregatedDryRunReport { reports })
     }
 }
 

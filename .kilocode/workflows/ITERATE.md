@@ -22,7 +22,7 @@ Repeat forever:
 3. Plan changes carefully; update or add tests first when feasible (TDD encouraged).
 4. Implement the change with a clean, minimal diff.
 5. Ensure CI will pass locally (fmt, clippy, tests) and commit using Conventional Commits.
-6. Open a PR with clear description, context, and links to roadmap items.
+6. Open a PR with clear description, context, and links to roadmap items (using `gh`)
 7. Address code reviews; iterate until approvals and green checks.
 8. Update `ROADMAP.md` to mark the task as done (and note follow-ups if any).
 9. Merge via `gh` (use squash unless otherwise agreed), then delete the branch.

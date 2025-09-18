@@ -78,11 +78,11 @@ fn test_prefix_plugin_on_graph_build() {
             "Expected prefix_enabled to be \"true\""
         );
         assert!(
-            child_node.metadata.get("prefix_label").is_some(),
+            child_node.metadata.contains_key("prefix_label"),
             "Expected prefix_label to be set"
         );
         assert!(
-            child_node.metadata.get("prefix_color").is_some(),
+            child_node.metadata.contains_key("prefix_color"),
             "Expected prefix_color to be set"
         );
     }

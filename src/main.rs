@@ -110,6 +110,41 @@ fn run(args: Args) -> Result<(), BodoError> {
         options: Some(options),
     };
 
-    graph_manager.run_plugins(Some(plugin_config))?;
+    if args.dry_run {
+        // Run dry-run simulation
+        let report = graph_manager.run_dry_run(Some(plugin_config))?;
+
+        // Output the dry-run report
+        if args.debug {
+            println!("Dry-run Report (Debug):");
+            println!("{:#?}", report);
+        } else {
+            println!("Dry-run Report:");
+            for plugin_report in &report.reports {
+                println!("Plugin: {}", plugin_report.plugin_name);
+                println!("Simulated Actions:");
+                for action in &plugin_report.simulated_actions {
+                    println!("  - {}: {}", action.action_type, action.description);
+                    for (key, value) in &action.details {
+                        println!("    {}: {}", key, value);
+                    }
+                }
+                if !plugin_report.dependencies.is_empty() {
+                    println!("Dependencies: {:?}", plugin_report.dependencies);
+                }
+                if !plugin_report.warnings.is_empty() {
+                    println!("Warnings:");
+                    for warning in &plugin_report.warnings {
+                        println!("  - {}", warning);
+                    }
+                }
+                println!();
+            }
+        }
+    } else {
+        // Normal execution flow
+        graph_manager.run_plugins(Some(plugin_config))?;
+    }
+
     Ok(())
 }

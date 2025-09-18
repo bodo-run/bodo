@@ -13,4 +13,7 @@ pub use config::BodoConfig;
 pub use errors::{BodoError, Result};
 pub use graph::Graph;
 pub use manager::GraphManager;
-pub use plugin::{Plugin, PluginConfig, PluginManager};
+pub use plugin::{
+    AggregatedDryRunReport, DryRun, DryRunReport, Plugin, PluginConfig, PluginManager,
+    SimulatedAction,
+};

@@ -31,6 +31,10 @@ pub struct Args {
     /// Additional arguments passed to the task
     #[arg(last = true)]
     pub args: Vec<String>,
+
+    /// Dry-run mode - simulate execution without running commands
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 pub fn get_task_name(args: &Args, graph_manager: &GraphManager) -> Result<String, BodoError> {

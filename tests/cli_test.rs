@@ -38,6 +38,7 @@ fn test_cli_get_task_name_default_exists() {
         task: None,
         subtask: None,
         args: vec![],
+        dry_run: false,
     };
     let name = get_task_name(&args, &manager).unwrap();
     assert_eq!(name, "default");
@@ -77,6 +78,7 @@ fn test_cli_get_task_name_with_existing_task() {
         task: Some("build".to_string()),
         subtask: None,
         args: vec![],
+        dry_run: false,
     };
     let name = get_task_name(&args, &manager).unwrap();
     assert_eq!(name, "build");

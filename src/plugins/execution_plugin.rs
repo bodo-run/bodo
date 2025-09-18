@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::{
     errors::{BodoError, Result},
     graph::{Graph, NodeKind},
-    plugin::{Plugin, PluginConfig},
+    plugin::{DryRun, DryRunReport, Plugin, PluginConfig, SimulatedAction},
     process::ProcessManager,
 };
 
@@ -135,16 +135,14 @@ impl Plugin for ExecutionPlugin {
 
         let mut pm = ProcessManager::new(true);
 
+        #[allow(clippy::type_complexity)]
         fn run_node(
             node_id: usize,
             graph: &Graph,
             pm: &mut ProcessManager,
             visited: &mut std::collections::HashSet<usize>,
             expand_env_vars_fn: &dyn Fn(&str, &HashMap<String, String>) -> String,
-
-            get_prefix_settings_fn: &dyn Fn(
-                &crate::graph::Node,
-            ) -> (bool, Option<String>, Option<String>),
+            get_prefix_settings_fn: &dyn Fn(&crate::graph::Node) -> (bool, Option<String>, Option<String>),
         ) -> Result<()> {
             if visited.contains(&node_id) {
                 return Ok(());
@@ -250,5 +248,219 @@ impl Plugin for ExecutionPlugin {
         pm.run_concurrently()?;
 
         Ok(())
+    }
+}
+
+impl DryRun for ExecutionPlugin {
+    fn dry_run_simulate(&self, graph: &Graph, _config: &PluginConfig) -> Result<DryRunReport> {
+        let task_name = if let Some(name) = &self.task_name {
+            name.clone()
+        } else {
+            return Err(BodoError::PluginError("No task specified".to_string()));
+        };
+
+        let task_id = *graph
+            .task_registry
+            .get(&task_name)
+            .ok_or_else(|| BodoError::TaskNotFound(task_name.clone()))?;
+
+        let mut visited = std::collections::HashSet::new();
+        let mut simulated_actions = Vec::new();
+        let mut dependencies = Vec::new();
+        let mut warnings = Vec::new();
+
+        #[allow(clippy::too_many_arguments)]
+        #[allow(clippy::type_complexity)]
+        #[allow(clippy::type_complexity)]
+        fn simulate_node(
+            node_id: usize,
+            graph: &Graph,
+            visited: &mut std::collections::HashSet<usize>,
+            simulated_actions: &mut Vec<SimulatedAction>,
+            dependencies: &mut Vec<String>,
+            warnings: &mut Vec<String>,
+            expand_env_vars_fn: &dyn Fn(&str, &std::collections::HashMap<String, String>) -> String,
+            #[allow(clippy::only_used_in_recursion)] _get_prefix_settings_fn: &dyn Fn(&crate::graph::Node) -> (bool, Option<String>, Option<String>),
+        ) -> Result<()> {
+            if visited.contains(&node_id) {
+                return Ok(());
+            }
+            visited.insert(node_id);
+
+            let node = &graph.nodes[node_id];
+            match &node.kind {
+                NodeKind::Task(task_data) => {
+                    // Add task as dependency
+                    dependencies.push(task_data.name.clone());
+
+                    // Run pre dependencies
+                    for edge in &graph.edges {
+                        if edge.to == node_id as u64 {
+                            simulate_node(
+                                edge.from as usize,
+                                graph,
+                                visited,
+                                simulated_actions,
+                                dependencies,
+                                warnings,
+                                expand_env_vars_fn,
+                                _get_prefix_settings_fn,
+                            )?;
+                        }
+                    }
+                    // Simulate task command execution
+                    if let Some(cmd) = &task_data.command {
+                        let expanded_cmd = expand_env_vars_fn(cmd, &task_data.env);
+
+                        // Check for unresolved environment variables
+                        if expanded_cmd.contains("${")
+                            || expanded_cmd.contains("$") && expanded_cmd.contains(" ")
+                        {
+                            warnings.push(format!(
+                                "Task '{}' may have unresolved environment variables",
+                                task_data.name
+                            ));
+                        }
+
+                        let mut details = std::collections::HashMap::new();
+                        details.insert("command".to_string(), expanded_cmd.clone());
+                        if let Some(cwd) = &task_data.working_dir {
+                            details.insert("working_directory".to_string(), cwd.clone());
+                        }
+
+                        simulated_actions.push(SimulatedAction {
+                            action_type: "command".to_string(),
+                            description: format!("Execute task '{}'", task_data.name),
+                            details,
+                            node_id: Some(node_id),
+                        });
+                    }
+                }
+                NodeKind::Command(cmd_data) => {
+                    let expanded_cmd = expand_env_vars_fn(&cmd_data.raw_command, &cmd_data.env);
+
+                    // Check for unresolved environment variables
+                    if expanded_cmd.contains("${")
+                        || expanded_cmd.contains("$") && expanded_cmd.contains(" ")
+                    {
+                        warnings
+                            .push("Command may have unresolved environment variables".to_string());
+                    }
+
+                    let mut details = std::collections::HashMap::new();
+                    details.insert("command".to_string(), expanded_cmd.clone());
+                    if let Some(cwd) = &cmd_data.working_dir {
+                        details.insert("working_directory".to_string(), cwd.clone());
+                    }
+
+                    simulated_actions.push(SimulatedAction {
+                        action_type: "command".to_string(),
+                        description: "Execute command".to_string(),
+                        details,
+                        node_id: Some(node_id),
+                    });
+                }
+                NodeKind::ConcurrentGroup(group_data) => {
+                    // Simulate concurrent group execution
+                    for &child_id in &group_data.child_nodes {
+                        let child_node = &graph.nodes[child_id as usize];
+                        match &child_node.kind {
+                            NodeKind::Task(task_data) => {
+                                dependencies.push(task_data.name.clone());
+
+                                if let Some(cmd) = &task_data.command {
+                                    let expanded_cmd = expand_env_vars_fn(cmd, &task_data.env);
+
+                                    // Check for unresolved environment variables
+                                    if expanded_cmd.contains("${")
+                                        || expanded_cmd.contains("$") && expanded_cmd.contains(" ")
+                                    {
+                                        warnings.push(format!("Concurrent task '{}' may have unresolved environment variables", task_data.name));
+                                    }
+
+                                    let mut details = std::collections::HashMap::new();
+                                    details.insert("command".to_string(), expanded_cmd.clone());
+                                    if let Some(cwd) = &task_data.working_dir {
+                                        details
+                                            .insert("working_directory".to_string(), cwd.clone());
+                                    }
+                                    details.insert(
+                                        "execution_mode".to_string(),
+                                        "concurrent".to_string(),
+                                    );
+
+                                    simulated_actions.push(SimulatedAction {
+                                        action_type: "command".to_string(),
+                                        description: format!(
+                                            "Execute concurrent task '{}'",
+                                            task_data.name
+                                        ),
+                                        details,
+                                        node_id: Some(child_id as usize),
+                                    });
+                                }
+                            }
+                            NodeKind::Command(cmd_data) => {
+                                let expanded_cmd =
+                                    expand_env_vars_fn(&cmd_data.raw_command, &cmd_data.env);
+
+                                // Check for unresolved environment variables
+                                if expanded_cmd.contains("${")
+                                    || expanded_cmd.contains("$") && expanded_cmd.contains(" ")
+                                {
+                                    warnings.push("Concurrent command may have unresolved environment variables".to_string());
+                                }
+
+                                let mut details = std::collections::HashMap::new();
+                                details.insert("command".to_string(), expanded_cmd.clone());
+                                if let Some(cwd) = &cmd_data.working_dir {
+                                    details.insert("working_directory".to_string(), cwd.clone());
+                                }
+                                details
+                                    .insert("execution_mode".to_string(), "concurrent".to_string());
+
+                                simulated_actions.push(SimulatedAction {
+                                    action_type: "command".to_string(),
+                                    description: "Execute concurrent command".to_string(),
+                                    details,
+                                    node_id: Some(child_id as usize),
+                                });
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
+
+        simulate_node(
+            task_id as usize,
+            graph,
+            &mut visited,
+            &mut simulated_actions,
+            &mut dependencies,
+            &mut warnings,
+            &|cmd, env| self.expand_env_vars(cmd, env),
+            &|node| self.get_prefix_settings(node),
+        )?;
+
+        let mut metadata = std::collections::HashMap::new();
+        metadata.insert(
+            "total_actions".to_string(),
+            simulated_actions.len().to_string(),
+        );
+        metadata.insert(
+            "total_dependencies".to_string(),
+            dependencies.len().to_string(),
+        );
+
+        Ok(DryRunReport {
+            plugin_name: "ExecutionPlugin".to_string(),
+            simulated_actions,
+            dependencies,
+            warnings,
+            metadata,
+        })
     }
 }

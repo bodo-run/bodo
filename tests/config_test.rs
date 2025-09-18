@@ -4,6 +4,7 @@ use bodo::config::{BodoConfig, Dependency, TaskConfig, WatchConfig};
 use validator::Validate;
 use validator::ValidationErrors;
 
+#[allow(clippy::field_reassign_with_default)]
 #[test]
 fn test_validate_task_name_reserved() {
     let mut config = TaskConfig::default();
@@ -13,6 +14,7 @@ fn test_validate_task_name_reserved() {
     assert!(matches!(result, Err(ValidationErrors { .. })));
 }
 
+#[allow(clippy::field_reassign_with_default)]
 #[test]
 fn test_validate_task_name_valid() {
     let mut config = TaskConfig::default();
@@ -25,6 +27,7 @@ fn test_validate_task_name_valid() {
     );
 }
 
+#[allow(clippy::field_reassign_with_default)]
 #[test]
 fn test_validate_task_name_invalid_characters() {
     let mut config = TaskConfig::default();
@@ -46,6 +49,7 @@ fn test_validate_task_name_invalid_characters() {
     assert!(matches!(result, Err(ValidationErrors { .. })));
 }
 
+#[allow(clippy::field_reassign_with_default)]
 #[test]
 fn test_validate_task_name_invalid_length() {
     let mut config = TaskConfig::default();

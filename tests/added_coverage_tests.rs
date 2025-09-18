@@ -46,6 +46,7 @@ mod new_tests {
             task: None,
             subtask: None,
             args: vec![],
+            dry_run: false,
         };
         let name = get_task_name(&args, &manager).unwrap();
         assert_eq!(name, "default");
@@ -85,6 +86,7 @@ mod new_tests {
             task: Some("build".to_string()),
             subtask: None,
             args: vec![],
+            dry_run: false,
         };
         let name = get_task_name(&args, &manager).unwrap();
         assert_eq!(name, "build");
@@ -167,13 +169,11 @@ mod new_tests {
             working_dir: None,
             env: HashMap::new(),
             exec_paths: vec![],
-            arguments: vec![{
-                let mut arg: TaskArgument = std::default::Default::default();
-                arg.name = "GREETING".to_string();
-                arg.description = Some("Greeting msg".to_string());
-                arg.required = true;
-                arg.default = Some("Hello".to_string());
-                arg
+            arguments: vec![TaskArgument {
+                name: "GREETING".to_string(),
+                description: Some("Greeting msg".to_string()),
+                required: true,
+                default: Some("Hello".to_string())
             }],
             is_default: false,
             script_id: "".to_string(),
@@ -211,12 +211,11 @@ mod new_tests {
             working_dir: None,
             env: HashMap::new(),
             exec_paths: vec![],
-            arguments: vec![{
-                let mut arg: TaskArgument = std::default::Default::default();
-                arg.name = "NAME".to_string();
-                arg.required = true;
-                arg.default = None;
-                arg
+            arguments: vec![TaskArgument {
+                name: "NAME".to_string(),
+                description: None,
+                required: true,
+                default: None
             }],
             is_default: false,
             script_id: "".to_string(),

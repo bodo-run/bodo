@@ -6,7 +6,7 @@ fn test_create_watcher_test() {
     let (watcher, rx) = WatchPlugin::create_watcher_test().expect("Failed to create watcher");
     // Expect timeout since no events occur.
     match rx.recv_timeout(std::time::Duration::from_millis(100)) {
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => assert!(true),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => (),
         _ => panic!("Expected timeout when no events occur"),
     }
     drop(watcher);
@@ -21,8 +21,8 @@ fn test_find_base_directory() {
 
 #[test]
 fn test_find_base_directory_with_no_wildcard() {
-    // If no wildcard is present and the given pattern does not resolve to an existing directory,
-    // the implementation returns the parent (which for a single component yields ".").
+    // If no wildcard is present and the given pattern is an existing directory,
+    // the implementation returns that directory.
     let base = WatchPlugin::find_base_directory("src").unwrap();
     assert_eq!(base, PathBuf::from("src"));
 }

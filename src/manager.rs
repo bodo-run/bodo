@@ -2,7 +2,7 @@ use crate::{
     config::{BodoConfig, TaskConfig},
     errors::BodoError,
     graph::{Graph, NodeKind},
-    plugin::{PluginConfig, PluginManager},
+    plugin::{AggregatedDryRunReport, PluginConfig, PluginManager},
     script_loader::ScriptLoader,
     Result,
 };
@@ -144,6 +144,22 @@ impl GraphManager {
         }
 
         Ok(())
+    }
+
+    pub fn run_dry_run(&mut self, config: Option<PluginConfig>) -> Result<AggregatedDryRunReport> {
+        let config = config.unwrap_or_default();
+        self.plugin_manager.sort_plugins();
+
+        // Run on_init and on_graph_build to prepare the graph
+        for plugin in self.plugin_manager.get_plugins_mut() {
+            plugin.on_init(&config)?;
+        }
+        for plugin in self.plugin_manager.get_plugins_mut() {
+            plugin.on_graph_build(&mut self.graph)?;
+        }
+
+        // Run dry-run simulation
+        self.plugin_manager.dry_run(&self.graph, &config)
     }
 
     // Rest of the code remains unchanged.

@@ -40,6 +40,7 @@ fn test_get_task_name_with_subtask_exists() {
         task: Some("build".to_string()),
         subtask: Some("unit".to_string()),
         args: vec![],
+        dry_run: false,
     };
 
     let result = get_task_name(&args, &manager).unwrap();
@@ -81,6 +82,7 @@ fn test_get_task_name_with_subtask_not_found() {
         task: Some("build".to_string()),
         subtask: Some("unit".to_string()),
         args: vec![],
+        dry_run: false,
     };
 
     let result = get_task_name(&args, &manager);

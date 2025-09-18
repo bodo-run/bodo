@@ -39,6 +39,7 @@ fn test_all_public_functions() -> Result<()> {
         task: None,
         subtask: None,
         args: vec![],
+        dry_run: false,
     };
     let task_name = get_task_name(&args, &gm)?;
     // When no task argument is provided, default task should be chosen.
