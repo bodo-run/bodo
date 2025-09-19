@@ -67,7 +67,7 @@ pub enum SideEffect {
     ProcessSpawn(String),
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PluginConfig {
     pub fail_fast: bool,
     pub watch: bool,

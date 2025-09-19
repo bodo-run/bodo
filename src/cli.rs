@@ -26,6 +26,14 @@ pub struct Args {
     #[arg(long)]
     pub dry_run: bool,
 
+    /// Verbose output (can be used multiple times for more verbosity)
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    pub verbose: u8,
+
+    /// Quiet mode - suppress output
+    #[arg(short, long)]
+    pub quiet: bool,
+
     /// Task to run (defaults to default_task)
     pub task: Option<String>,
 

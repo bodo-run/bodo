@@ -2,6 +2,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
+use tracing::{info, debug, warn, instrument};
 
 use crate::{
     errors::{BodoError, Result},
@@ -80,9 +81,12 @@ impl ExecutionPlugin {
     }
 
     /// Perform dry-run analysis and output results
+    #[instrument(skip(self, graph), fields(task_id = %task_id))]
     fn perform_dry_run(&self, graph: &Graph, task_id: u64) -> Result<()> {
         let mut visited = std::collections::HashSet::new();
         let mut total_duration = Duration::new(0, 0);
+        
+        info!("Starting dry-run analysis for task_id: {}", task_id);
         
         println!("📋 Dry-run execution plan:");
         println!("┌─────────────────────────────────────────────────────────────┐");
@@ -93,9 +97,12 @@ impl ExecutionPlugin {
         println!("\n⏱️  Estimated total execution time: {:?}", total_duration);
         println!("✅ Dry-run completed successfully. No commands were executed.");
         
+        info!("Dry-run analysis completed, estimated duration: {:?}", total_duration);
+        
         Ok(())
     }
 
+    #[instrument(skip(self, graph), fields(node_id = %node_id, depth = %depth))]
     fn analyze_task_tree(
         &self,
         graph: &Graph,
@@ -105,6 +112,7 @@ impl ExecutionPlugin {
         depth: usize,
     ) -> Result<()> {
         if visited.contains(&node_id) {
+            debug!("Node {} already visited, skipping", node_id);
             return Ok(());
         }
         visited.insert(node_id);
@@ -114,6 +122,8 @@ impl ExecutionPlugin {
 
         match &node.kind {
             NodeKind::Task(task_data) => {
+                debug!("Analyzing task: {}", task_data.name);
+                
                 // Analyze dependencies first
                 for edge in &graph.edges {
                     if edge.to == node_id as u64 {
@@ -126,6 +136,8 @@ impl ExecutionPlugin {
                     let duration = self.estimate_duration(&expanded_cmd).unwrap_or(Duration::from_millis(100));
                     *total_duration += duration;
                     
+                    debug!("Task {} will execute: {} (estimated {:?})", task_data.name, expanded_cmd, duration);
+                    
                     println!("│ {}📝 Task: {} ({:?})", indent, task_data.name, duration);
                     println!("│ {}   Command: {}", indent, expanded_cmd);
                     
@@ -135,6 +147,7 @@ impl ExecutionPlugin {
                     
                     if !task_data.env.is_empty() {
                         println!("│ {}   Environment: {} vars", indent, task_data.env.len());
+                        debug!("Environment variables: {:?}", task_data.env);
                     }
                 }
             }
@@ -143,9 +156,12 @@ impl ExecutionPlugin {
                 let duration = self.estimate_duration(&expanded_cmd).unwrap_or(Duration::from_millis(100));
                 *total_duration += duration;
                 
+                debug!("Command will execute: {} (estimated {:?})", expanded_cmd, duration);
+                
                 println!("│ {}⚡ Command: {} ({:?})", indent, expanded_cmd, duration);
             }
             NodeKind::ConcurrentGroup(group_data) => {
+                info!("Processing concurrent group with {} children", group_data.child_nodes.len());
                 println!("│ {}🔀 Concurrent Group (fail_fast: {})", indent, group_data.fail_fast);
                 for &child_id in &group_data.child_nodes {
                     self.analyze_task_tree(graph, child_id as usize, visited, total_duration, depth + 1)?;
@@ -243,18 +259,21 @@ impl Plugin for ExecutionPlugin {
         self
     }
 
+    #[instrument(skip(self), fields(task_name = %self.task_name.as_ref().unwrap_or(&"unknown".to_string())))]
     fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
         self.dry_run = config.dry_run;
         
         if let Some(options) = &config.options {
             if let Some(task) = options.get("task").and_then(|v| v.as_str()) {
                 self.task_name = Some(task.to_string());
+                debug!("ExecutionPlugin initialized for task: {}", task);
             }
         }
         
         // Handle dry-run mode
         if config.dry_run {
             if let Some(task_name) = &self.task_name {
+                info!("🔍 Dry-run mode enabled for task: {}", task_name);
                 println!("🔍 Dry-run mode enabled for task: {}", task_name);
                 println!("Commands will be analyzed but not executed.\n");
             }

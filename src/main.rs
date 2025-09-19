@@ -13,17 +13,23 @@ use bodo::{
 };
 use clap::Parser;
 use std::{collections::HashMap, process::exit};
-use tracing::{error, info, Level};
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing::{error, Level};
+use tracing_subscriber::EnvFilter;
 
 fn main() {
     let args = Args::parse();
 
-    // Initialize tracing instead of env_logger
-    let level = if args.debug {
+    // Initialize structured logging based on verbosity
+    let level = if args.quiet {
+        Level::ERROR
+    } else if args.debug {
         Level::DEBUG
     } else {
-        Level::INFO
+        match args.verbose {
+            0 => Level::INFO,
+            1 => Level::DEBUG,
+            _ => Level::TRACE,
+        }
     };
 
     let env_filter = EnvFilter::try_from_default_env()
@@ -31,7 +37,10 @@ fn main() {
 
     tracing_subscriber::fmt()
         .with_env_filter(env_filter)
-        .with_target(false)
+        .with_target(true)
+        .with_thread_ids(args.verbose >= 2)
+        .with_file(args.verbose >= 2)
+        .with_line_number(args.verbose >= 2)
         .init();
 
     if let Err(e) = run(args) {
