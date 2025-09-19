@@ -8,7 +8,9 @@ fn test_create_watcher_test() {
     let (watcher, rx) = WatchPlugin::create_watcher_test().expect("Failed to create watcher");
     // Expect timeout since no events occur.
     match rx.recv_timeout(Duration::from_millis(100)) {
-        Err(RecvTimeoutError::Timeout) => assert!(true),
+        Err(RecvTimeoutError::Timeout) => {
+            // Expected timeout when no events occur
+        }
         _ => panic!("Expected timeout when no events occur"),
     }
     drop(watcher);
@@ -38,9 +40,11 @@ fn test_watch_plugin_on_init_with_watch() {
 
 #[test]
 fn test_watch_plugin_on_graph_build_with_auto_watch_and_env_var_set() {
-    let mut plugin = WatchPlugin::new(false, false);
-
+    // Save the original value and set BODO_NO_WATCH
+    let original_value = std::env::var("BODO_NO_WATCH").ok();
     std::env::set_var("BODO_NO_WATCH", "1");
+
+    let mut plugin = WatchPlugin::new(false, false);
 
     let mut graph = bodo::graph::Graph::new();
 
@@ -73,14 +77,26 @@ fn test_watch_plugin_on_graph_build_with_auto_watch_and_env_var_set() {
 
     assert!(!plugin.is_watch_mode());
 
-    std::env::remove_var("BODO_NO_WATCH");
+    // Restore original environment state
+    match original_value {
+        Some(value) => std::env::set_var("BODO_NO_WATCH", value),
+        None => std::env::remove_var("BODO_NO_WATCH"),
+    }
 }
 
 #[test]
 fn test_watch_plugin_on_graph_build_with_auto_watch() {
-    let mut plugin = WatchPlugin::new(false, false);
-
+    // Ensure clean state - set to empty string then remove
+    std::env::set_var("BODO_NO_WATCH", "");
     std::env::remove_var("BODO_NO_WATCH");
+
+    // Verify it's actually removed
+    let env_check = std::env::var("BODO_NO_WATCH");
+    if env_check.is_ok() {
+        panic!("Failed to remove BODO_NO_WATCH: {:?}", env_check);
+    }
+
+    let mut plugin = WatchPlugin::new(false, false);
 
     let mut graph = bodo::graph::Graph::new();
 

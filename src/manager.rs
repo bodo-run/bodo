@@ -7,6 +7,7 @@ use crate::{
     Result,
 };
 use std::collections::HashMap;
+use tracing::instrument;
 
 pub struct GraphManager {
     pub config: BodoConfig,
@@ -33,6 +34,7 @@ impl GraphManager {
         self.plugin_manager.register(plugin);
     }
 
+    #[instrument(skip(self, config))]
     pub fn build_graph(&mut self, config: BodoConfig) -> Result<&Graph> {
         self.config = config.clone();
         let mut loader = ScriptLoader::new();
@@ -95,6 +97,7 @@ impl GraphManager {
         Ok(())
     }
 
+    #[instrument(skip(self, config))]
     pub fn run_plugins(&mut self, config: Option<PluginConfig>) -> Result<()> {
         self.plugin_manager.sort_plugins();
         self.plugin_manager.run_lifecycle(&mut self.graph, config)?;

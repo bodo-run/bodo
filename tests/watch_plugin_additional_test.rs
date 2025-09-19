@@ -1,3 +1,4 @@
+#![allow(clippy::assertions_on_constants)]
 use bodo::plugins::watch_plugin::WatchPlugin;
 use std::path::PathBuf;
 
@@ -6,7 +7,9 @@ fn test_create_watcher_test() {
     let (watcher, rx) = WatchPlugin::create_watcher_test().expect("Failed to create watcher");
     // Expect timeout since no events occur.
     match rx.recv_timeout(std::time::Duration::from_millis(100)) {
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => assert!(true),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            // Expected timeout when no events occur
+        }
         _ => panic!("Expected timeout when no events occur"),
     }
     drop(watcher);

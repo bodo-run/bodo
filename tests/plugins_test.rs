@@ -1,5 +1,4 @@
 use colored::Colorize;
-use log::info;
 use std::{any::Any, cmp::Ordering, collections::HashMap};
 
 use bodo::{
@@ -115,24 +114,24 @@ impl Plugin for PrintListPlugin {
         for line in lines {
             if line.is_heading {
                 if printed_first_heading {
-                    info!("");
+                    tracing::info!("");
                 }
-                info!("{}", line.left_col);
+                tracing::info!("{}", line.left_col);
                 printed_first_heading = true;
                 continue;
             }
             if let Some(desc) = line.desc {
-                info!(
+                tracing::info!(
                     "  {:<width$} {}",
                     line.left_col,
                     desc.dimmed(),
                     width = padded_width
                 );
             } else {
-                info!("  {}", line.left_col);
+                tracing::info!("  {}", line.left_col);
             }
         }
-        info!("");
+        tracing::info!("");
         Ok(())
     }
 }

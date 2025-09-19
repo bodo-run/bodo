@@ -12,30 +12,47 @@ use bodo::{
     BodoError,
 };
 use clap::Parser;
-use log::{error, LevelFilter};
 use std::{collections::HashMap, process::exit};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 fn main() {
     let args = Args::parse();
 
-    if args.debug {
+    // Set log level based on flags
+    if args.verbose || args.debug {
         std::env::set_var("RUST_LOG", "bodo=debug");
+    } else if args.quiet {
+        std::env::set_var("RUST_LOG", "bodo=error");
     } else if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "bodo=info");
     }
-    env_logger::Builder::from_default_env()
-        .filter_module(
-            "bodo",
-            if args.debug {
-                LevelFilter::Debug
-            } else {
-                LevelFilter::Info
-            },
-        )
+
+    // Set up log file rotation
+    let file_appender = tracing_appender::rolling::daily("logs", "bodo.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    // Create layers
+    let console_layer = tracing_subscriber::fmt::layer()
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_thread_names(false);
+
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_writer(non_blocking)
+        .json()
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_thread_names(false);
+
+    // Initialize tracing subscriber with both layers
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .with(console_layer)
+        .with(file_layer)
         .init();
 
     if let Err(e) = run(args) {
-        error!("Error: {}", e);
+        tracing::error!("Error: {}", e);
         exit(1);
     }
 }

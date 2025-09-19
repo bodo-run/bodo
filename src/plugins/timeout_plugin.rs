@@ -1,5 +1,4 @@
 use humantime::parse_duration;
-use log::debug;
 use std::any::Any;
 
 use crate::{
@@ -45,9 +44,10 @@ impl Plugin for TimeoutPlugin {
                     let seconds = Self::parse_timeout(timeout_str)?;
                     node.metadata
                         .insert("timeout_seconds".to_string(), seconds.to_string());
-                    debug!(
+                    tracing::debug!(
                         "TimeoutPlugin: node {} has timeout of {} seconds",
-                        node.id, seconds
+                        node.id,
+                        seconds
                     );
                 }
             }

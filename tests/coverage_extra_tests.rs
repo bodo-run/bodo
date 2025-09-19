@@ -40,6 +40,8 @@ mod new_tests {
             watch: false,
             auto_watch: false,
             debug: false,
+            verbose: false,
+            quiet: false,
             task: None,
             subtask: None,
             args: vec![],

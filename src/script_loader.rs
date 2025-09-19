@@ -148,11 +148,7 @@ impl ScriptLoader {
         merged
     }
 
-    pub fn merge_exec_paths(
-        global: &Vec<String>,
-        script: &Vec<String>,
-        task: &Vec<String>,
-    ) -> Vec<String> {
+    pub fn merge_exec_paths(global: &[String], script: &[String], task: &[String]) -> Vec<String> {
         let mut seen = std::collections::HashSet::new();
         let mut result = Vec::new();
         for path in global.iter().chain(script).chain(task) {

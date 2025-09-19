@@ -1,6 +1,7 @@
 pub type NodeId = u64;
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum NodeKind {
     Task(TaskData),
     Command(CommandData),
@@ -93,55 +94,55 @@ impl Graph {
     }
 
     pub fn print_debug(&self) {
-        log::debug!("\nGraph Debug Info:");
-        log::debug!("Nodes: {}", self.nodes.len());
+        tracing::debug!("\nGraph Debug Info:");
+        tracing::debug!("Nodes: {}", self.nodes.len());
         for node in &self.nodes {
             match &node.kind {
                 NodeKind::Task(task) => {
-                    log::debug!("  Task[{}]: {}", node.id, task.name);
+                    tracing::debug!("  Task[{}]: {}", node.id, task.name);
                     if let Some(desc) = &task.description {
-                        log::debug!("    Description: {}", desc);
+                        tracing::debug!("    Description: {}", desc);
                     }
                     if let Some(cmd) = &task.command {
-                        log::debug!("    Command: {}", cmd);
+                        tracing::debug!("    Command: {}", cmd);
                     }
                     if let Some(dir) = &task.working_dir {
-                        log::debug!("    Working Dir: {}", dir);
+                        tracing::debug!("    Working Dir: {}", dir);
                     }
                     if !task.env.is_empty() {
-                        log::debug!("    Environment:");
+                        tracing::debug!("    Environment:");
                         for (k, v) in &task.env {
-                            log::debug!("      {}={}", k, v);
+                            tracing::debug!("      {}={}", k, v);
                         }
                     }
                 }
                 NodeKind::Command(cmd) => {
-                    log::debug!("  Command[{}]: {}", node.id, cmd.raw_command);
+                    tracing::debug!("  Command[{}]: {}", node.id, cmd.raw_command);
                 }
                 NodeKind::ConcurrentGroup(group) => {
-                    log::debug!("  ConcurrentGroup[{}]:", node.id);
-                    log::debug!("    Children: {:?}", group.child_nodes);
-                    log::debug!("    Fail Fast: {}", group.fail_fast);
+                    tracing::debug!("  ConcurrentGroup[{}]:", node.id);
+                    tracing::debug!("    Children: {:?}", group.child_nodes);
+                    tracing::debug!("    Fail Fast: {}", group.fail_fast);
                     if let Some(max) = group.max_concurrent {
-                        log::debug!("    Max Concurrent: {}", max);
+                        tracing::debug!("    Max Concurrent: {}", max);
                     }
                     if let Some(timeout) = group.timeout_secs {
-                        log::debug!("    Timeout: {}s", timeout);
+                        tracing::debug!("    Timeout: {}s", timeout);
                     }
                 }
             }
             if !node.metadata.is_empty() {
-                log::debug!("    Metadata:");
+                tracing::debug!("    Metadata:");
                 for (k, v) in &node.metadata {
-                    log::debug!("      {}={}", k, v);
+                    tracing::debug!("      {}={}", k, v);
                 }
             }
         }
-        log::debug!("\nEdges: {}", self.edges.len());
+        tracing::debug!("\nEdges: {}", self.edges.len());
         for edge in &self.edges {
-            log::debug!("  {} -> {}", edge.from, edge.to);
+            tracing::debug!("  {} -> {}", edge.from, edge.to);
         }
-        log::debug!("");
+        tracing::debug!("");
     }
 
     pub fn detect_cycle(&self) -> Option<Vec<NodeId>> {
