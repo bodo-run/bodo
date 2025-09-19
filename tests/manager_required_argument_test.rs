@@ -1,3 +1,4 @@
+#![allow(clippy::field_reassign_with_default)]
 use bodo::config::{BodoConfig, TaskArgument, TaskConfig};
 use bodo::errors::BodoError;
 use bodo::manager::GraphManager;

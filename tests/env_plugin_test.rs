@@ -1,3 +1,4 @@
+#![allow(clippy::unnecessary_get_then_check)]
 use std::collections::HashMap;
 
 use bodo::graph::{Graph, NodeKind, TaskData};

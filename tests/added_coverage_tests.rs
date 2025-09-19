@@ -1,3 +1,4 @@
+#![allow(clippy::field_reassign_with_default)]
 use bodo::cli::{get_task_name, Args};
 use bodo::config::{BodoConfig, TaskArgument};
 use bodo::errors::BodoError;
@@ -43,6 +44,8 @@ mod new_tests {
             watch: false,
             auto_watch: false,
             debug: false,
+            verbose: false,
+            quiet: false,
             dry_run: false,
             task: None,
             subtask: None,
@@ -83,6 +86,8 @@ mod new_tests {
             watch: false,
             auto_watch: false,
             debug: false,
+            verbose: false,
+            quiet: false,
             dry_run: false,
             task: Some("build".to_string()),
             subtask: None,

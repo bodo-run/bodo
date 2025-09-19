@@ -1,3 +1,4 @@
+#![allow(clippy::zombie_processes)]
 // tests/main_test.rs
 
 use std::process::{Command, Stdio};

@@ -22,6 +22,14 @@ pub struct Args {
     #[arg(long)]
     pub debug: bool,
 
+    /// Enable verbose logging
+    #[arg(short, long)]
+    pub verbose: bool,
+
+    /// Enable quiet mode (only errors)
+    #[arg(short, long)]
+    pub quiet: bool,
+
     /// Dry-run mode - show what would be executed without running commands
     #[arg(long)]
     pub dry_run: bool,

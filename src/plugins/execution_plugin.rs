@@ -10,6 +10,7 @@ use crate::{
     process::ProcessManager,
     sandbox::Sandbox,
 };
+use tracing::instrument;
 
 pub struct ExecutionPlugin {
     pub task_name: Option<String>,
@@ -317,6 +318,7 @@ impl Plugin for ExecutionPlugin {
         Ok(())
     }
 
+    #[instrument(skip(self, graph))]
     fn on_after_run(&mut self, graph: &mut Graph) -> Result<()> {
         let task_name = if let Some(name) = &self.task_name {
             name.clone()
@@ -498,6 +500,7 @@ impl ExecutionPlugin {
         let mut visited = std::collections::HashSet::new();
         let mut pm = ProcessManager::new(true);
 
+        #[instrument(skip(graph, pm, visited, expand_env_vars_fn, get_prefix_settings_fn))]
         #[allow(clippy::type_complexity)]
         fn run_node(
             node_id: usize,

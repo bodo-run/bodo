@@ -6,7 +6,6 @@ use crate::{
     Result,
 };
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use log::{debug, error, warn};
 use notify::{Config as NotifyConfig, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
     any::Any,
@@ -57,7 +56,7 @@ impl WatchPlugin {
     // Here we'll keep it simpler and just store a flag we can read in on_after_run.
 
     fn create_watcher() -> Result<(RecommendedWatcher, Receiver<notify::Result<Event>>)> {
-        debug!("Creating file watcher with 1s poll interval");
+        tracing::debug!("Creating file watcher with 1s poll interval");
         let (tx, rx) = mpsc::channel();
         let watcher = RecommendedWatcher::new(
             move |res| {
@@ -84,7 +83,7 @@ impl WatchPlugin {
         let cwd = match std::env::current_dir() {
             Ok(path) => path,
             Err(e) => {
-                warn!("Failed to get current directory: {}", e);
+                tracing::warn!("Failed to get current directory: {}", e);
                 return vec![];
             }
         };
@@ -93,7 +92,7 @@ impl WatchPlugin {
             let changed_abs = match changed_path.canonicalize() {
                 Ok(p) => p,
                 Err(e) => {
-                    warn!(
+                    tracing::warn!(
                         "Failed to canonicalize path {}: {}",
                         changed_path.display(),
                         e
@@ -106,7 +105,7 @@ impl WatchPlugin {
                 let watch_abs = match watch_dir.canonicalize() {
                     Ok(p) => p,
                     Err(e) => {
-                        warn!(
+                        tracing::warn!(
                             "Failed to canonicalize watch dir {}: {}",
                             watch_dir.display(),
                             e
@@ -218,10 +217,15 @@ impl Plugin for WatchPlugin {
                         auto_watch: true, ..
                     }) = &task_data.watch
                     {
-                        // Found auto_watch == true, enable watch mode only if BODO_NO_WATCH is not set
-                        if std::env::var("BODO_NO_WATCH").is_err() {
-                            self.watch_mode = true;
-                            break;
+                        // Found auto_watch == true, enable watch mode only if BODO_NO_WATCH is not set to "1"
+                        match std::env::var("BODO_NO_WATCH") {
+                            Ok(ref v) if v == "1" => {
+                                // BODO_NO_WATCH is set to "1", do not enable watch mode
+                            }
+                            _ => {
+                                self.watch_mode = true;
+                                break;
+                            }
                         }
                     }
                 }
@@ -313,7 +317,7 @@ impl Plugin for WatchPlugin {
         for d in &all_dirs {
             if d.is_dir() {
                 if let Err(e) = watcher.watch(d, RecursiveMode::Recursive) {
-                    warn!("WatchPlugin: Failed to watch '{}': {}", d.display(), e);
+                    tracing::warn!("WatchPlugin: Failed to watch '{}': {}", d.display(), e);
                 }
             }
         }
@@ -327,14 +331,14 @@ impl Plugin for WatchPlugin {
             let event = match rx.recv() {
                 Ok(e) => e,
                 Err(_) => {
-                    debug!("WatchPlugin: Watcher channel closed. Exiting loop.");
+                    tracing::debug!("WatchPlugin: Watcher channel closed. Exiting loop.");
                     break;
                 }
             };
             let event = match event {
                 Ok(ev) => ev,
                 Err(err) => {
-                    warn!("WatchPlugin: Watch error: {}", err);
+                    tracing::warn!("WatchPlugin: Watch error: {}", err);
                     continue;
                 }
             };
@@ -342,7 +346,7 @@ impl Plugin for WatchPlugin {
             let now = Instant::now();
             let since_last = now.duration_since(last_run);
             if since_last < Duration::from_millis(max_debounce) {
-                debug!("Debouncing event (too soon after last run)");
+                tracing::debug!("Debouncing event (too soon after last run)");
                 continue;
             }
             last_run = now;
@@ -402,9 +406,11 @@ impl Plugin for WatchPlugin {
                         options: Some(options),
                     };
                     if let Err(e) = new_manager.run_plugins(Some(plugin_config)) {
-                        error!("WatchPlugin: re-run failed: {}", e);
+                        tracing::error!("WatchPlugin: re-run failed: {}", e);
                         if self.stop_on_fail {
-                            warn!("WatchPlugin: Stopping watch loop due to re-run failure");
+                            tracing::warn!(
+                                "WatchPlugin: Stopping watch loop due to re-run failure"
+                            );
                             return Ok(());
                         }
                     }

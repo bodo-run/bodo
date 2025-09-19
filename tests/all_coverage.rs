@@ -36,6 +36,8 @@ fn test_all_public_functions() -> Result<()> {
         watch: false,
         auto_watch: false,
         debug: false,
+        verbose: false,
+        quiet: false,
         dry_run: false,
         task: None,
         subtask: None,

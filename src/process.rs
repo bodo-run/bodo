@@ -1,4 +1,3 @@
-use log::{debug, error, info, warn};
 use std::{
     io::{BufRead, BufReader},
     process::{Child, Command, Stdio},
@@ -24,7 +23,7 @@ pub struct ProcessManager {
 
 impl ProcessManager {
     pub fn new(fail_fast: bool) -> Self {
-        debug!("Creating ProcessManager with fail_fast={}", fail_fast);
+        tracing::debug!("Creating ProcessManager with fail_fast={}", fail_fast);
         Self {
             children: Vec::new(),
             fail_fast,
@@ -40,9 +39,13 @@ impl ProcessManager {
         prefix_color: Option<String>,
         working_dir: Option<&str>,
     ) -> std::io::Result<()> {
-        debug!(
+        tracing::debug!(
             "Spawning command '{}' (prefix={}, label={:?}, color={:?}, working_dir={:?})",
-            cmd, prefix_enabled, prefix_label, prefix_color, working_dir
+            cmd,
+            prefix_enabled,
+            prefix_label,
+            prefix_color,
+            working_dir
         );
 
         let mut command = if cfg!(target_os = "windows") {
@@ -78,7 +81,7 @@ impl ProcessManager {
                 for line in reader.lines().map_while(Result::ok) {
                     if prefix_enabled {
                         let colored_line = color_line(&label, &color, &line, false);
-                        info!("{}", colored_line);
+                        tracing::info!("{}", colored_line);
                     } else {
                         println!("{}", line);
                     }
@@ -94,7 +97,7 @@ impl ProcessManager {
                 for line in reader.lines().map_while(Result::ok) {
                     if prefix_enabled {
                         let colored_line = color_line(&label, &color, &line, true);
-                        error!("{}", colored_line);
+                        tracing::error!("{}", colored_line);
                     } else {
                         eprintln!("{}", line);
                     }
@@ -113,7 +116,7 @@ impl ProcessManager {
     }
 
     pub fn run_concurrently(&mut self) -> std::io::Result<()> {
-        debug!("Running {} processes concurrently", self.children.len());
+        tracing::debug!("Running {} processes concurrently", self.children.len());
 
         let children = std::mem::take(&mut self.children);
         let len = children.len();
@@ -137,7 +140,7 @@ impl ProcessManager {
                 // Try to wait with a timeout to allow checking the termination flag
                 loop {
                     if should_terminate.load(Ordering::SeqCst) {
-                        debug!("Process '{}' received termination signal", name);
+                        tracing::debug!("Process '{}' received termination signal", name);
                         let _ = child_info.child.kill();
                         break Ok::<(String, i32, bool), std::io::Error>((name, -1, fail_fast));
                     }
@@ -195,7 +198,7 @@ impl ProcessManager {
     }
 
     pub fn kill_all(&mut self) -> Result<(), BodoError> {
-        warn!("kill_all called, best effort kill all children...");
+        tracing::warn!("kill_all called, best effort kill all children...");
         let mut children = std::mem::take(&mut self.children);
         for child in &mut children {
             let _ = child.child.kill();
@@ -221,7 +224,7 @@ pub fn color_line(
 }
 
 pub fn parse_color(c: &str) -> Option<Color> {
-    debug!("Parsing color: {}", c);
+    tracing::debug!("Parsing color: {}", c);
     match c.to_lowercase().as_str() {
         "black" => Some(Color::Black),
         "red" => Some(Color::Red),
@@ -240,7 +243,7 @@ pub fn parse_color(c: &str) -> Option<Color> {
         "brightcyan" => Some(Color::BrightCyan),
         "brightwhite" => Some(Color::BrightWhite),
         _ => {
-            debug!("Unknown color: {}", c);
+            tracing::debug!("Unknown color: {}", c);
             None
         }
     }

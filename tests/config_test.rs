@@ -1,3 +1,4 @@
+#![allow(clippy::field_reassign_with_default)]
 // tests/config_test.rs
 
 use bodo::config::{BodoConfig, Dependency, TaskConfig, WatchConfig};
