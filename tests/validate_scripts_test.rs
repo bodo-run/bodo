@@ -14,7 +14,7 @@ fn test_validate_all_scripts_yaml() {
     let mut count = 0;
     for entry in WalkDir::new(scripts_dir) {
         let entry = entry.expect("Failed to read directory entry");
-        if entry.path().is_file() && entry.path().extension().map_or(false, |ext| ext == "yaml") {
+        if entry.path().is_file() && entry.path().extension().is_some_and(|ext| ext == "yaml") {
             count += 1;
             let content = fs::read_to_string(entry.path()).expect("Failed to read YAML file");
             let _doc: Value = serde_yaml::from_str(&content)

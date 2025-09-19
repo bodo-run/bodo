@@ -206,7 +206,7 @@ fn test_concurrent_plugin_with_commands() {
 
     assert_eq!(group_nodes.len(), 1, "Expected one concurrent group node");
 
-    let (group_id, group_data) = &group_nodes[0];
+    let (_group_id, group_data) = &group_nodes[0];
     assert_eq!(group_data.child_nodes.len(), 2);
 
     // The child nodes should be Command nodes

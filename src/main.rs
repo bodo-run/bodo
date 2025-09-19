@@ -107,6 +107,7 @@ fn run(args: Args) -> Result<(), BodoError> {
         fail_fast: true,
         watch: watch_mode,
         list: false,
+        dry_run: args.dry_run,
         options: Some(options),
     };
 

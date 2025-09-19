@@ -20,8 +20,10 @@ tasks:
     fs::write(&script_path, config_yaml).expect("Failed to write script file");
 
     let mut loader = ScriptLoader::new();
-    let mut config = BodoConfig::default();
-    config.root_script = Some(script_path.to_str().unwrap().to_string());
+    let config = BodoConfig {
+        root_script: Some(script_path.to_str().unwrap().to_string()),
+        ..Default::default()
+    };
     let graph = loader.build_graph(config).expect("Failed to build graph");
     // Since root_script was provided, tasks are registered with the key: "<root_script> <task_name>"
     let expected_key = format!("{} {}", script_path.to_str().unwrap(), "test_task");
@@ -87,10 +89,12 @@ tasks:
     fs::write(&script2_path, script2_content).unwrap();
 
     let mut loader = ScriptLoader::new();
-    let mut config = BodoConfig::default();
     // Instead of using scripts_dirs (which is not implemented), we simulate loading one file.
     // We set root_script to script1_path.
-    config.root_script = Some(script1_path.to_str().unwrap().to_string());
+    let config = BodoConfig {
+        root_script: Some(script1_path.to_str().unwrap().to_string()),
+        ..Default::default()
+    };
     let graph = loader
         .build_graph(config)
         .expect("Failed to build graph from root_script");

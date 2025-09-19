@@ -29,5 +29,5 @@ fn test_timeout_plugin_no_timeout() {
     assert!(result.is_ok());
     // Timeout metadata should not be present.
     let node = &graph.nodes[task_id as usize];
-    assert!(node.metadata.get("timeout_seconds").is_none());
+    assert!(!node.metadata.contains_key("timeout_seconds"));
 }

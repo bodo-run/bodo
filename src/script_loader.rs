@@ -149,7 +149,7 @@ impl ScriptLoader {
     }
 
     pub fn merge_exec_paths(
-        global: &Vec<String>,
+        global: &[String],
         script: &Vec<String>,
         task: &Vec<String>,
     ) -> Vec<String> {

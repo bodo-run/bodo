@@ -174,10 +174,10 @@ impl ProcessManager {
             match handle.join().unwrap() {
                 Ok((name, code, _)) => {
                     if code != 0 {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("Process '{}' failed with exit code {}", name, code),
-                        ));
+                        return Err(std::io::Error::other(format!(
+                            "Process '{}' failed with exit code {}",
+                            name, code
+                        )));
                     }
                 }
                 Err(e) => {
