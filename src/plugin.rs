@@ -1,5 +1,6 @@
 use crate::graph::Graph;
 use crate::Result;
+use crate::errors::RecoveryStrategy;
 use std::any::Any;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -57,6 +58,34 @@ pub trait DryRunnable {
     fn dry_run(&self, context: &ExecutionContext) -> Result<DryRunReport>;
 }
 
+/// Trait for plugins that support error recovery strategies
+///
+/// Plugins implementing this trait can define custom recovery behaviors
+/// for different types of errors and operations.
+pub trait Recoverable {
+    /// Get the recovery strategy for this plugin
+    fn recovery_strategy(&self) -> RecoveryStrategy {
+        // Default strategy: retry up to 3 times with 100ms initial backoff
+        RecoveryStrategy::Retry {
+            max_attempts: 3,
+            backoff: Duration::from_millis(100),
+        }
+    }
+
+    /// Handle recovery for a specific error
+    /// Returns true if recovery was successful and operation should be retried
+    fn handle_recovery(&mut self, error: &crate::errors::BodoError) -> Result<bool> {
+        // Default implementation: let the recovery executor handle it
+        Ok(error.is_retryable())
+    }
+
+    /// Create a checkpoint before executing a critical operation
+    fn create_checkpoint(&self, context: &ExecutionContext) -> Result<Option<crate::errors::TaskCheckpoint>> {
+        // Default implementation: no checkpointing
+        Ok(None)
+    }
+}
+
 /// Synchronous plugin trait (no `async` anymore).
 pub trait Plugin: Send {
     fn name(&self) -> &'static str;
@@ -95,6 +124,12 @@ pub struct PluginConfig {
     pub list: bool,
     /// Whether to run in dry-run mode (simulation without side effects)
     pub dry_run: bool,
+    /// Enable error recovery mechanisms
+    pub enable_recovery: bool,
+    /// Maximum retry attempts for all operations
+    pub max_retry_attempts: Option<u32>,
+    /// Initial backoff duration for retries
+    pub initial_retry_backoff: Option<Duration>,
     /// Additional plugin-specific options
     pub options: Option<serde_json::Map<String, serde_json::Value>>,
 }

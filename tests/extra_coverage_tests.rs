@@ -94,7 +94,7 @@ mod new_tests {
 
     #[test]
     fn test_bodo_error_variants_display() {
-        let io_err = BodoError::IoError(std::io::Error::new(std::io::ErrorKind::Other, "io error"));
+        let io_err = BodoError::IoError(std::io::Error::other("io error"));
         assert_eq!(format!("{}", io_err), "io error");
 
         let watcher_err = BodoError::WatcherError("watcher error".to_string());
