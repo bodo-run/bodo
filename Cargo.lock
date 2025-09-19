@@ -151,6 +151,7 @@ dependencies = [
  "clap",
  "colored",
  "env_logger",
+ "fastrand",
  "globset",
  "humantime",
  "log",

@@ -1,8 +1,9 @@
 //! Error recovery mechanisms including retry logic, rollback, and recovery strategies
 
-use crate::errors::{BodoError, ErrorCategory, RecoveryStrategy, TaskCheckpoint, CheckpointState};
+use crate::errors::{BodoError, RecoveryStrategy, TaskCheckpoint, CheckpointState};
+use crate::metrics;
 use crate::Result;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -50,11 +51,28 @@ impl RetryMechanism {
     {
         let mut last_error = None;
         let mut backoff = self.config.initial_backoff;
+        let start_time = SystemTime::now();
 
         for attempt in 1..=self.config.max_attempts {
+            metrics::record_retry_attempt();
+            
             match operation() {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    if attempt > 1 {
+                        // This was a recovery success
+                        if let Ok(elapsed) = start_time.elapsed() {
+                            metrics::record_recovery_success(elapsed);
+                        }
+                        tracing::info!(
+                            attempt = attempt,
+                            "Operation succeeded after retry"
+                        );
+                    }
+                    return Ok(result);
+                }
                 Err(error) => {
+                    metrics::record_error(&error);
+                    
                     tracing::warn!(
                         attempt = attempt,
                         max_attempts = self.config.max_attempts,
@@ -65,6 +83,9 @@ impl RetryMechanism {
                     // Don't retry permanent errors
                     if !error.is_retryable() {
                         tracing::info!("Error is not retryable, aborting retry attempts");
+                        if let Ok(elapsed) = start_time.elapsed() {
+                            metrics::record_recovery_failure(elapsed);
+                        }
                         return Err(error);
                     }
 
@@ -92,6 +113,10 @@ impl RetryMechanism {
         }
 
         // All retry attempts exhausted
+        if let Ok(elapsed) = start_time.elapsed() {
+            metrics::record_recovery_failure(elapsed);
+        }
+        
         let last_error = last_error.unwrap(); // Safe because we always have at least one attempt
         Err(BodoError::RetryExhausted {
             attempts: self.config.max_attempts,
@@ -107,7 +132,7 @@ impl RetryMechanism {
 
         // Add up to 25% jitter to avoid thundering herd
         let jitter_range = base_duration.as_millis() / 4;
-        let jitter = fastrand::u64(0..=jitter_range);
+        let jitter = fastrand::u64(0..=(jitter_range as u64));
         
         Duration::from_millis(base_duration.as_millis() as u64 + jitter)
     }
@@ -166,7 +191,7 @@ impl CheckpointManager {
         // Restore working directory
         std::env::set_current_dir(&checkpoint.state.working_directory)
             .map_err(|e| BodoError::RollbackFailed {
-                checkpoint: checkpoint.clone(),
+                checkpoint: Box::new(checkpoint.clone()),
                 cause: format!("Failed to restore working directory: {}", e),
             })?;
 
@@ -196,15 +221,14 @@ impl Default for CheckpointManager {
 }
 
 /// Recovery strategy executor
+#[derive(Default)]
 pub struct RecoveryExecutor {
-    retry_mechanism: RetryMechanism,
     checkpoint_manager: CheckpointManager,
 }
 
 impl RecoveryExecutor {
-    pub fn new(retry_config: RetryConfig) -> Self {
+    pub fn new(_retry_config: RetryConfig) -> Self {
         Self {
-            retry_mechanism: RetryMechanism::new(retry_config),
             checkpoint_manager: CheckpointManager::new(),
         }
     }
@@ -213,7 +237,7 @@ impl RecoveryExecutor {
     pub fn execute_strategy<F, T>(
         &mut self,
         strategy: &RecoveryStrategy,
-        operation: F,
+        mut operation: F,
     ) -> Result<T>
     where
         F: FnMut() -> Result<T>,
@@ -284,15 +308,12 @@ impl RecoveryExecutor {
     }
 }
 
-impl Default for RecoveryExecutor {
-    fn default() -> Self {
-        Self::new(RetryConfig::default())
-    }
-}
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::errors::ErrorCategory;
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
 
@@ -320,7 +341,7 @@ mod tests {
     fn test_retry_mechanism_permanent_error() {
         let retry_mechanism = RetryMechanism::new(RetryConfig::default());
         
-        let result = retry_mechanism.execute_with_retry(|| {
+        let result: Result<String> = retry_mechanism.execute_with_retry(|| {
             Err(BodoError::ValidationError("permanent error".to_string()))
         });
 
@@ -341,7 +362,7 @@ mod tests {
         };
         let retry_mechanism = RetryMechanism::new(config);
 
-        let result = retry_mechanism.execute_with_retry(|| {
+        let result: Result<String> = retry_mechanism.execute_with_retry(|| {
             Err(BodoError::WatcherError("always fails".to_string()))
         });
 

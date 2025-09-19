@@ -399,6 +399,9 @@ impl Plugin for WatchPlugin {
                         watch: true,
                         list: false,
                         dry_run: false,
+                        enable_recovery: false,
+                        max_retry_attempts: None,
+                        initial_retry_backoff: None,
                         options: Some(options),
                     };
                     if let Err(e) = new_manager.run_plugins(Some(plugin_config)) {

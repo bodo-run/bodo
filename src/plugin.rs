@@ -1,6 +1,7 @@
 use crate::graph::Graph;
 use crate::Result;
 use crate::errors::RecoveryStrategy;
+use crate::recovery::{RecoveryExecutor, RetryConfig};
 use std::any::Any;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -80,7 +81,7 @@ pub trait Recoverable {
     }
 
     /// Create a checkpoint before executing a critical operation
-    fn create_checkpoint(&self, context: &ExecutionContext) -> Result<Option<crate::errors::TaskCheckpoint>> {
+    fn create_checkpoint(&self, _context: &ExecutionContext) -> Result<Option<crate::errors::TaskCheckpoint>> {
         // Default implementation: no checkpointing
         Ok(None)
     }
@@ -136,12 +137,14 @@ pub struct PluginConfig {
 
 pub struct PluginManager {
     plugins: Vec<Box<dyn Plugin>>,
+    recovery_executor: RecoveryExecutor,
 }
 
 impl PluginManager {
     pub fn new() -> Self {
         Self {
             plugins: Vec::new(),
+            recovery_executor: RecoveryExecutor::default(),
         }
     }
 
@@ -159,23 +162,85 @@ impl PluginManager {
         &self.plugins
     }
 
-    /// Runs the "lifecycle" in a blocking (synchronous) manner.
+    /// Runs the "lifecycle" in a blocking (synchronous) manner with recovery support.
     pub fn run_lifecycle(&mut self, graph: &mut Graph, config: Option<PluginConfig>) -> Result<()> {
         let config = config.unwrap_or_default();
         self.sort_plugins();
 
-        // on_init
-        for plugin in &mut self.plugins {
-            plugin.on_init(&config)?;
+        // Configure recovery executor if recovery is enabled
+        if config.enable_recovery {
+            let retry_config = RetryConfig {
+                max_attempts: config.max_retry_attempts.unwrap_or(3),
+                initial_backoff: config.initial_retry_backoff.unwrap_or(Duration::from_millis(100)),
+                ..Default::default()
+            };
+            self.recovery_executor = RecoveryExecutor::new(retry_config);
+            tracing::info!("Recovery mechanisms enabled for plugin lifecycle");
         }
-        // on_graph_build
+
+        // on_init with recovery
         for plugin in &mut self.plugins {
-            plugin.on_graph_build(graph)?;
+            if config.enable_recovery {
+                let plugin_name = plugin.name();
+                self.recovery_executor.execute_strategy(
+                    &RecoveryStrategy::Retry {
+                        max_attempts: config.max_retry_attempts.unwrap_or(3),
+                        backoff: config.initial_retry_backoff.unwrap_or(Duration::from_millis(100)),
+                    },
+                    || {
+                        tracing::debug!(plugin = plugin_name, "Running on_init with recovery");
+                        plugin.on_init(&config)
+                    },
+                )?;
+            } else {
+                plugin.on_init(&config)?;
+            }
         }
-        // on_after_run
+
+        // on_graph_build with recovery
         for plugin in &mut self.plugins {
-            plugin.on_after_run(graph)?;
+            if config.enable_recovery {
+                let plugin_name = plugin.name();
+                self.recovery_executor.execute_strategy(
+                    &RecoveryStrategy::Retry {
+                        max_attempts: config.max_retry_attempts.unwrap_or(3),
+                        backoff: config.initial_retry_backoff.unwrap_or(Duration::from_millis(100)),
+                    },
+                    || {
+                        tracing::debug!(plugin = plugin_name, "Running on_graph_build with recovery");
+                        plugin.on_graph_build(graph)
+                    },
+                )?;
+            } else {
+                plugin.on_graph_build(graph)?;
+            }
         }
+
+        // on_after_run with recovery
+        for plugin in &mut self.plugins {
+            if config.enable_recovery {
+                let plugin_name = plugin.name();
+                self.recovery_executor.execute_strategy(
+                    &RecoveryStrategy::Retry {
+                        max_attempts: config.max_retry_attempts.unwrap_or(3),
+                        backoff: config.initial_retry_backoff.unwrap_or(Duration::from_millis(100)),
+                    },
+                    || {
+                        tracing::debug!(plugin = plugin_name, "Running on_after_run with recovery");
+                        plugin.on_after_run(graph)
+                    },
+                )?;
+            } else {
+                plugin.on_after_run(graph)?;
+            }
+        }
+
+        // Log metrics summary if recovery was used
+        if config.enable_recovery {
+            let summary = crate::metrics::get_metrics_summary();
+            tracing::info!(metrics_summary = %summary, "Plugin lifecycle completed with recovery");
+        }
+
         Ok(())
     }
 }

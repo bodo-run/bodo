@@ -4,6 +4,7 @@ pub mod designer;
 pub mod errors;
 pub mod graph;
 pub mod manager;
+pub mod metrics; // Error metrics and monitoring
 pub mod plugin;
 pub mod plugins;
 pub mod process;

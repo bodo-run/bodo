@@ -4,16 +4,18 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::{
-    errors::{BodoError, Result},
+    errors::{BodoError, Result, RecoveryStrategy, TaskCheckpoint, CheckpointState},
     graph::{Graph, NodeKind},
-    plugin::{DryRunReport, DryRunnable, ExecutionContext, Plugin, PluginConfig, SideEffect},
+    plugin::{DryRunReport, DryRunnable, ExecutionContext, Plugin, PluginConfig, SideEffect, Recoverable},
     process::ProcessManager,
+    recovery::RecoveryExecutor,
     sandbox::Sandbox,
 };
 
 pub struct ExecutionPlugin {
     pub task_name: Option<String>,
     pub dry_run: bool,
+    pub recovery_executor: RecoveryExecutor,
 }
 
 impl Default for ExecutionPlugin {
@@ -27,6 +29,7 @@ impl ExecutionPlugin {
         Self {
             task_name: None,
             dry_run: false,
+            recovery_executor: RecoveryExecutor::default(),
         }
     }
 
@@ -613,5 +616,61 @@ impl ExecutionPlugin {
         pm.run_concurrently()?;
 
         Ok(())
+    }
+}
+
+impl Recoverable for ExecutionPlugin {
+    fn recovery_strategy(&self) -> RecoveryStrategy {
+        // For execution operations, use retry with moderate settings
+        RecoveryStrategy::Retry {
+            max_attempts: 3,
+            backoff: Duration::from_millis(500),
+        }
+    }
+
+    fn handle_recovery(&mut self, error: &BodoError) -> Result<bool> {
+        tracing::warn!(
+            error = %error,
+            "ExecutionPlugin handling recovery for error"
+        );
+
+        // Log the error for metrics collection
+        match error.categorize() {
+            crate::errors::ErrorCategory::Transient => {
+                tracing::info!("Error is transient, will retry");
+                Ok(true)
+            }
+            crate::errors::ErrorCategory::Permanent => {
+                tracing::error!("Error is permanent, will not retry");
+                Ok(false)
+            }
+            crate::errors::ErrorCategory::Unknown => {
+                tracing::warn!("Error category unknown, will try once more");
+                Ok(true)
+            }
+        }
+    }
+
+    fn create_checkpoint(&self, context: &ExecutionContext) -> Result<Option<TaskCheckpoint>> {
+        if let Some(task_name) = &self.task_name {
+            let checkpoint = TaskCheckpoint {
+                task_id: task_name.clone(),
+                timestamp: std::time::SystemTime::now(),
+                state: CheckpointState {
+                    environment: context.environment.clone(),
+                    working_directory: context.working_directory.clone(),
+                    metadata: std::collections::HashMap::new(),
+                },
+            };
+
+            tracing::debug!(
+                task_id = %task_name,
+                "Created checkpoint for execution plugin"
+            );
+
+            Ok(Some(checkpoint))
+        } else {
+            Ok(None)
+        }
     }
 }

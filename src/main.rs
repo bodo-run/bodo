@@ -108,6 +108,9 @@ fn run(args: Args) -> Result<(), BodoError> {
         watch: watch_mode,
         list: false,
         dry_run: args.dry_run,
+        enable_recovery: true, // Enable recovery by default
+        max_retry_attempts: None, // Use default values
+        initial_retry_backoff: None,
         options: Some(options),
     };
 

@@ -20,6 +20,9 @@ fn test_plugin_config_custom() {
         watch: true,
         list: true,
         dry_run: false,
+        enable_recovery: false,
+        max_retry_attempts: None,
+        initial_retry_backoff: None,
         options: Some(options.as_object().unwrap().clone()),
     };
     assert!(config.fail_fast);

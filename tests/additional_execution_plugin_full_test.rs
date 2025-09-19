@@ -66,6 +66,7 @@ fn test_execution_plugin_run_node_chain() -> Result<()> {
         watch: false,
         list: false,
         dry_run: false,
+        enable_recovery: false,        max_retry_attempts: None,        initial_retry_backoff: None,
         options: Some(json!({"task": "A"}).as_object().unwrap().clone()),
     };
     // Import Plugin trait for method resolution.
@@ -91,6 +92,7 @@ fn test_execution_plugin_on_init() -> Result<()> {
         watch: false,
         list: false,
         dry_run: false,
+        enable_recovery: false,        max_retry_attempts: None,        initial_retry_backoff: None,
         options: Some(options),
     };
     plugin.on_init(&config).unwrap();

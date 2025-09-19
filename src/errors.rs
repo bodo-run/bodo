@@ -2,7 +2,7 @@ use std::{error::Error, fmt, io, time::Duration};
 use validator::{ValidationError, ValidationErrors};
 
 /// Error categorization for recovery strategies
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorCategory {
     /// Transient errors that may resolve with retry
     Transient,
@@ -60,7 +60,7 @@ pub enum BodoError {
     /// Error during retry operations
     RetryExhausted { attempts: u32, last_error: Box<BodoError> },
     /// Error during rollback operations  
-    RollbackFailed { checkpoint: TaskCheckpoint, cause: String },
+    RollbackFailed { checkpoint: Box<TaskCheckpoint>, cause: String },
     /// Recovery strategy error
     RecoveryFailed { strategy: String, cause: String },
 }

@@ -22,6 +22,7 @@ fn test_execution_plugin_dry_run_mode() {
         watch: false,
         list: false,
         dry_run: true,
+        enable_recovery: false,        max_retry_attempts: None,        initial_retry_backoff: None,
         options: Some({
             let mut options = serde_json::Map::new();
             options.insert(
@@ -49,6 +50,7 @@ fn test_execution_plugin_normal_mode() {
         watch: false,
         list: false,
         dry_run: false,
+        enable_recovery: false,        max_retry_attempts: None,        initial_retry_backoff: None,
         options: Some({
             let mut options = serde_json::Map::new();
             options.insert(

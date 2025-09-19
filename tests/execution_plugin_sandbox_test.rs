@@ -13,6 +13,7 @@ fn test_execution_plugin_sandbox_integration() {
         watch: false,
         list: false,
         dry_run: true,
+        enable_recovery: false,        max_retry_attempts: None,        initial_retry_backoff: None,
         options: Some({
             let mut options = serde_json::Map::new();
             options.insert(
