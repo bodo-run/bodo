@@ -1,5 +1,51 @@
-use std::{error::Error, fmt, io};
+use std::{error::Error, fmt, io, time::Duration};
 use validator::{ValidationError, ValidationErrors};
+
+/// Error categorization for recovery strategies
+#[derive(Debug, Clone, PartialEq)]
+pub enum ErrorCategory {
+    /// Transient errors that may resolve with retry
+    Transient,
+    /// Permanent errors that won't resolve with retry
+    Permanent, 
+    /// Unknown error category
+    Unknown,
+}
+
+/// Recovery strategy for error handling
+#[derive(Debug, Clone)]
+pub enum RecoveryStrategy {
+    /// Retry with exponential backoff
+    Retry { max_attempts: u32, backoff: Duration },
+    /// Rollback to previous checkpoint
+    Rollback { checkpoint: TaskCheckpoint },
+    /// Continue execution, skipping failed operations
+    Continue { skip_failed: bool },
+    /// Abort execution immediately  
+    Abort,
+}
+
+/// Checkpoint for rollback functionality
+#[derive(Debug, Clone)]
+pub struct TaskCheckpoint {
+    /// Task identifier
+    pub task_id: String,
+    /// Timestamp when checkpoint was created
+    pub timestamp: std::time::SystemTime,
+    /// State data for rollback
+    pub state: CheckpointState,
+}
+
+/// State information captured at checkpoint
+#[derive(Debug, Clone)]
+pub struct CheckpointState {
+    /// Environment variables at checkpoint
+    pub environment: std::collections::HashMap<String, String>,
+    /// Working directory at checkpoint
+    pub working_directory: std::path::PathBuf,
+    /// Any additional state data
+    pub metadata: std::collections::HashMap<String, String>,
+}
 
 #[derive(Debug)]
 pub enum BodoError {
@@ -11,6 +57,46 @@ pub enum BodoError {
     YamlError(serde_yaml::Error),
     NoTaskSpecified,
     ValidationError(String),
+    /// Error during retry operations
+    RetryExhausted { attempts: u32, last_error: Box<BodoError> },
+    /// Error during rollback operations  
+    RollbackFailed { checkpoint: TaskCheckpoint, cause: String },
+    /// Recovery strategy error
+    RecoveryFailed { strategy: String, cause: String },
+}
+
+impl BodoError {
+    /// Categorize error for recovery strategy selection
+    pub fn categorize(&self) -> ErrorCategory {
+        match self {
+            BodoError::IoError(err) => {
+                match err.kind() {
+                    io::ErrorKind::TimedOut | 
+                    io::ErrorKind::Interrupted |
+                    io::ErrorKind::ConnectionRefused |
+                    io::ErrorKind::ConnectionAborted => ErrorCategory::Transient,
+                    io::ErrorKind::NotFound |
+                    io::ErrorKind::PermissionDenied |
+                    io::ErrorKind::InvalidInput => ErrorCategory::Permanent,
+                    _ => ErrorCategory::Unknown,
+                }
+            }
+            BodoError::WatcherError(_) => ErrorCategory::Transient,
+            BodoError::TaskNotFound(_) => ErrorCategory::Permanent,
+            BodoError::PluginError(_) => ErrorCategory::Unknown,
+            BodoError::SerdeError(_) | BodoError::YamlError(_) => ErrorCategory::Permanent,
+            BodoError::NoTaskSpecified => ErrorCategory::Permanent,
+            BodoError::ValidationError(_) => ErrorCategory::Permanent,
+            BodoError::RetryExhausted { .. } => ErrorCategory::Permanent,
+            BodoError::RollbackFailed { .. } => ErrorCategory::Permanent,
+            BodoError::RecoveryFailed { .. } => ErrorCategory::Permanent,
+        }
+    }
+    
+    /// Check if error is retryable based on its category
+    pub fn is_retryable(&self) -> bool {
+        matches!(self.categorize(), ErrorCategory::Transient)
+    }
 }
 
 impl fmt::Display for BodoError {
@@ -26,6 +112,15 @@ impl fmt::Display for BodoError {
                 write!(f, "No task specified and no scripts/script.yaml found")
             }
             BodoError::ValidationError(err) => write!(f, "Validation error: {}", err),
+            BodoError::RetryExhausted { attempts, .. } => {
+                write!(f, "Retry exhausted after {} attempts", attempts)
+            }
+            BodoError::RollbackFailed { checkpoint, cause } => {
+                write!(f, "Rollback failed for task '{}': {}", checkpoint.task_id, cause)
+            }
+            BodoError::RecoveryFailed { strategy, cause } => {
+                write!(f, "Recovery strategy '{}' failed: {}", strategy, cause)
+            }
         }
     }
 }
