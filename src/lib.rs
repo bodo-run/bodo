@@ -7,6 +7,7 @@ pub mod manager;
 pub mod plugin;
 pub mod plugins;
 pub mod process;
+pub mod sandbox;
 pub mod script_loader; // Added empty designer module for coverage
 
 pub use config::BodoConfig;

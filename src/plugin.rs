@@ -49,8 +49,8 @@ pub struct ExecutionContext {
 }
 
 /// Trait for plugins that support dry-run mode
-/// 
-/// Plugins implementing this trait can simulate their execution without 
+///
+/// Plugins implementing this trait can simulate their execution without
 /// performing actual side effects, useful for previewing what would happen.
 pub trait DryRunnable {
     /// Simulate execution and return a report of what would happen

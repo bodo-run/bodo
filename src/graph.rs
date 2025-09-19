@@ -1,6 +1,7 @@
 pub type NodeId = u64;
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum NodeKind {
     Task(TaskData),
     Command(CommandData),
