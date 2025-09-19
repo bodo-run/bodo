@@ -30,7 +30,7 @@ impl ExecutionPlugin {
     }
 
     /// Analyze command for potential side effects
-    fn analyze_side_effects(&self, cmd: &str, working_dir: &Option<PathBuf>) -> Vec<SideEffect> {
+    pub fn analyze_side_effects(&self, cmd: &str, working_dir: &Option<PathBuf>) -> Vec<SideEffect> {
         let mut effects = Vec::new();
         
         // Simple heuristic analysis of common command patterns
@@ -61,7 +61,7 @@ impl ExecutionPlugin {
     }
 
     /// Estimate command execution duration based on command type
-    fn estimate_duration(&self, cmd: &str) -> Option<Duration> {
+    pub fn estimate_duration(&self, cmd: &str) -> Option<Duration> {
         if cmd.contains("sleep") {
             // Try to extract sleep duration
             return Some(Duration::from_secs(1));

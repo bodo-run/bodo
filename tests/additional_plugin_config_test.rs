@@ -19,6 +19,7 @@ fn test_plugin_config_custom() {
         fail_fast: true,
         watch: true,
         list: true,
+        dry_run: false,
         options: Some(options.as_object().unwrap().clone()),
     };
     assert!(config.fail_fast);
