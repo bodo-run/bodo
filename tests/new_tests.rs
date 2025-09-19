@@ -46,12 +46,6 @@ mod new_tests {
             verbose: false,
             quiet: false,
             dry_run: false,
-<<<<<<< HEAD
-            verbose: false,
-            quiet: false,
-=======
-            dry_run: false,
->>>>>>> origin/main
             task: None,
             subtask: None,
             args: vec![],
@@ -94,12 +88,6 @@ mod new_tests {
             verbose: false,
             quiet: false,
             dry_run: false,
-<<<<<<< HEAD
-            verbose: false,
-            quiet: false,
-=======
-            dry_run: false,
->>>>>>> origin/main
             task: Some("build".to_string()),
             subtask: None,
             args: vec![],

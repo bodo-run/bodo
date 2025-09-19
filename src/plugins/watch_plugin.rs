@@ -217,10 +217,15 @@ impl Plugin for WatchPlugin {
                         auto_watch: true, ..
                     }) = &task_data.watch
                     {
-                        // Found auto_watch == true, enable watch mode only if BODO_NO_WATCH is not set or not "1"
-                        if std::env::var("BODO_NO_WATCH").map_or(true, |v| v != "1") {
-                            self.watch_mode = true;
-                            break;
+                        // Found auto_watch == true, enable watch mode only if BODO_NO_WATCH is not set to "1"
+                        match std::env::var("BODO_NO_WATCH") {
+                            Ok(ref v) if v == "1" => {
+                                // BODO_NO_WATCH is set to "1", do not enable watch mode
+                            }
+                            _ => {
+                                self.watch_mode = true;
+                                break;
+                            }
                         }
                     }
                 }

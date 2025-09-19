@@ -29,7 +29,7 @@ fn main() {
 
     // Set up log file rotation
     let file_appender = tracing_appender::rolling::daily("logs", "bodo.log");
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     // Create layers
     let console_layer = tracing_subscriber::fmt::layer()
@@ -51,13 +51,13 @@ fn main() {
         .with(file_layer)
         .init();
 
-    if let Err(e) = run(args) {
+    if let Err(e) = run(args, guard) {
         tracing::error!("Error: {}", e);
         exit(1);
     }
 }
 
-fn run(args: Args) -> Result<(), BodoError> {
+fn run(args: Args, _guard: tracing_appender::non_blocking::WorkerGuard) -> Result<(), BodoError> {
     let watch_mode = if std::env::var("BODO_NO_WATCH").is_ok() {
         false
     } else if args.auto_watch {

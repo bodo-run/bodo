@@ -8,13 +8,9 @@ fn test_create_watcher_test() {
     let (watcher, rx) = WatchPlugin::create_watcher_test().expect("Failed to create watcher");
     // Expect timeout since no events occur.
     match rx.recv_timeout(Duration::from_millis(100)) {
-<<<<<<< HEAD
         Err(RecvTimeoutError::Timeout) => {
             // Expected timeout when no events occur
         }
-=======
-        Err(RecvTimeoutError::Timeout) => {}
->>>>>>> origin/main
         _ => panic!("Expected timeout when no events occur"),
     }
     drop(watcher);
@@ -90,8 +86,7 @@ fn test_watch_plugin_on_graph_build_with_auto_watch_and_env_var_set() {
 
 #[test]
 fn test_watch_plugin_on_graph_build_with_auto_watch() {
-    // Ensure clean state - set to empty string then remove
-    std::env::set_var("BODO_NO_WATCH", "");
+    // Ensure clean state
     std::env::remove_var("BODO_NO_WATCH");
 
     // Verify it's actually removed

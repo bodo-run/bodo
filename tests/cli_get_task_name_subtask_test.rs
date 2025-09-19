@@ -37,15 +37,9 @@ fn test_get_task_name_with_subtask_exists() {
         watch: false,
         auto_watch: false,
         debug: false,
-            verbose: false,
-            quiet: false,
-            dry_run: false,
-<<<<<<< HEAD
         verbose: false,
         quiet: false,
-=======
         dry_run: false,
->>>>>>> origin/main
         task: Some("build".to_string()),
         subtask: Some("unit".to_string()),
         args: vec![],
@@ -87,15 +81,9 @@ fn test_get_task_name_with_subtask_not_found() {
         watch: false,
         auto_watch: false,
         debug: false,
-            verbose: false,
-            quiet: false,
-            dry_run: false,
-<<<<<<< HEAD
         verbose: false,
         quiet: false,
-=======
         dry_run: false,
->>>>>>> origin/main
         task: Some("build".to_string()),
         subtask: Some("unit".to_string()),
         args: vec![],
