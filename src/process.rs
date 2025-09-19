@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::errors::BodoError;
+use crate::platform::{get_platform_executor, PlatformExecutor};
 use colored::{Color, Colorize};
 
 pub struct ChildProcess {
@@ -20,6 +21,7 @@ pub struct ChildProcess {
 pub struct ProcessManager {
     pub children: Vec<ChildProcess>,
     pub fail_fast: bool,
+    platform_executor: Box<dyn PlatformExecutor>,
 }
 
 impl ProcessManager {
