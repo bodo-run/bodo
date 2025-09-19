@@ -30,6 +30,10 @@ pub struct Args {
     #[arg(short, long)]
     pub quiet: bool,
 
+    /// Dry-run mode - show what would be executed without running commands
+    #[arg(long)]
+    pub dry_run: bool,
+
     /// Task to run (defaults to default_task)
     pub task: Option<String>,
 

@@ -11,8 +11,15 @@ fn test_get_task_name_no_default_and_no_argument() {
         watch: false,
         auto_watch: false,
         debug: false,
+            verbose: false,
+            quiet: false,
+            dry_run: false,
+<<<<<<< HEAD
         verbose: false,
         quiet: false,
+=======
+        dry_run: false,
+>>>>>>> origin/main
         task: None,
         subtask: None,
         args: vec![],
@@ -57,8 +64,15 @@ fn test_get_task_name_task_not_found() {
         watch: false,
         auto_watch: false,
         debug: false,
+            verbose: false,
+            quiet: false,
+            dry_run: false,
+<<<<<<< HEAD
         verbose: false,
         quiet: false,
+=======
+        dry_run: false,
+>>>>>>> origin/main
         task: Some("nonexistent".to_string()),
         subtask: None,
         args: vec![],

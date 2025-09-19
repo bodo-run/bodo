@@ -46,6 +46,13 @@ mod new_tests {
             debug: false,
             verbose: false,
             quiet: false,
+            dry_run: false,
+<<<<<<< HEAD
+            verbose: false,
+            quiet: false,
+=======
+            dry_run: false,
+>>>>>>> origin/main
             task: None,
             subtask: None,
             args: vec![],
@@ -87,6 +94,13 @@ mod new_tests {
             debug: false,
             verbose: false,
             quiet: false,
+            dry_run: false,
+<<<<<<< HEAD
+            verbose: false,
+            quiet: false,
+=======
+            dry_run: false,
+>>>>>>> origin/main
             task: Some("build".to_string()),
             subtask: None,
             args: vec![],
@@ -172,13 +186,11 @@ mod new_tests {
             working_dir: None,
             env: HashMap::new(),
             exec_paths: vec![],
-            arguments: vec![{
-                let mut arg: TaskArgument = std::default::Default::default();
-                arg.name = "GREETING".to_string();
-                arg.description = Some("Greeting msg".to_string());
-                arg.required = true;
-                arg.default = Some("Hello".to_string());
-                arg
+            arguments: vec![TaskArgument {
+                name: "GREETING".to_string(),
+                description: Some("Greeting msg".to_string()),
+                required: true,
+                default: Some("Hello".to_string()),
             }],
             is_default: false,
             script_id: "".to_string(),
@@ -216,12 +228,11 @@ mod new_tests {
             working_dir: None,
             env: HashMap::new(),
             exec_paths: vec![],
-            arguments: vec![{
-                let mut arg: TaskArgument = std::default::Default::default();
-                arg.name = "NAME".to_string();
-                arg.required = true;
-                arg.default = None;
-                arg
+            arguments: vec![TaskArgument {
+                name: "NAME".to_string(),
+                required: true,
+                default: None,
+                ..Default::default()
             }],
             is_default: false,
             script_id: "".to_string(),

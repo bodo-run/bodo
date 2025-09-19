@@ -161,8 +161,11 @@ dependencies = [
  "terminal_size",
  "tokio",
  "tracing",
+<<<<<<< HEAD
  "tracing-appender",
  "tracing-subscriber",
+=======
+>>>>>>> origin/main
  "validator",
  "walkdir",
 ]
@@ -1233,6 +1236,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "tracing-appender"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1245,6 +1249,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> origin/main
 name = "tracing-attributes"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1262,6 +1268,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9d12581f227e93f094d3af2ae690a574abb8a2b9b7a96e7cfe9647b2b617678"
 dependencies = [
  "once_cell",
+<<<<<<< HEAD
  "valuable",
 ]
 
@@ -1305,6 +1312,8 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-serde",
+=======
+>>>>>>> origin/main
 ]
 
 [[package]]

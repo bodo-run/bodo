@@ -35,8 +35,15 @@ fn test_cli_get_task_name_default_exists() {
         watch: false,
         auto_watch: false,
         debug: false,
+            verbose: false,
+            quiet: false,
+            dry_run: false,
+<<<<<<< HEAD
         verbose: false,
         quiet: false,
+=======
+        dry_run: false,
+>>>>>>> origin/main
         task: None,
         subtask: None,
         args: vec![],
@@ -76,8 +83,15 @@ fn test_cli_get_task_name_with_existing_task() {
         watch: false,
         auto_watch: false,
         debug: false,
+            verbose: false,
+            quiet: false,
+            dry_run: false,
+<<<<<<< HEAD
         verbose: false,
         quiet: false,
+=======
+        dry_run: false,
+>>>>>>> origin/main
         task: Some("build".to_string()),
         subtask: None,
         args: vec![],

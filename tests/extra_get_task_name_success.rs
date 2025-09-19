@@ -42,6 +42,13 @@ mod extra_get_task_name_success {
             debug: false,
             verbose: false,
             quiet: false,
+            dry_run: false,
+<<<<<<< HEAD
+            verbose: false,
+            quiet: false,
+=======
+            dry_run: false,
+>>>>>>> origin/main
             task: None,
             subtask: None,
             args: vec![],
@@ -83,6 +90,13 @@ mod extra_get_task_name_success {
             debug: false,
             verbose: false,
             quiet: false,
+            dry_run: false,
+<<<<<<< HEAD
+            verbose: false,
+            quiet: false,
+=======
+            dry_run: false,
+>>>>>>> origin/main
             task: Some("build".to_string()),
             subtask: None,
             args: vec![],
@@ -124,6 +138,13 @@ mod extra_get_task_name_success {
             debug: false,
             verbose: false,
             quiet: false,
+            dry_run: false,
+<<<<<<< HEAD
+            verbose: false,
+            quiet: false,
+=======
+            dry_run: false,
+>>>>>>> origin/main
             task: Some("deploy".to_string()),
             subtask: Some("prod".to_string()),
             args: vec![],
@@ -142,6 +163,13 @@ mod extra_get_task_name_success {
             debug: false,
             verbose: false,
             quiet: false,
+            dry_run: false,
+<<<<<<< HEAD
+            verbose: false,
+            quiet: false,
+=======
+            dry_run: false,
+>>>>>>> origin/main
             task: None,
             subtask: None,
             args: vec![],
@@ -183,6 +211,13 @@ mod extra_get_task_name_success {
             debug: false,
             verbose: false,
             quiet: false,
+            dry_run: false,
+<<<<<<< HEAD
+            verbose: false,
+            quiet: false,
+=======
+            dry_run: false,
+>>>>>>> origin/main
             task: Some("nonexistent".to_string()),
             subtask: None,
             args: vec![],

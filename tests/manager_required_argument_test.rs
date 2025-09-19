@@ -6,14 +6,16 @@ use std::collections::HashMap;
 
 #[test]
 fn test_missing_required_argument() {
-    let mut task_config = TaskConfig::default();
-    task_config.command = Some("echo $ARG".to_string());
-    task_config.arguments = vec![TaskArgument {
-        name: "ARG".to_string(),
-        description: Some("A required argument".to_string()),
-        required: true,
-        default: None,
-    }];
+    let task_config = TaskConfig {
+        command: Some("echo $ARG".to_string()),
+        arguments: vec![TaskArgument {
+            name: "ARG".to_string(),
+            description: Some("A required argument".to_string()),
+            required: true,
+            default: None,
+        }],
+        ..Default::default()
+    };
     let mut tasks = HashMap::new();
     tasks.insert("test".to_string(), task_config);
     let config = BodoConfig {

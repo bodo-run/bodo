@@ -42,6 +42,13 @@ mod new_tests {
             debug: false,
             verbose: false,
             quiet: false,
+            dry_run: false,
+<<<<<<< HEAD
+            verbose: false,
+            quiet: false,
+=======
+            dry_run: false,
+>>>>>>> origin/main
             task: None,
             subtask: None,
             args: vec![],

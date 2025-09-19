@@ -7,18 +7,22 @@ use validator::ValidationErrors;
 
 #[test]
 fn test_validate_task_name_reserved() {
-    let mut config = TaskConfig::default();
-    config._name_check = Some("default_task".to_string());
-    config.command = Some("echo 'test'".to_string()); // Add command to pass validation
+    let config = TaskConfig {
+        _name_check: Some("default_task".to_string()),
+        command: Some("echo 'test'".to_string()), // Add command to pass validation
+        ..Default::default()
+    };
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 }
 
 #[test]
 fn test_validate_task_name_valid() {
-    let mut config = TaskConfig::default();
-    config._name_check = Some("valid_task_name".to_string());
-    config.command = Some("echo 'test'".to_string()); // Add command to pass validation
+    let config = TaskConfig {
+        _name_check: Some("valid_task_name".to_string()),
+        command: Some("echo 'test'".to_string()), // Add command to pass validation
+        ..Default::default()
+    };
     let result = config.validate();
     assert!(
         result.is_ok(),
@@ -28,37 +32,47 @@ fn test_validate_task_name_valid() {
 
 #[test]
 fn test_validate_task_name_invalid_characters() {
-    let mut config = TaskConfig::default();
-    config._name_check = Some("invalid/task/name".to_string());
-    config.command = Some("echo 'test'".to_string()); // Add command
+    let config = TaskConfig {
+        _name_check: Some("invalid/task/name".to_string()),
+        command: Some("echo 'test'".to_string()), // Add command
+        ..Default::default()
+    };
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 
-    let mut config = TaskConfig::default();
-    config._name_check = Some("invalid..name".to_string());
-    config.command = Some("echo 'test'".to_string()); // Add command
+    let config = TaskConfig {
+        _name_check: Some("invalid..name".to_string()),
+        command: Some("echo 'test'".to_string()), // Add command
+        ..Default::default()
+    };
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 
-    let mut config = TaskConfig::default();
-    config._name_check = Some("invalid.name".to_string());
-    config.command = Some("echo 'test'".to_string()); // Add command
+    let config = TaskConfig {
+        _name_check: Some("invalid.name".to_string()),
+        command: Some("echo 'test'".to_string()), // Add command
+        ..Default::default()
+    };
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 }
 
 #[test]
 fn test_validate_task_name_invalid_length() {
-    let mut config = TaskConfig::default();
-    config._name_check = Some("".to_string());
-    config.command = Some("echo 'test'".to_string()); // Add command
+    let config = TaskConfig {
+        _name_check: Some("".to_string()),
+        command: Some("echo 'test'".to_string()), // Add command
+        ..Default::default()
+    };
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 
     let long_name = "a".repeat(101);
-    let mut config = TaskConfig::default();
-    config._name_check = Some(long_name);
-    config.command = Some("echo 'test'".to_string()); // Add command
+    let config = TaskConfig {
+        _name_check: Some(long_name),
+        command: Some("echo 'test'".to_string()), // Add command
+        ..Default::default()
+    };
     let result = config.validate();
     assert!(matches!(result, Err(ValidationErrors { .. })));
 }
