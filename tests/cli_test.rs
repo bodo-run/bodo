@@ -86,10 +86,7 @@ fn test_cli_get_task_name_with_existing_task() {
 
 #[test]
 fn test_bodo_error_variants_display() {
-    let io_err = bodo::errors::BodoError::IoError(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        "io error",
-    ));
+    let io_err = bodo::errors::BodoError::IoError(std::io::Error::other("io error"));
     assert_eq!(format!("{}", io_err), "io error");
 
     let watcher_err = bodo::errors::BodoError::WatcherError("watcher error".to_string());

@@ -5,7 +5,7 @@ use std::io;
 
 #[test]
 fn test_bodo_error_display() {
-    let err = BodoError::IoError(io::Error::new(io::ErrorKind::Other, "io_error"));
+    let err = BodoError::IoError(io::Error::other("io_error"));
     assert_eq!(format!("{}", err), "io_error");
 
     let err = BodoError::WatcherError("watcher_error".to_string());
@@ -30,7 +30,7 @@ fn test_bodo_error_display() {
 #[test]
 fn test_bodo_error_from_io_error() {
     use std::io;
-    let io_err = io::Error::new(io::ErrorKind::Other, "some io error");
+    let io_err = io::Error::other("some io error");
     let bodo_err: BodoError = io_err.into();
     assert!(matches!(bodo_err, BodoError::IoError(_)));
 }
