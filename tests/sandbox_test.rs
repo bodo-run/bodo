@@ -11,8 +11,8 @@ fn test_sandbox_creation() {
 
 #[test]
 fn test_sandbox_directory_setup() {
-    let sandbox = Sandbox::new().expect("Failed to create sandbox");
-    let working_dir = Path::new("/test/dir");
+    let _sandbox = Sandbox::new().expect("Failed to create sandbox");
+    let _working_dir = Path::new("/test/dir");
 
     // This is testing internal functionality, so we'd need to make setup_sandbox_dirs public
     // or create a wrapper method for testing

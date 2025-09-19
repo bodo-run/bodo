@@ -50,6 +50,7 @@ default_task:
         .to_string_lossy()
         .into_owned();
 
+    #[allow(clippy::zombie_processes)]
     let mut child = Command::new(exe_path)
         // .arg("default") // No need to specify 'default' since we're testing the default task
         .env("RUST_LOG", "info")
@@ -151,6 +152,7 @@ tasks:
         .unwrap()
         .to_string();
 
+    #[allow(clippy::zombie_processes)]
     let mut child = Command::new(exe_path)
         .arg("--list")
         .env("RUST_LOG", "info")

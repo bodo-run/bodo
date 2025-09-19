@@ -65,6 +65,7 @@ fn test_execution_plugin_run_node_chain() -> Result<()> {
         fail_fast: true,
         watch: false,
         list: false,
+        dry_run: false,
         options: Some(json!({"task": "A"}).as_object().unwrap().clone()),
     };
     // Import Plugin trait for method resolution.
@@ -89,6 +90,7 @@ fn test_execution_plugin_on_init() -> Result<()> {
         fail_fast: true,
         watch: false,
         list: false,
+        dry_run: false,
         options: Some(options),
     };
     plugin.on_init(&config).unwrap();

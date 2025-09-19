@@ -121,7 +121,7 @@ fn test_env_plugin_on_graph_build_no_global_env() {
     assert!(result.is_ok());
 
     if let NodeKind::Task(task_data) = &graph.nodes[task_id as usize].kind {
-        assert!(task_data.env.get("GLOBAL_ENV").is_none());
+        assert!(!task_data.env.contains_key("GLOBAL_ENV"));
     } else {
         panic!("Expected Task node");
     }
