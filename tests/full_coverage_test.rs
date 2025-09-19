@@ -36,7 +36,7 @@ fn test_graph_print_debug() {
 #[test]
 fn test_graph_detect_cycle_none() {
     let mut graph = Graph::new();
-    let _ = graph.add_node(bodo::graph::NodeKind::Task(bodo::graph::TaskData {
+    let _ = graph.add_node(bodo::graph::NodeKind::Task(Box::new(bodo::graph::TaskData {
         name: "a".to_string(),
         description: None,
         command: Some("echo a".to_string()),
@@ -60,7 +60,7 @@ fn test_graph_detect_cycle_none() {
 fn test_graph_detect_cycle_some() {
     let mut graph = Graph::new();
     let (id1, id2) = (
-        graph.add_node(bodo::graph::NodeKind::Task(bodo::graph::TaskData {
+        graph.add_node(bodo::graph::NodeKind::Task(Box::new(bodo::graph::TaskData {
             name: "a".to_string(),
             description: None,
             command: Some("echo a".to_string()),
@@ -77,7 +77,7 @@ fn test_graph_detect_cycle_some() {
             concurrently: vec![],
             concurrently_options: Default::default(),
         })),
-        graph.add_node(bodo::graph::NodeKind::Task(bodo::graph::TaskData {
+        graph.add_node(bodo::graph::NodeKind::Task(Box::new(bodo::graph::TaskData {
             name: "b".to_string(),
             description: None,
             command: Some("echo b".to_string()),
@@ -104,7 +104,7 @@ fn test_graph_detect_cycle_some() {
 #[test]
 fn test_graph_topological_sort_order() -> bodo::Result<()> {
     let mut graph = Graph::new();
-    let a = graph.add_node(bodo::graph::NodeKind::Task(bodo::graph::TaskData {
+    let a = graph.add_node(bodo::graph::NodeKind::Task(Box::new(bodo::graph::TaskData {
         name: "A".to_string(),
         description: None,
         command: Some("echo A".to_string()),
@@ -121,7 +121,7 @@ fn test_graph_topological_sort_order() -> bodo::Result<()> {
         concurrently: vec![],
         concurrently_options: Default::default(),
     }));
-    let b = graph.add_node(bodo::graph::NodeKind::Task(bodo::graph::TaskData {
+    let b = graph.add_node(bodo::graph::NodeKind::Task(Box::new(bodo::graph::TaskData {
         name: "B".to_string(),
         description: None,
         command: Some("echo B".to_string()),

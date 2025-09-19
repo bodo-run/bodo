@@ -5,7 +5,7 @@ use std::collections::HashMap;
 #[test]
 fn test_topological_sort_order() -> Result<()> {
     let mut graph = Graph::new();
-    let a = graph.add_node(NodeKind::Task(TaskData {
+    let a = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "A".to_string(),
         description: None,
         command: Some("echo A".to_string()),
@@ -22,7 +22,7 @@ fn test_topological_sort_order() -> Result<()> {
         concurrently: vec![],
         concurrently_options: Default::default(),
     }));
-    let b = graph.add_node(NodeKind::Task(TaskData {
+    let b = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "B".to_string(),
         description: None,
         command: Some("echo B".to_string()),

@@ -8,6 +8,8 @@ use crate::{
     process::ProcessManager,
 };
 
+type PrefixSettingsFn = dyn Fn(&crate::graph::Node) -> (bool, Option<String>, Option<String>);
+
 pub struct ExecutionPlugin {
     pub task_name: Option<String>,
 }
@@ -95,6 +97,72 @@ impl ExecutionPlugin {
         }
         result
     }
+
+    // Static versions of methods to avoid lifetime issues in closures
+    fn expand_env_vars_static(cmd: &str, env: &HashMap<String, String>) -> String {
+        let mut result = String::new();
+        let mut chars = cmd.chars().peekable();
+
+        while let Some(c) = chars.next() {
+            if c == '$' {
+                if chars.peek() == Some(&'$') {
+                    chars.next();
+                    result.push('$');
+                } else if chars.peek() == Some(&'{') {
+                    chars.next();
+                    let mut var_name = String::new();
+                    for c in chars.by_ref() {
+                        if c == '}' {
+                            break;
+                        }
+                        var_name.push(c);
+                    }
+                    if let Some(value) = env.get(&var_name) {
+                        result.push_str(value);
+                    } else if let Ok(value) = std::env::var(&var_name) {
+                        result.push_str(&value);
+                    }
+                } else {
+                    let mut var_name = String::new();
+                    while let Some(&c) = chars.peek() {
+                        if c.is_alphanumeric() || c == '_' {
+                            var_name.push(chars.next().unwrap());
+                        } else {
+                            break;
+                        }
+                    }
+                    if !var_name.is_empty() {
+                        if let Some(value) = env.get(&var_name) {
+                            result.push_str(value);
+                        } else if let Ok(value) = std::env::var(&var_name) {
+                            result.push_str(&value);
+                        }
+                    } else {
+                        result.push('$');
+                    }
+                }
+            } else {
+                result.push(c);
+            }
+        }
+
+        result
+    }
+
+    fn get_prefix_settings_static(
+        node: &crate::graph::Node,
+    ) -> (bool, Option<String>, Option<String>) {
+        let prefix_enabled = node
+            .metadata
+            .get("prefix_enabled")
+            .map(|s| s == "true")
+            .unwrap_or(false);
+
+        let prefix = node.metadata.get("prefix").cloned();
+        let suffix = node.metadata.get("suffix").cloned();
+
+        (prefix_enabled, prefix, suffix)
+    }
 }
 
 impl Plugin for ExecutionPlugin {
@@ -142,9 +210,7 @@ impl Plugin for ExecutionPlugin {
             visited: &mut std::collections::HashSet<usize>,
             expand_env_vars_fn: &dyn Fn(&str, &HashMap<String, String>) -> String,
 
-            get_prefix_settings_fn: &dyn Fn(
-                &crate::graph::Node,
-            ) -> (bool, Option<String>, Option<String>),
+            get_prefix_settings_fn: &PrefixSettingsFn,
         ) -> Result<()> {
             if visited.contains(&node_id) {
                 return Ok(());
@@ -238,13 +304,21 @@ impl Plugin for ExecutionPlugin {
             Ok(())
         }
 
+        // Create closures to capture self methods
+        let expand_env_vars = |cmd: &str, env: &HashMap<String, String>| -> String {
+            ExecutionPlugin::expand_env_vars_static(cmd, env)
+        };
+        let get_prefix_settings = |node: &crate::graph::Node| -> (bool, Option<String>, Option<String>) {
+            ExecutionPlugin::get_prefix_settings_static(node)
+        };
+
         run_node(
             task_id as usize,
             graph,
             &mut pm,
             &mut visited,
-            &|cmd, env| self.expand_env_vars(cmd, env),
-            &|node| self.get_prefix_settings(node),
+            &expand_env_vars,
+            &get_prefix_settings,
         )?;
 
         pm.run_concurrently()?;

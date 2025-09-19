@@ -29,7 +29,7 @@ fn test_concurrent_plugin_fallback() {
         post_deps: vec![],
     };
 
-    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+    let main_task_id = graph.add_node(NodeKind::Task(Box::new(task_data_main)));
 
     let task_data_child1 = TaskData {
         name: "child_task1".to_string(),
@@ -49,7 +49,7 @@ fn test_concurrent_plugin_fallback() {
         post_deps: vec![],
     };
 
-    let child1_id = graph.add_node(NodeKind::Task(task_data_child1));
+    let child1_id = graph.add_node(NodeKind::Task(Box::new(task_data_child1)));
 
     let task_data_child2 = TaskData {
         name: "child_task2".to_string(),
@@ -69,7 +69,7 @@ fn test_concurrent_plugin_fallback() {
         post_deps: vec![],
     };
 
-    let child2_id = graph.add_node(NodeKind::Task(task_data_child2));
+    let child2_id = graph.add_node(NodeKind::Task(Box::new(task_data_child2)));
 
     // Register child tasks in task_registry
     graph

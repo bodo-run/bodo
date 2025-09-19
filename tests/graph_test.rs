@@ -4,7 +4,7 @@ use std::collections::HashMap;
 #[test]
 fn test_add_node() {
     let mut graph = Graph::new();
-    let node_id = graph.add_node(NodeKind::Task(TaskData {
+    let node_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "test_task".to_string(),
         description: None,
         command: None,
@@ -46,7 +46,7 @@ fn test_graph_add_nodes_and_edges() {
         concurrently: vec![],
         concurrently_options: Default::default(),
     };
-    let node_id1 = graph.add_node(NodeKind::Task(task_data1));
+    let node_id1 = graph.add_node(NodeKind::Task(Box::new(task_data1)));
 
     let task_data2 = TaskData {
         name: "task2".to_string(),
@@ -65,7 +65,7 @@ fn test_graph_add_nodes_and_edges() {
         concurrently: vec![],
         concurrently_options: Default::default(),
     };
-    let node_id2 = graph.add_node(NodeKind::Task(task_data2));
+    let node_id2 = graph.add_node(NodeKind::Task(Box::new(task_data2)));
 
     graph.add_edge(node_id1, node_id2).unwrap();
 

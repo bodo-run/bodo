@@ -8,7 +8,7 @@ use std::collections::HashMap;
 fn test_timeout_plugin_on_graph_build_sets_timeout() -> Result<(), BodoError> {
     let mut plugin = TimeoutPlugin::new();
     let mut graph = Graph::new();
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
+    let task_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "test_task".to_string(),
         description: Some("A test task".to_string()),
         command: Some("sleep 5".to_string()),

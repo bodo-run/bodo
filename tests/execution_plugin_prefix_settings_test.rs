@@ -7,7 +7,7 @@ fn test_get_prefix_settings() {
     let plugin = ExecutionPlugin::new();
     let node = Node {
         id: 0,
-        kind: NodeKind::Task(TaskData {
+        kind: NodeKind::Task(Box::new(TaskData {
             name: "test".to_string(),
             description: None,
             command: Some("echo test".to_string()),
@@ -23,7 +23,7 @@ fn test_get_prefix_settings() {
             post_deps: vec![],
             concurrently: vec![],
             concurrently_options: Default::default(),
-        }),
+        })),
         metadata: {
             let mut m = HashMap::new();
             m.insert("prefix_enabled".to_string(), "true".to_string());

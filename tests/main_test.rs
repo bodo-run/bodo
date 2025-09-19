@@ -6,6 +6,7 @@ use std::time::Duration;
 use tempfile::tempdir;
 
 #[test]
+#[allow(clippy::zombie_processes)]
 fn test_bodo_default() {
     // Build the path to the built 'bodo' executable
     let current_exe = std::env::current_exe().expect("Failed to get current exe path");
@@ -99,6 +100,7 @@ default_task:
 }
 
 #[test]
+#[allow(clippy::zombie_processes)]
 fn test_bodo_list() {
     // Build the path to the built 'bodo' executable
     let current_exe = std::env::current_exe().expect("Failed to get current exe path");

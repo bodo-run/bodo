@@ -10,7 +10,7 @@ fn test_all_public_functions() -> Result<()> {
     if !gm.task_exists("default") {
         gm.graph.nodes.push(Node {
             id: 0,
-            kind: NodeKind::Task(TaskData {
+            kind: NodeKind::Task(Box::new(TaskData {
                 name: "default".to_string(),
                 description: Some("Default Task".to_string()),
                 command: Some("echo default".to_string()),
@@ -26,7 +26,7 @@ fn test_all_public_functions() -> Result<()> {
                 post_deps: vec![],
                 concurrently: vec![],
                 concurrently_options: Default::default(),
-            }),
+            })),
             metadata: HashMap::new(),
         });
         gm.graph.task_registry.insert("default".to_string(), 0);

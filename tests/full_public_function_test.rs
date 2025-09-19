@@ -16,7 +16,7 @@ mod new_tests {
         // Manually add default task to graph and registry:
         manager.graph.nodes.push(Node {
             id: 0,
-            kind: NodeKind::Task(TaskData {
+            kind: NodeKind::Task(Box::new(TaskData {
                 name: "default".to_string(),
                 description: Some("Default Task".to_string()),
                 command: Some("echo default".to_string()),
@@ -32,7 +32,7 @@ mod new_tests {
                 post_deps: vec![],
                 concurrently: vec![],
                 concurrently_options: Default::default(),
-            }),
+            })),
             metadata: HashMap::new(),
         });
         manager.graph.task_registry.insert("default".to_string(), 0);
@@ -56,7 +56,7 @@ mod new_tests {
         // Add task "build"
         manager.graph.nodes.push(Node {
             id: 0,
-            kind: NodeKind::Task(TaskData {
+            kind: NodeKind::Task(Box::new(TaskData {
                 name: "build".to_string(),
                 description: Some("Build Task".to_string()),
                 command: Some("cargo build".to_string()),
@@ -72,7 +72,7 @@ mod new_tests {
                 post_deps: vec![],
                 concurrently: vec![],
                 concurrently_options: Default::default(),
-            }),
+            })),
             metadata: HashMap::new(),
         });
         manager.graph.task_registry.insert("build".to_string(), 0);
@@ -110,7 +110,7 @@ mod new_tests {
         let mut gm = GraphManager::new();
         gm.graph.nodes.push(Node {
             id: 0,
-            kind: NodeKind::Task(TaskData {
+            kind: NodeKind::Task(Box::new(TaskData {
                 name: "existing".to_string(),
                 description: None,
                 command: Some("echo existing".to_string()),
@@ -126,7 +126,7 @@ mod new_tests {
                 post_deps: vec![],
                 concurrently: vec![],
                 concurrently_options: Default::default(),
-            }),
+            })),
             metadata: HashMap::new(),
         });
         gm.graph.task_registry.insert("existing".to_string(), 0);

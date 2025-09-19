@@ -14,7 +14,7 @@ mod extra_get_task_name_success {
         // Add default task to the graph.
         gm.graph.nodes.push(Node {
             id: 0,
-            kind: NodeKind::Task(TaskData {
+            kind: NodeKind::Task(Box::new(TaskData {
                 name: "default".to_string(),
                 description: Some("Default Task".to_string()),
                 command: Some("echo default".to_string()),
@@ -30,7 +30,7 @@ mod extra_get_task_name_success {
                 post_deps: vec![],
                 concurrently: vec![],
                 concurrently_options: Default::default(),
-            }),
+            })),
             metadata: HashMap::new(),
         });
         gm.graph.task_registry.insert("default".to_string(), 0);
@@ -53,7 +53,7 @@ mod extra_get_task_name_success {
         let mut gm = GraphManager::new();
         gm.graph.nodes.push(Node {
             id: 0,
-            kind: NodeKind::Task(TaskData {
+            kind: NodeKind::Task(Box::new(TaskData {
                 name: "build".to_string(),
                 description: Some("Build Task".to_string()),
                 command: Some("echo build".to_string()),
@@ -69,7 +69,7 @@ mod extra_get_task_name_success {
                 post_deps: vec![],
                 concurrently: vec![],
                 concurrently_options: Default::default(),
-            }),
+            })),
             metadata: HashMap::new(),
         });
         gm.graph.task_registry.insert("build".to_string(), 0);
@@ -92,7 +92,7 @@ mod extra_get_task_name_success {
         let mut gm = GraphManager::new();
         gm.graph.nodes.push(Node {
             id: 0,
-            kind: NodeKind::Task(TaskData {
+            kind: NodeKind::Task(Box::new(TaskData {
                 name: "deploy prod".to_string(),
                 description: Some("Deploy production".to_string()),
                 command: Some("echo deploy prod".to_string()),
@@ -108,7 +108,7 @@ mod extra_get_task_name_success {
                 post_deps: vec![],
                 concurrently: vec![],
                 concurrently_options: Default::default(),
-            }),
+            })),
             metadata: HashMap::new(),
         });
         gm.graph.task_registry.insert("deploy prod".to_string(), 0);
@@ -147,7 +147,7 @@ mod extra_get_task_name_success {
         let mut gm = GraphManager::new();
         gm.graph.nodes.push(Node {
             id: 0,
-            kind: NodeKind::Task(TaskData {
+            kind: NodeKind::Task(Box::new(TaskData {
                 name: "existing".to_string(),
                 description: None,
                 command: Some("echo existing".to_string()),
@@ -163,7 +163,7 @@ mod extra_get_task_name_success {
                 post_deps: vec![],
                 concurrently: vec![],
                 concurrently_options: Default::default(),
-            }),
+            })),
             metadata: HashMap::new(),
         });
         gm.graph.task_registry.insert("existing".to_string(), 0);

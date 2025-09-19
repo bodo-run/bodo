@@ -40,7 +40,7 @@ fn test_execution_plugin_on_after_run() -> Result<()> {
     let mut plugin = ExecutionPlugin::new();
     plugin.task_name = Some("test_task".to_string());
     let mut graph = Graph::new();
-    let node_id = graph.add_node(NodeKind::Task(TaskData {
+    let node_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "test_task".to_string(),
         description: None,
         command: Some("echo 'Hello World'".to_string()),
@@ -68,7 +68,7 @@ fn test_execution_plugin_on_after_run_with_command_node() -> Result<()> {
     let mut plugin = ExecutionPlugin::new();
     plugin.task_name = Some("test_task".to_string());
     let mut graph = Graph::new();
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
+    let task_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "test_task".to_string(),
         description: None,
         command: None,

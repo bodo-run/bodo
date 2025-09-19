@@ -2,7 +2,7 @@ pub type NodeId = u64;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
-    Task(TaskData),
+    Task(Box<TaskData>),
     Command(CommandData),
     ConcurrentGroup(ConcurrentGroupData),
 }

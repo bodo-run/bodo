@@ -23,7 +23,7 @@ fn test_prefix_plugin_on_graph_build() {
             .insert("prefix_output".to_string(), "true".to_string());
     }
     // Create two child task nodes
-    let task1_id = graph.add_node(NodeKind::Task(TaskData {
+    let task1_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "task1".to_string(),
         description: Some("Task one".to_string()),
         command: Some("echo Task1".to_string()),
@@ -40,7 +40,7 @@ fn test_prefix_plugin_on_graph_build() {
         concurrently: vec![],
         concurrently_options: Default::default(),
     }));
-    let task2_id = graph.add_node(NodeKind::Task(TaskData {
+    let task2_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "task2".to_string(),
         description: Some("Task two".to_string()),
         command: Some("echo Task2".to_string()),

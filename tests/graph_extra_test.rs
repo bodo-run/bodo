@@ -6,7 +6,7 @@ fn test_print_debug_and_get_node_name() {
     let mut graph = Graph::new();
 
     // Add a Task node
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
+    let task_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "TaskA".to_string(),
         description: Some("Task A Description".to_string()),
         command: Some("echo TaskA".to_string()),
@@ -22,7 +22,7 @@ fn test_print_debug_and_get_node_name() {
         post_deps: vec![],
         concurrently: vec![],
         concurrently_options: Default::default(),
-    }));
+    })));
     let task_name = graph.node_name(task_id as usize);
     assert!(task_name.contains("TaskA") || task_name.contains("scriptDir/TaskA"));
 
@@ -56,7 +56,7 @@ fn test_get_node_name_for_various_types() {
     let mut graph = Graph::new();
 
     // Task node with empty script_display_name
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
+    let task_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "task_only".to_string(),
         description: None,
         command: Some("echo test".to_string()),
@@ -72,7 +72,7 @@ fn test_get_node_name_for_various_types() {
         post_deps: vec![],
         concurrently: vec![],
         concurrently_options: Default::default(),
-    }));
+    })));
     let name1 = graph.node_name(task_id as usize);
     assert_eq!(name1, "task_only");
 

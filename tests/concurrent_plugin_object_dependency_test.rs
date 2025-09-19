@@ -30,7 +30,7 @@ fn test_concurrent_plugin() {
         post_deps: vec![],
     };
 
-    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+    let main_task_id = graph.add_node(NodeKind::Task(Box::new(task_data_main)));
 
     let task_data_child1 = TaskData {
         name: "child_task1".to_string(),
@@ -50,7 +50,7 @@ fn test_concurrent_plugin() {
         post_deps: vec![],
     };
 
-    let child1_id = graph.add_node(NodeKind::Task(task_data_child1));
+    let child1_id = graph.add_node(NodeKind::Task(Box::new(task_data_child1)));
 
     let task_data_child2 = TaskData {
         name: "child_task2".to_string(),
@@ -70,7 +70,7 @@ fn test_concurrent_plugin() {
         post_deps: vec![],
     };
 
-    let child2_id = graph.add_node(NodeKind::Task(task_data_child2));
+    let child2_id = graph.add_node(NodeKind::Task(Box::new(task_data_child2)));
 
     // Register child tasks in task_registry
     graph
@@ -172,7 +172,7 @@ fn test_concurrent_plugin_with_commands() {
         post_deps: vec![],
     };
 
-    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+    let main_task_id = graph.add_node(NodeKind::Task(Box::new(task_data_main)));
 
     // Set up the main_task to have concurrent commands
     let main_node = &mut graph.nodes[main_task_id as usize];
@@ -250,7 +250,7 @@ fn test_concurrent_plugin_nonexistent_task() {
         post_deps: vec![],
     };
 
-    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+    let main_task_id = graph.add_node(NodeKind::Task(Box::new(task_data_main)));
 
     // Set up the main_task to have a nonexistent concurrent task
     let main_node = &mut graph.nodes[main_task_id as usize];
@@ -298,7 +298,7 @@ fn test_concurrent_plugin_invalid_dependency_format() {
         post_deps: vec![],
     };
 
-    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+    let main_task_id = graph.add_node(NodeKind::Task(Box::new(task_data_main)));
     let main_node = &mut graph.nodes[main_task_id as usize];
     main_node
         .metadata

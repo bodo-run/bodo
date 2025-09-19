@@ -29,7 +29,7 @@ fn test_execution_plugin_run_node_chain() -> Result<()> {
         concurrently: vec![],
         concurrently_options: Default::default(),
     };
-    let b_id = graph.add_node(NodeKind::Task(task_b));
+    let b_id = graph.add_node(NodeKind::Task(Box::new(task_b)));
 
     // Task A with a simple command.
     let task_a = TaskData {
@@ -49,7 +49,7 @@ fn test_execution_plugin_run_node_chain() -> Result<()> {
         concurrently: vec![],
         concurrently_options: Default::default(),
     };
-    let a_id = graph.add_node(NodeKind::Task(task_a));
+    let a_id = graph.add_node(NodeKind::Task(Box::new(task_a)));
 
     // Register tasks into the task_registry.
     graph.task_registry.insert("A".to_string(), a_id);
@@ -110,7 +110,7 @@ fn test_execution_plugin_on_after_run_with_command_node() -> Result<()> {
     let mut plugin = ExecutionPlugin::new();
     plugin.task_name = Some("test_task".to_string());
     let mut graph = Graph::new();
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
+    let task_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "test_task".to_string(),
         description: None,
         command: Some("echo 'Hello World'".to_string()),
@@ -126,7 +126,7 @@ fn test_execution_plugin_on_after_run_with_command_node() -> Result<()> {
         post_deps: vec![],
         concurrently: vec![],
         concurrently_options: Default::default(),
-    }));
+    })));
     graph.task_registry.insert("test_task".to_string(), task_id);
     let result = plugin.on_after_run(&mut graph);
     assert!(result.is_ok());

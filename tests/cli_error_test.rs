@@ -28,7 +28,7 @@ fn test_get_task_name_task_not_found() {
     let mut manager = GraphManager::new();
     let dummy_id = manager
         .graph
-        .add_node(bodo::graph::NodeKind::Task(bodo::graph::TaskData {
+        .add_node(bodo::graph::NodeKind::Task(Box::new(bodo::graph::TaskData {
             name: "dummy".to_string(),
             description: None,
             command: Some("echo dummy".to_string()),

@@ -41,7 +41,7 @@ tasks:
     // Optionally, you can check that the command of the task is the one from the second definition.
     let key = "duplicate_task".to_string();
     let node_id = graph.task_registry.get(&key).expect("Task not found");
-    if let bodo::graph::NodeKind::Task(task) = &graph.nodes[*node_id as usize].kind {
+    if let bodo::graph::NodeKind::Task(Box::new(task) = &graph.nodes[*node_id as usize].kind {
         assert_eq!(task.command.as_deref(), Some("echo \"Second definition\""));
     } else {
         panic!("Expected a Task node");

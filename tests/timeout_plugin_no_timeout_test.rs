@@ -7,7 +7,7 @@ use std::collections::HashMap;
 fn test_timeout_plugin_no_timeout() {
     let mut plugin = TimeoutPlugin::new();
     let mut graph = Graph::new();
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
+    let task_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "no_timeout".to_string(),
         description: Some("Task with no timeout".to_string()),
         command: Some("echo no timeout".to_string()),

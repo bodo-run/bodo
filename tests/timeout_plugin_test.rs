@@ -66,7 +66,7 @@ fn test_timeout_plugin() -> Result<()> {
         concurrently_options: Default::default(),
     };
 
-    let node_id = graph.add_node(NodeKind::Task(task_data));
+    let node_id = graph.add_node(NodeKind::Task(Box::new(task_data)));
 
     // Set up a node with a timeout in metadata
     let node = &mut graph.nodes[node_id as usize];
@@ -106,7 +106,7 @@ fn test_invalid_timeout_plugin() -> Result<()> {
         concurrently_options: Default::default(),
     };
 
-    let node_id = graph.add_node(NodeKind::Task(task_data));
+    let node_id = graph.add_node(NodeKind::Task(Box::new(task_data)));
 
     // Set up a node with an invalid timeout in metadata
     let node = &mut graph.nodes[node_id as usize];

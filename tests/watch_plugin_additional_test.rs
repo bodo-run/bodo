@@ -6,7 +6,7 @@ fn test_create_watcher_test() {
     let (watcher, rx) = WatchPlugin::create_watcher_test().expect("Failed to create watcher");
     // Expect timeout since no events occur.
     match rx.recv_timeout(std::time::Duration::from_millis(100)) {
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => assert!(true),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => { /* expected timeout */ }
         _ => panic!("Expected timeout when no events occur"),
     }
     drop(watcher);

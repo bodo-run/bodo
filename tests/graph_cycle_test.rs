@@ -6,7 +6,7 @@ use std::collections::HashMap;
 fn test_detect_and_format_cycle() {
     let mut graph = Graph::new();
     // Create three task nodes: A, B, C.
-    let a = graph.add_node(NodeKind::Task(TaskData {
+    let a = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "A".to_string(),
         description: None,
         command: Some("echo A".to_string()),
@@ -23,7 +23,7 @@ fn test_detect_and_format_cycle() {
         concurrently: vec![],
         concurrently_options: Default::default(),
     }));
-    let b = graph.add_node(NodeKind::Task(TaskData {
+    let b = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "B".to_string(),
         description: None,
         command: Some("echo B".to_string()),
@@ -40,7 +40,7 @@ fn test_detect_and_format_cycle() {
         concurrently: vec![],
         concurrently_options: Default::default(),
     }));
-    let c = graph.add_node(NodeKind::Task(TaskData {
+    let c = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "C".to_string(),
         description: None,
         command: Some("echo C".to_string()),

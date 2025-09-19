@@ -27,7 +27,7 @@ fn test_concurrent_plugin_invalid_object_dependency() {
         watch: None,
     };
 
-    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+    let main_task_id = graph.add_node(NodeKind::Task(Box::new(task_data_main)));
 
     // Set up the main_task to have a nonexistent concurrent task
     let main_node = &mut graph.nodes[main_task_id as usize];
@@ -74,7 +74,7 @@ fn test_concurrent_plugin_empty_concurrently() {
         watch: None,
     };
 
-    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+    let main_task_id = graph.add_node(NodeKind::Task(Box::new(task_data_main)));
 
     // Set up the main_task with empty 'concurrently' metadata
     let main_node = &mut graph.nodes[main_task_id as usize];
@@ -135,7 +135,7 @@ fn test_concurrent_plugin_nonexistent_task_in_object() {
         script_display_name: "script".to_string(),
         watch: None,
     };
-    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+    let main_task_id = graph.add_node(NodeKind::Task(Box::new(task_data_main)));
     let main_node = &mut graph.nodes[main_task_id as usize];
     main_node.metadata.insert(
         "concurrently".to_string(),
@@ -171,7 +171,7 @@ fn test_concurrent_plugin_invalid_dependency_format() {
         watch: None,
     };
 
-    let main_task_id = graph.add_node(NodeKind::Task(task_data_main));
+    let main_task_id = graph.add_node(NodeKind::Task(Box::new(task_data_main)));
     let main_node = &mut graph.nodes[main_task_id as usize];
     main_node.metadata.insert(
         "concurrently".to_string(),

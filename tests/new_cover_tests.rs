@@ -15,7 +15,7 @@ mod new_tests {
         // Manually add default task to graph and registry:
         manager.graph.nodes.push(Node {
             id: 0,
-            kind: NodeKind::Task(TaskData {
+            kind: NodeKind::Task(Box::new(TaskData {
                 name: "default".to_string(),
                 description: Some("Default Task".to_string()),
                 command: Some("echo default".to_string()),
@@ -31,7 +31,7 @@ mod new_tests {
                 post_deps: vec![],
                 concurrently: vec![],
                 concurrently_options: Default::default(),
-            }),
+            })),
             metadata: HashMap::new(),
         });
         manager.graph.task_registry.insert("default".to_string(), 0);
@@ -55,7 +55,7 @@ mod new_tests {
         // Add task "build"
         manager.graph.nodes.push(Node {
             id: 0,
-            kind: NodeKind::Task(TaskData {
+            kind: NodeKind::Task(Box::new(TaskData {
                 name: "build".to_string(),
                 description: Some("Build Task".to_string()),
                 command: Some("cargo build".to_string()),
@@ -71,7 +71,7 @@ mod new_tests {
                 post_deps: vec![],
                 concurrently: vec![],
                 concurrently_options: Default::default(),
-            }),
+            })),
             metadata: HashMap::new(),
         });
         manager.graph.task_registry.insert("build".to_string(), 0);
@@ -90,7 +90,7 @@ mod new_tests {
 
     #[test]
     fn test_bodo_error_variants_display() {
-        let io_err = BodoError::IoError(std::io::Error::new(std::io::ErrorKind::Other, "io error"));
+        let io_err = BodoError::IoError(std::io::Error::other("io error"));
         assert_eq!(format!("{}", io_err), "io error");
 
         let watcher_err = BodoError::WatcherError("watcher error".to_string());

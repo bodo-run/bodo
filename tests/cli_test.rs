@@ -9,7 +9,7 @@ fn test_cli_get_task_name_default_exists() {
     // Manually add default task to graph and registry:
     manager.graph.nodes.push(Node {
         id: 0,
-        kind: NodeKind::Task(TaskData {
+        kind: NodeKind::Task(Box::new(TaskData {
             name: "default".to_string(),
             description: Some("Default Task".to_string()),
             command: Some("echo default".to_string()),
@@ -25,7 +25,7 @@ fn test_cli_get_task_name_default_exists() {
             post_deps: vec![],
             concurrently: vec![],
             concurrently_options: Default::default(),
-        }),
+            })),
         metadata: HashMap::new(),
     });
     manager.graph.task_registry.insert("default".to_string(), 0);
@@ -49,7 +49,7 @@ fn test_cli_get_task_name_with_existing_task() {
     // Add task "build"
     manager.graph.nodes.push(Node {
         id: 0,
-        kind: NodeKind::Task(TaskData {
+        kind: NodeKind::Task(Box::new(TaskData {
             name: "build".to_string(),
             description: Some("Build Task".to_string()),
             command: Some("cargo build".to_string()),
@@ -65,7 +65,7 @@ fn test_cli_get_task_name_with_existing_task() {
             post_deps: vec![],
             concurrently: vec![],
             concurrently_options: Default::default(),
-        }),
+            })),
         metadata: HashMap::new(),
     });
     manager.graph.task_registry.insert("build".to_string(), 0);

@@ -47,8 +47,8 @@ fn test_print_list_plugin() {
     };
 
     // Add nodes to graph
-    graph.add_node(NodeKind::Task(task_data1));
-    graph.add_node(NodeKind::Task(task_data2));
+    graph.add_node(NodeKind::Task(Box::new(task_data1)));
+    graph.add_node(NodeKind::Task(Box::new(task_data2)));
 
     // Apply the plugin
     let result = plugin.on_graph_build(&mut graph);

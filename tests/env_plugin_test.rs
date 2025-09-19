@@ -33,7 +33,7 @@ fn test_env_plugin_on_graph_build() {
     )]));
 
     let mut graph = Graph::new();
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
+    let task_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "test_task".to_string(),
         description: None,
         command: Some("echo $GLOBAL_ENV".to_string()),
@@ -100,7 +100,7 @@ fn test_env_plugin_on_graph_build_no_global_env() {
 
     let mut graph = Graph::new();
 
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
+    let task_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "test_task".to_string(),
         description: None,
         command: Some("echo $GLOBAL_ENV".to_string()),

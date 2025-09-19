@@ -5,7 +5,7 @@ use bodo::graph::{Graph, NodeKind, TaskData};
 fn test_add_edge_invalid() {
     let mut graph = Graph::new();
     // Create one task node.
-    let _node0 = graph.add_node(NodeKind::Task(TaskData {
+    let _node0 = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "task".to_string(),
         description: None,
         command: Some("echo task".to_string()),
@@ -36,7 +36,7 @@ fn test_add_edge_invalid() {
 fn test_get_node_name() {
     let mut graph = Graph::new();
     // Task node with empty script_display_name.
-    let task_id = graph.add_node(NodeKind::Task(TaskData {
+    let task_id = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "mytask".to_string(),
         description: None,
         command: Some("echo".to_string()),
@@ -57,7 +57,7 @@ fn test_get_node_name() {
     assert_eq!(name, "mytask");
 
     // Task node with non-empty script_display_name.
-    let task_id2 = graph.add_node(NodeKind::Task(TaskData {
+    let task_id2 = graph.add_node(NodeKind::Task(Box::new(TaskData {
         name: "task2".to_string(),
         description: None,
         command: Some("echo".to_string()),

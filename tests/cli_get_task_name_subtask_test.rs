@@ -8,7 +8,7 @@ fn test_get_task_name_with_subtask_exists() {
     // Add a task with concatenated name "build unit"
     manager.graph.nodes.push(bodo::graph::Node {
         id: 0,
-        kind: bodo::graph::NodeKind::Task(bodo::graph::TaskData {
+        kind: bodo::graph::NodeKind::Task(Box::new(bodo::graph::TaskData {
             name: "build unit".to_string(),
             description: None,
             command: Some("echo build unit".to_string()),
@@ -24,7 +24,7 @@ fn test_get_task_name_with_subtask_exists() {
             post_deps: vec![],
             concurrently: vec![],
             concurrently_options: Default::default(),
-        }),
+            })),
         metadata: Default::default(),
     });
     manager
@@ -52,7 +52,7 @@ fn test_get_task_name_with_subtask_not_found() {
     // Only add task "build" exists.
     manager.graph.nodes.push(bodo::graph::Node {
         id: 0,
-        kind: bodo::graph::NodeKind::Task(bodo::graph::TaskData {
+        kind: bodo::graph::NodeKind::Task(Box::new(bodo::graph::TaskData {
             name: "build".to_string(),
             description: None,
             command: Some("echo build".to_string()),
@@ -68,7 +68,7 @@ fn test_get_task_name_with_subtask_not_found() {
             post_deps: vec![],
             concurrently: vec![],
             concurrently_options: Default::default(),
-        }),
+            })),
         metadata: Default::default(),
     });
     manager.graph.task_registry.insert("build".to_string(), 0);

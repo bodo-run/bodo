@@ -38,7 +38,7 @@ fn test_dummy_plugin_on_run() -> Result<()> {
     let mut plugin = DummyOnRunPlugin::new();
     let mut graph = Graph::new();
     // Create a dummy task node; its id will be non-zero.
-    let _node_id = graph.add_node(bodo::graph::NodeKind::Task(bodo::graph::TaskData {
+    let _node_id = graph.add_node(bodo::graph::NodeKind::Task(Box::new(bodo::graph::TaskData {
         name: "dummy".to_string(),
         description: None,
         command: Some("echo dummy".to_string()),
