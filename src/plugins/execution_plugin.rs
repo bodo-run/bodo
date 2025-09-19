@@ -1,15 +1,18 @@
 use std::any::Any;
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::time::Duration;
 
 use crate::{
     errors::{BodoError, Result},
     graph::{Graph, NodeKind},
-    plugin::{Plugin, PluginConfig},
+    plugin::{Plugin, PluginConfig, DryRunnable, ExecutionContext, DryRunReport, SideEffect},
     process::ProcessManager,
 };
 
 pub struct ExecutionPlugin {
     pub task_name: Option<String>,
+    pub dry_run: bool,
 }
 
 impl Default for ExecutionPlugin {
@@ -20,7 +23,137 @@ impl Default for ExecutionPlugin {
 
 impl ExecutionPlugin {
     pub fn new() -> Self {
-        Self { task_name: None }
+        Self { 
+            task_name: None,
+            dry_run: false,
+        }
+    }
+
+    /// Analyze command for potential side effects
+    fn analyze_side_effects(&self, cmd: &str, working_dir: &Option<PathBuf>) -> Vec<SideEffect> {
+        let mut effects = Vec::new();
+        
+        // Simple heuristic analysis of common command patterns
+        if cmd.contains("touch ") || cmd.contains("echo ") || cmd.contains(" > ") {
+            if let Some(dir) = working_dir {
+                effects.push(SideEffect::FileCreation(dir.join("output")));
+            }
+        }
+        
+        if cmd.contains("rm ") || cmd.contains("del ") {
+            if let Some(dir) = working_dir {
+                effects.push(SideEffect::FileDeletion(dir.join("file")));
+            }
+        }
+        
+        if cmd.contains("curl ") || cmd.contains("wget ") || cmd.contains("http") {
+            effects.push(SideEffect::NetworkRequest("external".to_string()));
+        }
+        
+        if cmd.contains("export ") || cmd.contains("set ") {
+            effects.push(SideEffect::EnvironmentChange("VAR".to_string(), "value".to_string()));
+        }
+        
+        // Any command execution spawns a process
+        effects.push(SideEffect::ProcessSpawn(cmd.to_string()));
+        
+        effects
+    }
+
+    /// Estimate command execution duration based on command type
+    fn estimate_duration(&self, cmd: &str) -> Option<Duration> {
+        if cmd.contains("sleep") {
+            // Try to extract sleep duration
+            return Some(Duration::from_secs(1));
+        }
+        
+        if cmd.contains("curl") || cmd.contains("wget") {
+            return Some(Duration::from_millis(500));
+        }
+        
+        if cmd.contains("npm install") || cmd.contains("cargo build") {
+            return Some(Duration::from_secs(30));
+        }
+        
+        // Default estimation for simple commands
+        Some(Duration::from_millis(100))
+    }
+
+    /// Perform dry-run analysis and output results
+    fn perform_dry_run(&self, graph: &Graph, task_id: u64) -> Result<()> {
+        let mut visited = std::collections::HashSet::new();
+        let mut total_duration = Duration::new(0, 0);
+        
+        println!("📋 Dry-run execution plan:");
+        println!("┌─────────────────────────────────────────────────────────────┐");
+        
+        self.analyze_task_tree(graph, task_id as usize, &mut visited, &mut total_duration, 0)?;
+        
+        println!("└─────────────────────────────────────────────────────────────┘");
+        println!("\n⏱️  Estimated total execution time: {:?}", total_duration);
+        println!("✅ Dry-run completed successfully. No commands were executed.");
+        
+        Ok(())
+    }
+
+    fn analyze_task_tree(
+        &self,
+        graph: &Graph,
+        node_id: usize,
+        visited: &mut std::collections::HashSet<usize>,
+        total_duration: &mut Duration,
+        depth: usize,
+    ) -> Result<()> {
+        if visited.contains(&node_id) {
+            return Ok(());
+        }
+        visited.insert(node_id);
+
+        let indent = "  ".repeat(depth);
+        let node = &graph.nodes[node_id];
+
+        match &node.kind {
+            NodeKind::Task(task_data) => {
+                // Analyze dependencies first
+                for edge in &graph.edges {
+                    if edge.to == node_id as u64 {
+                        self.analyze_task_tree(graph, edge.from as usize, visited, total_duration, depth + 1)?;
+                    }
+                }
+
+                if let Some(cmd) = &task_data.command {
+                    let expanded_cmd = self.expand_env_vars(cmd, &task_data.env);
+                    let duration = self.estimate_duration(&expanded_cmd).unwrap_or(Duration::from_millis(100));
+                    *total_duration += duration;
+                    
+                    println!("│ {}📝 Task: {} ({:?})", indent, task_data.name, duration);
+                    println!("│ {}   Command: {}", indent, expanded_cmd);
+                    
+                    if let Some(wd) = &task_data.working_dir {
+                        println!("│ {}   Working Dir: {}", indent, wd);
+                    }
+                    
+                    if !task_data.env.is_empty() {
+                        println!("│ {}   Environment: {} vars", indent, task_data.env.len());
+                    }
+                }
+            }
+            NodeKind::Command(cmd_data) => {
+                let expanded_cmd = self.expand_env_vars(&cmd_data.raw_command, &cmd_data.env);
+                let duration = self.estimate_duration(&expanded_cmd).unwrap_or(Duration::from_millis(100));
+                *total_duration += duration;
+                
+                println!("│ {}⚡ Command: {} ({:?})", indent, expanded_cmd, duration);
+            }
+            NodeKind::ConcurrentGroup(group_data) => {
+                println!("│ {}🔀 Concurrent Group (fail_fast: {})", indent, group_data.fail_fast);
+                for &child_id in &group_data.child_nodes {
+                    self.analyze_task_tree(graph, child_id as usize, visited, total_duration, depth + 1)?;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Changed the visibility of the method to `pub`
@@ -111,11 +244,22 @@ impl Plugin for ExecutionPlugin {
     }
 
     fn on_init(&mut self, config: &PluginConfig) -> Result<()> {
+        self.dry_run = config.dry_run;
+        
         if let Some(options) = &config.options {
             if let Some(task) = options.get("task").and_then(|v| v.as_str()) {
                 self.task_name = Some(task.to_string());
             }
         }
+        
+        // Handle dry-run mode
+        if config.dry_run {
+            if let Some(task_name) = &self.task_name {
+                println!("🔍 Dry-run mode enabled for task: {}", task_name);
+                println!("Commands will be analyzed but not executed.\n");
+            }
+        }
+        
         Ok(())
     }
 
@@ -130,6 +274,10 @@ impl Plugin for ExecutionPlugin {
             .task_registry
             .get(&task_name)
             .ok_or_else(|| BodoError::TaskNotFound(task_name.clone()))?;
+
+        if self.dry_run {
+            return self.perform_dry_run(graph, task_id);
+        }
 
         let mut visited = std::collections::HashSet::new();
 
@@ -250,5 +398,22 @@ impl Plugin for ExecutionPlugin {
         pm.run_concurrently()?;
 
         Ok(())
+    }
+}
+
+impl DryRunnable for ExecutionPlugin {
+    fn dry_run(&self, context: &ExecutionContext) -> Result<DryRunReport> {
+        let expanded_cmd = self.expand_env_vars("echo 'dry-run'", &context.environment);
+        let side_effects = self.analyze_side_effects(&expanded_cmd, &Some(context.working_directory.clone()));
+        let estimated_duration = self.estimate_duration(&expanded_cmd);
+        
+        Ok(DryRunReport {
+            command: expanded_cmd,
+            environment: context.environment.clone(),
+            working_directory: context.working_directory.clone(),
+            dependencies: vec![], // TODO: Extract from graph
+            estimated_duration,
+            side_effects,
+        })
     }
 }

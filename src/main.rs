@@ -12,26 +12,26 @@ use bodo::{
     BodoError,
 };
 use clap::Parser;
-use log::{error, LevelFilter};
 use std::{collections::HashMap, process::exit};
+use tracing::{error, info, Level};
+use tracing_subscriber::{fmt, EnvFilter};
 
 fn main() {
     let args = Args::parse();
 
-    if args.debug {
-        std::env::set_var("RUST_LOG", "bodo=debug");
-    } else if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "bodo=info");
-    }
-    env_logger::Builder::from_default_env()
-        .filter_module(
-            "bodo",
-            if args.debug {
-                LevelFilter::Debug
-            } else {
-                LevelFilter::Info
-            },
-        )
+    // Initialize tracing instead of env_logger
+    let level = if args.debug {
+        Level::DEBUG
+    } else {
+        Level::INFO
+    };
+
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(format!("bodo={}", level)));
+
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_target(false)
         .init();
 
     if let Err(e) = run(args) {
@@ -107,6 +107,7 @@ fn run(args: Args) -> Result<(), BodoError> {
         fail_fast: true,
         watch: watch_mode,
         list: false,
+        dry_run: args.dry_run,
         options: Some(options),
     };
 

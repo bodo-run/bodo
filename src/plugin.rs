@@ -1,6 +1,9 @@
 use crate::graph::Graph;
 use crate::Result;
 use std::any::Any;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::time::Duration;
 
 /// Synchronous plugin trait (no `async` anymore).
 pub trait Plugin: Send {
@@ -29,11 +32,47 @@ pub trait Plugin: Send {
     }
 }
 
+/// Trait for plugins that support dry-run mode
+pub trait DryRunnable {
+    fn dry_run(&self, context: &ExecutionContext) -> Result<DryRunReport>;
+}
+
+/// Context information for dry-run execution
+#[derive(Debug, Clone)]
+pub struct ExecutionContext {
+    pub task_name: String,
+    pub working_directory: PathBuf,
+    pub environment: HashMap<String, String>,
+}
+
+/// Report structure for dry-run results
+#[derive(Debug, Clone)]
+pub struct DryRunReport {
+    pub command: String,
+    pub environment: HashMap<String, String>,
+    pub working_directory: PathBuf,
+    pub dependencies: Vec<String>,
+    pub estimated_duration: Option<Duration>,
+    pub side_effects: Vec<SideEffect>,
+}
+
+/// Represents potential side effects of command execution
+#[derive(Debug, Clone)]
+pub enum SideEffect {
+    FileCreation(PathBuf),
+    FileModification(PathBuf),
+    FileDeletion(PathBuf),
+    NetworkRequest(String),
+    EnvironmentChange(String, String),
+    ProcessSpawn(String),
+}
+
 #[derive(Default)]
 pub struct PluginConfig {
     pub fail_fast: bool,
     pub watch: bool,
     pub list: bool,
+    pub dry_run: bool,
     pub options: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
